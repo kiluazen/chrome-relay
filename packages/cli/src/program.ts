@@ -12,6 +12,12 @@ export function buildProgram(): Command {
     .description("Connect your local Chrome browser to coding agents through a local bridge.")
     .version(CHROME_RELAY_VERSION)
     .showHelpAfterError()
+    // Global --group flag: `chrome-relay --group X navigate ...` and
+    // `chrome-relay navigate --group X ...` both work. Subcommands resolve
+    // the effective value via baseArgs() which checks subcommand-level first,
+    // then falls back to the program-level (parent) option.
+    .option("--group <name>", "target the active tab of a named group window (works at top level too)")
+    .enablePositionalOptions()
     .addHelpText(
       "after",
       `
@@ -73,10 +79,15 @@ Notes:
   // Build a base args object from common options. Every subcommand that
   // takes a tab/group routes through here so the `--tab wins, --group
   // fallback` contract stays in one place.
+  //
+  // Group precedence: subcommand-level --group wins over program-level
+  // (parent) --group. Lets `chrome-relay --group default <cmd> --group override`
+  // do the right thing for ad-hoc one-offs in a session.
   function baseArgs(opts: { tab?: number; group?: string }): Record<string, unknown> {
     const args: Record<string, unknown> = {};
     if (opts.tab !== undefined)  args.tabId = opts.tab;
-    if (opts.group)              args.groupName = opts.group;
+    const effectiveGroup = opts.group ?? (program.opts() as { group?: string }).group;
+    if (effectiveGroup)          args.groupName = effectiveGroup;
     return args;
   }
 
@@ -114,8 +125,7 @@ Examples:
     }
 
     const args: Record<string, unknown> = { url };
-    if (opts.tab !== undefined) args.tabId = opts.tab;
-    if (opts.group) args.groupName = opts.group;
+    Object.assign(args, baseArgs(opts));
     if (opts.new) args.newTab = true;
     if (opts.inactive) args.active = false;
     await run("chrome_navigate", args);
@@ -148,8 +158,7 @@ full-tab screenshot when an agent only needs to see one component.
       )
   ).action(async (opts) => {
     const args: Record<string, unknown> = {};
-    if (opts.tab !== undefined) args.tabId = opts.tab;
-    if (opts.group) args.groupName = opts.group;
+    Object.assign(args, baseArgs(opts));
     if (opts.full) args.fullPage = true;
     if (opts.bbox) args.bbox = opts.bbox;
     if (opts.selector) args.selector = opts.selector;
@@ -182,8 +191,7 @@ full-tab screenshot when an agent only needs to see one component.
       .option("-i, --interactive", "return only interactive elements")
   ).action(async (opts) => {
     const args: Record<string, unknown> = {};
-    if (opts.tab !== undefined) args.tabId = opts.tab;
-    if (opts.group) args.groupName = opts.group;
+    Object.assign(args, baseArgs(opts));
     if (opts.interactive) args.interactiveOnly = true;
     await run("chrome_read_page", args);
   });
@@ -192,8 +200,7 @@ full-tab screenshot when an agent only needs to see one component.
     program.command("click <selector>").description("Click an element by CSS selector.")
   ).action(async (selector: string, opts) => {
     const args: Record<string, unknown> = { selector };
-    if (opts.tab !== undefined) args.tabId = opts.tab;
-    if (opts.group) args.groupName = opts.group;
+    Object.assign(args, baseArgs(opts));
     await run("chrome_click_element", args);
   });
 
@@ -203,8 +210,7 @@ full-tab screenshot when an agent only needs to see one component.
       .description("Fill an input or textarea.")
   ).action(async (selector: string, value: string, opts) => {
     const args: Record<string, unknown> = { selector, value };
-    if (opts.tab !== undefined) args.tabId = opts.tab;
-    if (opts.group) args.groupName = opts.group;
+    Object.assign(args, baseArgs(opts));
     await run("chrome_fill_or_select", args);
   });
 
@@ -227,8 +233,7 @@ For typing text into a field, use \`chrome-relay type\` instead.
       )
   ).action(async (keys: string, opts) => {
     const args: Record<string, unknown> = { keys };
-    if (opts.tab !== undefined) args.tabId = opts.tab;
-    if (opts.group) args.groupName = opts.group;
+    Object.assign(args, baseArgs(opts));
     await run("chrome_keyboard", args);
   });
 
@@ -254,8 +259,7 @@ When to pick which:
       )
   ).action(async (text: string, opts) => {
     const args: Record<string, unknown> = { text };
-    if (opts.tab !== undefined) args.tabId = opts.tab;
-    if (opts.group) args.groupName = opts.group;
+    Object.assign(args, baseArgs(opts));
     if (opts.selector) args.selector = opts.selector;
     await run("chrome_type", args);
   });
@@ -282,8 +286,7 @@ Notes:
       )
   ).action(async (code: string, opts) => {
     const args: Record<string, unknown> = { code };
-    if (opts.tab !== undefined) args.tabId = opts.tab;
-    if (opts.group) args.groupName = opts.group;
+    Object.assign(args, baseArgs(opts));
     if (typeof opts.timeoutMs === "number") args.timeoutMs = opts.timeoutMs;
     await run("chrome_evaluate", args);
   });
@@ -358,8 +361,7 @@ Notes:
       .description("Apply a named device preset (iphone-14, pixel-7, desktop-1440, etc).")
   ).action(async (name: string, opts) => {
     const args: Record<string, unknown> = { action: "preset", name };
-    if (opts.tab !== undefined) args.tabId = opts.tab;
-    if (opts.group) args.groupName = opts.group;
+    Object.assign(args, baseArgs(opts));
     await run("chrome_viewport", args);
   });
 
@@ -369,8 +371,7 @@ Notes:
       .description("Drop the viewport override and return the tab to its native size.")
   ).action(async (opts) => {
     const args: Record<string, unknown> = { action: "clear" };
-    if (opts.tab !== undefined) args.tabId = opts.tab;
-    if (opts.group) args.groupName = opts.group;
+    Object.assign(args, baseArgs(opts));
     await run("chrome_viewport", args);
   });
 
