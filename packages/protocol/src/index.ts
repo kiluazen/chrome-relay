@@ -23,7 +23,22 @@ export const TOOL_NAMES = {
   TYPE: "chrome_type",
   EVALUATE: "chrome_evaluate",
   // §2.2 — viewport emulation (set/preset/clear share one tool, action via args.action)
-  VIEWPORT: "chrome_viewport"
+  VIEWPORT: "chrome_viewport",
+  // chrome_self_reload — calls chrome.runtime.reload() inside the extension.
+  // Lets the dev loop refresh the extension without manually clicking reload
+  // on chrome://extensions (Chrome blocks CDP attach on chrome:// pages).
+  SELF_RELOAD: "chrome_self_reload",
+  // §2.7c — console capture. Ring-buffer per tab; actions read/clear via args.
+  CONSOLE: "chrome_console",
+  // §2.1 — groups. Single tool with action: create | list | close.
+  // Every existing tool also accepts an optional groupName arg.
+  GROUP: "chrome_group",
+  // §2.4 — accessibility tree. ~30× smaller than DOM serialization, more
+  // semantic. click_ax pairs with it: targets by backendDOMNodeId, no CSS.
+  AX: "chrome_ax",
+  CLICK_AX: "chrome_click_ax",
+  // §2.7a — network capture. Ring-buffer per tab; actions read/clear/har/body.
+  NETWORK: "chrome_network"
 } as const;
 
 export type ToolName = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES];

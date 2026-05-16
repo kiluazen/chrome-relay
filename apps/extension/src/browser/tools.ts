@@ -8,6 +8,26 @@ import {
   readPageSnapshot
 } from "./page-actions";
 import { VIEWPORT_PRESETS, isPresetName, listPresets } from "./viewport-presets";
+import {
+  ensureConsoleCapture,
+  readConsole,
+  clearConsole,
+  type ConsoleLevel
+} from "./console-buffer";
+import {
+  createGroup,
+  listGroups,
+  closeGroup,
+  resolveGroupTarget
+} from "./groups";
+import { getAxTree, clickAxNode } from "./a11y";
+import {
+  ensureNetworkCapture,
+  readNetwork,
+  getBody,
+  clearNetwork,
+  buildHar
+} from "./network-buffer";
 
 type ToolHandler = (args: ToolArguments) => Promise<unknown>;
 
@@ -19,6 +39,22 @@ async function getActiveTab(): Promise<chrome.tabs.Tab> {
   return tab;
 }
 
+// Target-tab resolver. Precedence: explicit tabId → groupName → active tab in
+// current window. Documented "tab wins" contract: if both --tab and --group
+// are passed, --tab takes precedence (groupName is silently ignored).
+async function resolveTarget(args: { tabId?: unknown; groupName?: unknown }): Promise<chrome.tabs.Tab> {
+  if (typeof args.tabId === "number") {
+    return chrome.tabs.get(args.tabId);
+  }
+  if (typeof args.groupName === "string" && args.groupName) {
+    return resolveGroupTarget(args.groupName);
+  }
+  return getActiveTab();
+}
+
+// Compatibility shim — existing call sites still pass a bare number. New
+// callers use resolveTarget(args). Eventually we can remove this and
+// migrate every handler, but no need to touch the world right now.
 async function getTargetTab(tabId?: number): Promise<chrome.tabs.Tab> {
   if (typeof tabId === "number") {
     return chrome.tabs.get(tabId);
@@ -67,7 +103,7 @@ const handlers: Record<ToolName, ToolHandler> = {
       return { tabId: tab.id, windowId: tab.windowId, url: tab.url };
     }
 
-    const current = await getTargetTab(typeof args.tabId === "number" ? args.tabId : undefined);
+    const current = await resolveTarget(args);
     const tabId = requireTabId(current);
 
     await send(tabId, "Page.navigate", { url });
@@ -103,7 +139,7 @@ const handlers: Record<ToolName, ToolHandler> = {
   },
 
   async [TOOL_NAMES.SCREENSHOT](args) {
-    const tab = await getTargetTab(typeof args.tabId === "number" ? args.tabId : undefined);
+    const tab = await resolveTarget(args);
     const tabId = requireTabId(tab);
     const fullPage = args.fullPage === true;
 
@@ -154,7 +190,7 @@ const handlers: Record<ToolName, ToolHandler> = {
   },
 
   async [TOOL_NAMES.READ_PAGE](args) {
-    const tab = await getTargetTab(typeof args.tabId === "number" ? args.tabId : undefined);
+    const tab = await resolveTarget(args);
     const tabId = requireTabId(tab);
     return evalInTab(tabId, readPageSnapshot, [args.interactiveOnly === true]);
   },
@@ -165,7 +201,7 @@ const handlers: Record<ToolName, ToolHandler> = {
       throw new Error("chrome_click_element requires a selector.");
     }
 
-    const tab = await getTargetTab(typeof args.tabId === "number" ? args.tabId : undefined);
+    const tab = await resolveTarget(args);
     const tabId = requireTabId(tab);
 
     // Resolve the element's center in viewport CSS pixels and scroll it into view.
@@ -207,7 +243,7 @@ const handlers: Record<ToolName, ToolHandler> = {
       throw new Error("chrome_fill_or_select requires a selector.");
     }
 
-    const tab = await getTargetTab(typeof args.tabId === "number" ? args.tabId : undefined);
+    const tab = await resolveTarget(args);
     return evalInTab(requireTabId(tab), fillElement, [selector, value]);
   },
 
@@ -217,7 +253,7 @@ const handlers: Record<ToolName, ToolHandler> = {
       throw new Error("chrome_keyboard requires keys.");
     }
 
-    const tab = await getTargetTab(typeof args.tabId === "number" ? args.tabId : undefined);
+    const tab = await resolveTarget(args);
     const tabId = requireTabId(tab);
     await pressKey(tabId, keys);
     return { sent: true, keys };
@@ -229,7 +265,7 @@ const handlers: Record<ToolName, ToolHandler> = {
       throw new Error("chrome_type requires text.");
     }
 
-    const tab = await getTargetTab(typeof args.tabId === "number" ? args.tabId : undefined);
+    const tab = await resolveTarget(args);
     const tabId = requireTabId(tab);
 
     let focused: { selector: string } | null = null;
@@ -249,7 +285,7 @@ const handlers: Record<ToolName, ToolHandler> = {
       throw new Error("chrome_evaluate requires code.");
     }
 
-    const tab = await getTargetTab(typeof args.tabId === "number" ? args.tabId : undefined);
+    const tab = await resolveTarget(args);
     const tabId = requireTabId(tab);
     const timeout = typeof args.timeoutMs === "number" ? args.timeoutMs : 15_000;
     const expression = `(async () => { ${code} })()`;
@@ -278,7 +314,7 @@ const handlers: Record<ToolName, ToolHandler> = {
       return { presets: listPresets() };
     }
 
-    const tab = await getTargetTab(typeof args.tabId === "number" ? args.tabId : undefined);
+    const tab = await resolveTarget(args);
     const tabId = requireTabId(tab);
 
     if (action === "clear") {
@@ -351,8 +387,132 @@ const handlers: Record<ToolName, ToolHandler> = {
         preset: presetName
       }
     };
+  },
+
+  // chrome_self_reload — restart the extension service worker via
+  // chrome.runtime.reload(). New code (after rebuild) takes effect on the
+  // NEXT message that goes through the bridge. Returns immediately; the SW
+  // will tear down shortly after.
+  //
+  // Workaround for Chrome's CDP block on chrome:// pages: we can't drive the
+  // "reload" button on chrome://extensions via debugger.attach, but the
+  // extension can self-reload from inside. No-arg.
+  async [TOOL_NAMES.SELF_RELOAD]() {
+    // Defer slightly so this tool call's response makes it back to the bridge
+    // before the SW dies. 100ms is plenty in practice.
+    setTimeout(() => chrome.runtime.reload(), 100);
+    return { reloaded: true, note: "Extension service worker will restart momentarily." };
+  },
+
+  // §2.4 — accessibility tree. Returns a compact, semantic alternative to
+  // chrome_read_page. Each node carries backendDOMNodeId (`id`) which
+  // chrome_click_ax uses to click without needing a CSS selector.
+  async [TOOL_NAMES.AX](args) {
+    const tab = await resolveTarget(args);
+    const tabId = requireTabId(tab);
+    return getAxTree(tabId, {
+      interactiveOnly: args.interactiveOnly === true,
+      rootRole: typeof args.rootRole === "string" ? args.rootRole : undefined,
+      includeSubframes: args.includeSubframes === true
+    });
+  },
+
+  async [TOOL_NAMES.CLICK_AX](args) {
+    const tab = await resolveTarget(args);
+    const tabId = requireTabId(tab);
+    const node = Number(args.node ?? args.id);
+    if (!Number.isFinite(node) || node <= 0) {
+      throw new Error("chrome_click_ax requires --node <backendDOMNodeId> (a positive integer from `chrome-relay ax`).");
+    }
+    return clickAxNode(tabId, node);
+  },
+
+  // §2.1 — groups. Named Chrome windows for parallel agent work. Single tool
+  // with action: create | list | close.
+  async [TOOL_NAMES.GROUP](args) {
+    const action = typeof args.action === "string" ? args.action : "list";
+    if (action === "create") {
+      const name = typeof args.name === "string" ? args.name : "";
+      if (!name) throw new Error("chrome_group create requires a name.");
+      const url = typeof args.url === "string" ? args.url : undefined;
+      const label = typeof args.label === "string" ? args.label : undefined;
+      return createGroup(name, { url, label });
+    }
+    if (action === "list") {
+      const groups = await listGroups();
+      return { groups, count: groups.length };
+    }
+    if (action === "close") {
+      const name = typeof args.name === "string" ? args.name : "";
+      if (!name) throw new Error("chrome_group close requires a name.");
+      return closeGroup(name);
+    }
+    throw new Error(`chrome_group: unknown action "${action}". Expected create | list | close.`);
+  },
+
+  // §2.7c — console capture. First call on a tab subscribes; subsequent calls
+  // are fast reads from the in-memory ring buffer. Actions:
+  //   read   (default) → return entries [+ optional level/since/limit filter]
+  //   clear            → wipe the buffer
+  async [TOOL_NAMES.CONSOLE](args) {
+    const tab = await resolveTarget(args);
+    const tabId = requireTabId(tab);
+    const action = typeof args.action === "string" ? args.action : "read";
+
+    if (action === "clear") {
+      return clearConsole(tabId);
+    }
+
+    // Subscribe first call (cheap idempotent on subsequent calls).
+    await ensureConsoleCapture(tabId);
+
+    const levels = parseLevels(args.levels);
+    const since  = typeof args.since === "number" ? args.since : undefined;
+    const limit  = typeof args.limit === "number" ? args.limit : undefined;
+    return readConsole(tabId, { levels, since, limit });
+  },
+
+  // §2.7a — network capture. First call on a tab subscribes; subsequent calls
+  // are reads from the in-memory ring. action: read | clear | har | body.
+  async [TOOL_NAMES.NETWORK](args) {
+    const tab = await resolveTarget(args);
+    const tabId = requireTabId(tab);
+    const action = typeof args.action === "string" ? args.action : "read";
+
+    if (action === "clear") return clearNetwork(tabId);
+
+    await ensureNetworkCapture(tabId);
+
+    if (action === "body") {
+      const requestId = typeof args.requestId === "string" ? args.requestId : "";
+      if (!requestId) throw new Error("chrome_network body requires --request-id.");
+      return getBody(tabId, requestId);
+    }
+
+    const filter = typeof args.filter === "string" ? args.filter : undefined;
+    const status = typeof args.status === "string" ? args.status : undefined;
+    const method = typeof args.method === "string" ? args.method : undefined;
+    const limit  = typeof args.limit === "number" ? args.limit : undefined;
+
+    if (action === "har") {
+      return buildHar(tabId, { filter, status: status as "ok" | "redirect" | "client_error" | "server_error" | "failed" | undefined, method, limit });
+    }
+    return readNetwork(tabId, { filter, status: status as "ok" | "redirect" | "client_error" | "server_error" | "failed" | undefined, method, limit });
   }
 };
+
+// Parse a comma string or array of strings into validated console levels.
+// Unknown levels are silently dropped — agents pass labels not enums.
+function parseLevels(input: unknown): ConsoleLevel[] | undefined {
+  const valid = new Set<ConsoleLevel>(["log", "info", "warn", "error", "debug", "exception"]);
+  if (typeof input === "string") {
+    return input.split(",").map((s) => s.trim()).filter((s): s is ConsoleLevel => valid.has(s as ConsoleLevel));
+  }
+  if (Array.isArray(input)) {
+    return input.filter((s): s is ConsoleLevel => typeof s === "string" && valid.has(s as ConsoleLevel));
+  }
+  return undefined;
+}
 
 // Parse "x,y,w,h" → CDP clip object. Strict: rejects negative or non-numeric.
 function parseBbox(spec: string): { x: number; y: number; width: number; height: number; scale: number } {

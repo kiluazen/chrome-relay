@@ -65,7 +65,19 @@ Notes:
   }
 
   function tabOpt(cmd: Command) {
-    return cmd.option("-t, --tab <id>", "target tab ID", (v) => Number(v));
+    return cmd
+      .option("-t, --tab <id>", "target tab ID", (v) => Number(v))
+      .option("--group <name>", "target the active tab of a named group window (see `chrome-relay group`)");
+  }
+
+  // Build a base args object from common options. Every subcommand that
+  // takes a tab/group routes through here so the `--tab wins, --group
+  // fallback` contract stays in one place.
+  function baseArgs(opts: { tab?: number; group?: string }): Record<string, unknown> {
+    const args: Record<string, unknown> = {};
+    if (opts.tab !== undefined)  args.tabId = opts.tab;
+    if (opts.group)              args.groupName = opts.group;
+    return args;
   }
 
   program
@@ -103,6 +115,7 @@ Examples:
 
     const args: Record<string, unknown> = { url };
     if (opts.tab !== undefined) args.tabId = opts.tab;
+    if (opts.group) args.groupName = opts.group;
     if (opts.new) args.newTab = true;
     if (opts.inactive) args.active = false;
     await run("chrome_navigate", args);
@@ -136,6 +149,7 @@ full-tab screenshot when an agent only needs to see one component.
   ).action(async (opts) => {
     const args: Record<string, unknown> = {};
     if (opts.tab !== undefined) args.tabId = opts.tab;
+    if (opts.group) args.groupName = opts.group;
     if (opts.full) args.fullPage = true;
     if (opts.bbox) args.bbox = opts.bbox;
     if (opts.selector) args.selector = opts.selector;
@@ -169,6 +183,7 @@ full-tab screenshot when an agent only needs to see one component.
   ).action(async (opts) => {
     const args: Record<string, unknown> = {};
     if (opts.tab !== undefined) args.tabId = opts.tab;
+    if (opts.group) args.groupName = opts.group;
     if (opts.interactive) args.interactiveOnly = true;
     await run("chrome_read_page", args);
   });
@@ -178,6 +193,7 @@ full-tab screenshot when an agent only needs to see one component.
   ).action(async (selector: string, opts) => {
     const args: Record<string, unknown> = { selector };
     if (opts.tab !== undefined) args.tabId = opts.tab;
+    if (opts.group) args.groupName = opts.group;
     await run("chrome_click_element", args);
   });
 
@@ -188,6 +204,7 @@ full-tab screenshot when an agent only needs to see one component.
   ).action(async (selector: string, value: string, opts) => {
     const args: Record<string, unknown> = { selector, value };
     if (opts.tab !== undefined) args.tabId = opts.tab;
+    if (opts.group) args.groupName = opts.group;
     await run("chrome_fill_or_select", args);
   });
 
@@ -211,6 +228,7 @@ For typing text into a field, use \`chrome-relay type\` instead.
   ).action(async (keys: string, opts) => {
     const args: Record<string, unknown> = { keys };
     if (opts.tab !== undefined) args.tabId = opts.tab;
+    if (opts.group) args.groupName = opts.group;
     await run("chrome_keyboard", args);
   });
 
@@ -237,6 +255,7 @@ When to pick which:
   ).action(async (text: string, opts) => {
     const args: Record<string, unknown> = { text };
     if (opts.tab !== undefined) args.tabId = opts.tab;
+    if (opts.group) args.groupName = opts.group;
     if (opts.selector) args.selector = opts.selector;
     await run("chrome_type", args);
   });
@@ -264,6 +283,7 @@ Notes:
   ).action(async (code: string, opts) => {
     const args: Record<string, unknown> = { code };
     if (opts.tab !== undefined) args.tabId = opts.tab;
+    if (opts.group) args.groupName = opts.group;
     if (typeof opts.timeoutMs === "number") args.timeoutMs = opts.timeoutMs;
     await run("chrome_evaluate", args);
   });
@@ -339,6 +359,7 @@ Notes:
   ).action(async (name: string, opts) => {
     const args: Record<string, unknown> = { action: "preset", name };
     if (opts.tab !== undefined) args.tabId = opts.tab;
+    if (opts.group) args.groupName = opts.group;
     await run("chrome_viewport", args);
   });
 
@@ -349,6 +370,7 @@ Notes:
   ).action(async (opts) => {
     const args: Record<string, unknown> = { action: "clear" };
     if (opts.tab !== undefined) args.tabId = opts.tab;
+    if (opts.group) args.groupName = opts.group;
     await run("chrome_viewport", args);
   });
 
@@ -358,6 +380,227 @@ Notes:
     .action(async () => {
       await run("chrome_viewport", { action: "list" });
     });
+
+  program
+    .command("self-reload")
+    .description("Restart the chrome-relay extension's service worker (picks up newly built code).")
+    .action(async () => {
+      await run("chrome_self_reload", {});
+    });
+
+  // ---------- ax (§2.4 — accessibility tree) ----------
+  tabOpt(
+    program
+      .command("ax")
+      .description("Extract the accessibility tree — ~30× smaller than `read` and more semantic.")
+      .option("-i, --interactive-only", "filter to actionable roles (button, link, textbox, ...)")
+      .option("--root <role>",           "start from the first node matching this role (e.g. 'main')")
+      .option("--include-subframes",     "walk subframes too (default: top frame only)")
+      .addHelpText(
+        "after",
+        `
+
+Examples:
+  chrome-relay ax --tab 123
+  chrome-relay ax --tab 123 --interactive-only
+  chrome-relay ax --tab 123 --root main --interactive-only
+
+Notes:
+  Each node carries an "id" — that's the backendDOMNodeId. Pass it to
+  \`chrome-relay click-ax --node <id>\` to click without a CSS selector.
+`
+      )
+  ).action(async (opts) => {
+    const args: Record<string, unknown> = baseArgs(opts);
+    if (opts.interactiveOnly)  args.interactiveOnly = true;
+    if (opts.root)             args.rootRole = opts.root;
+    if (opts.includeSubframes) args.includeSubframes = true;
+    await run("chrome_ax", args);
+  });
+
+  tabOpt(
+    program
+      .command("click-ax")
+      .description("Click an element by its backendDOMNodeId from a previous `ax` call.")
+      .requiredOption("--node <id>", "backendDOMNodeId from `chrome-relay ax`", (v) => Number(v))
+      .addHelpText(
+        "after",
+        `
+
+Examples:
+  chrome-relay click-ax --tab 123 --node 456
+
+Notes:
+  Throws explicitly if the node id is stale (page mutated since you called
+  \`ax\`). Re-run \`ax\` and pass the fresh id.
+`
+      )
+  ).action(async (opts) => {
+    const args: Record<string, unknown> = baseArgs(opts);
+    args.node = opts.node;
+    await run("chrome_click_ax", args);
+  });
+
+  // ---------- group (§2.1 — named Chrome windows for parallel agent work) ----------
+  const group = program
+    .command("group")
+    .description("Manage named Chrome windows so multiple agents can drive separate windows.")
+    .addHelpText(
+      "after",
+      `
+
+Examples:
+  chrome-relay group create bidsmith-h01 --url https://reddit.com
+  chrome-relay group list
+  chrome-relay --group bidsmith-h01 navigate https://news.ycombinator.com
+  chrome-relay --group bidsmith-h01 screenshot -o evidence.png
+  chrome-relay group close bidsmith-h01
+
+Notes:
+  Hard lifecycle: if you manually close the group's window, the next
+  --group operation fails loudly until you run \`group close\` + \`group create\` again.
+  If you pass both --tab and --group on the same command, --tab wins.
+`
+    );
+
+  group
+    .command("create <name>")
+    .description("Open a new Chrome window and bind it to <name>.")
+    .option("--url <url>", "initial URL (default about:blank)")
+    .option("--label <label>", "human-readable description shown in popup/list")
+    .action(async (name: string, opts) => {
+      const args: Record<string, unknown> = { action: "create", name };
+      if (opts.url)   args.url = opts.url;
+      if (opts.label) args.label = opts.label;
+      await run("chrome_group", args);
+    });
+
+  group
+    .command("list")
+    .description("List all known groups + whether their window is still alive.")
+    .action(async () => {
+      await run("chrome_group", { action: "list" });
+    });
+
+  group
+    .command("close <name>")
+    .description("Close the group's window (if alive) and remove the binding.")
+    .action(async (name: string) => {
+      await run("chrome_group", { action: "close", name });
+    });
+
+  // ---------- network (§2.7a — HTTP capture + HAR export) ----------
+  const network = program
+    .command("network")
+    .description("Capture HTTP request/response metadata. Ring buffer, last 200 per tab.")
+    .addHelpText(
+      "after",
+      `
+
+Examples:
+  chrome-relay network --tab 123                          # last 200 requests
+  chrome-relay network --tab 123 --filter api.example.com  # url substring
+  chrome-relay network --tab 123 --status failed           # only failures
+  chrome-relay network --tab 123 --method POST
+  chrome-relay network --tab 123 --body <requestId>        # lazy body fetch
+  chrome-relay network --tab 123 har > capture.har         # HAR export
+  chrome-relay network --tab 123 --clear
+
+Privacy:
+  Capturing network traffic includes Authorization headers, cookies, and
+  request/response bodies. The capture stays in the extension's memory and
+  is wiped on tab close. Don't run this on a tab whose state you wouldn't
+  share with the agent invoking chrome-relay.
+
+Notes:
+  Bodies are NOT eagerly buffered — Chrome GCs response bodies ~30s after
+  the request finishes. Use \`--body <id>\` promptly. WebSocket frames and
+  SSE streams are out of scope.
+`
+    );
+
+  tabOpt(
+    network
+      .command("read", { isDefault: true })
+      .description("List captured network entries.")
+      .option("--filter <substr>", "url substring filter")
+      .option("--status <bucket>", "ok | redirect | client_error | server_error | failed")
+      .option("--method <verb>",   "exact method, e.g. POST")
+      .option("--limit <n>",       "cap response length", (v) => Number(v))
+  ).action(async (opts) => {
+    const args: Record<string, unknown> = baseArgs(opts);
+    if (opts.filter) args.filter = opts.filter;
+    if (opts.status) args.status = opts.status;
+    if (opts.method) args.method = opts.method;
+    if (typeof opts.limit === "number") args.limit = opts.limit;
+    await run("chrome_network", args);
+  });
+
+  tabOpt(
+    network
+      .command("body <requestId>")
+      .description("Fetch the response body for one request (lazy; may fail if GC'd).")
+  ).action(async (requestId: string, opts) => {
+    const args: Record<string, unknown> = { ...baseArgs(opts), action: "body", requestId };
+    await run("chrome_network", args);
+  });
+
+  tabOpt(
+    network
+      .command("har")
+      .description("Emit HAR-compatible JSON for the captured entries.")
+      .option("--filter <substr>", "url substring filter")
+      .option("--status <bucket>", "status bucket filter")
+  ).action(async (opts) => {
+    const args: Record<string, unknown> = { ...baseArgs(opts), action: "har" };
+    if (opts.filter) args.filter = opts.filter;
+    if (opts.status) args.status = opts.status;
+    await run("chrome_network", args);
+  });
+
+  tabOpt(
+    network
+      .command("clear")
+      .description("Wipe the network buffer for this tab.")
+  ).action(async (opts) => {
+    const args: Record<string, unknown> = { ...baseArgs(opts), action: "clear" };
+    await run("chrome_network", args);
+  });
+
+  // ---------- console (§2.7c — page console + exception capture) ----------
+  tabOpt(
+    program
+      .command("console")
+      .description("Read console.log/warn/error + page exceptions (ring buffer, last 200).")
+      .option("--level <levels>", "comma-separated: log,info,warn,error,debug,exception")
+      .option("--since <id>",     "only return entries with id > since (live-tail-ish)", (v) => Number(v))
+      .option("--limit <n>",      "cap response length", (v) => Number(v))
+      .option("--clear",          "wipe the buffer (no read)")
+      .addHelpText(
+        "after",
+        `
+
+Examples:
+  chrome-relay console --tab 123
+  chrome-relay console --tab 123 --level error,exception
+  chrome-relay console --tab 123 --since 50         # entries newer than id 50 (tail-style polling)
+  chrome-relay console --tab 123 --clear
+
+Notes:
+  Ring buffer holds the last 200 entries per tab (or 256 KB, whichever first).
+  Wipes on tab close. First call on a tab subscribes; subsequent calls are
+  instant in-memory reads.
+`
+      )
+  ).action(async (opts) => {
+    const args: Record<string, unknown> = {};
+    if (opts.tab !== undefined)    args.tabId = opts.tab;
+    if (opts.clear)                args.action = "clear";
+    if (opts.level)                args.levels = opts.level;
+    if (typeof opts.since === "number") args.since = opts.since;
+    if (typeof opts.limit === "number") args.limit = opts.limit;
+    await run("chrome_console", args);
+  });
 
   return program;
 }

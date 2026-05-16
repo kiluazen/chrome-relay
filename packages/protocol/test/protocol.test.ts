@@ -15,15 +15,21 @@ import {
 describe("TOOL_NAMES", () => {
   it("exposes the expected stable tool surface", () => {
     expect(Object.keys(TOOL_NAMES).sort()).toEqual([
+      "AX",
       "CLICK",
+      "CLICK_AX",
       "CLOSE_TABS",
+      "CONSOLE",
       "EVALUATE",
       "FILL",
       "GET_WINDOWS_AND_TABS",
+      "GROUP",
       "KEYBOARD",
       "NAVIGATE",
+      "NETWORK",
       "READ_PAGE",
       "SCREENSHOT",
+      "SELF_RELOAD",
       "SWITCH_TAB",
       "TYPE",
       "VIEWPORT"

@@ -110,6 +110,88 @@ describe("CLI argument parsing", () => {
     });
   });
 
+  describe("network (§2.7a)", () => {
+    it("default (read) posts chrome_network with just tabId", async () => {
+      await runArgs("network", "--tab", "42");
+      expect(lastBody()).toEqual({ name: "chrome_network", args: { tabId: 42 } });
+    });
+    it("filter + status + method + limit are forwarded", async () => {
+      await runArgs("network", "--tab", "42", "--filter", "api.", "--status", "ok", "--method", "POST", "--limit", "10");
+      expect(lastBody().args).toEqual({
+        tabId: 42, filter: "api.", status: "ok", method: "POST", limit: 10
+      });
+    });
+    it("body subcommand sets action=body + requestId", async () => {
+      await runArgs("network", "body", "req-123", "--tab", "42");
+      expect(lastBody()).toEqual({
+        name: "chrome_network",
+        args: { tabId: 42, action: "body", requestId: "req-123" }
+      });
+    });
+    it("har subcommand sets action=har", async () => {
+      await runArgs("network", "har", "--tab", "42");
+      expect(lastBody().args).toMatchObject({ tabId: 42, action: "har" });
+    });
+    it("clear subcommand sets action=clear", async () => {
+      await runArgs("network", "clear", "--tab", "42");
+      expect(lastBody().args).toMatchObject({ tabId: 42, action: "clear" });
+    });
+  });
+
+  describe("ax (§2.4)", () => {
+    it("ax default posts chrome_ax with just tabId", async () => {
+      await runArgs("ax", "--tab", "42");
+      expect(lastBody()).toEqual({ name: "chrome_ax", args: { tabId: 42 } });
+    });
+    it("ax --interactive-only --root main --include-subframes forwards every flag", async () => {
+      await runArgs("ax", "--tab", "42", "--interactive-only", "--root", "main", "--include-subframes");
+      expect(lastBody().args).toEqual({
+        tabId: 42,
+        interactiveOnly: true,
+        rootRole: "main",
+        includeSubframes: true
+      });
+    });
+    it("click-ax requires --node and forwards it", async () => {
+      await runArgs("click-ax", "--tab", "42", "--node", "123");
+      expect(lastBody()).toEqual({ name: "chrome_click_ax", args: { tabId: 42, node: 123 } });
+    });
+  });
+
+  describe("group (§2.1)", () => {
+    it("create posts action=create + name (+ url + label)", async () => {
+      await runArgs("group", "create", "bidsmith-h01", "--url", "https://reddit.com", "--label", "ad ops");
+      expect(lastBody()).toEqual({
+        name: "chrome_group",
+        args: { action: "create", name: "bidsmith-h01", url: "https://reddit.com", label: "ad ops" }
+      });
+    });
+
+    it("list posts action=list with no extras", async () => {
+      await runArgs("group", "list");
+      expect(lastBody()).toEqual({ name: "chrome_group", args: { action: "list" } });
+    });
+
+    it("close posts action=close + name", async () => {
+      await runArgs("group", "close", "bidsmith-h01");
+      expect(lastBody()).toEqual({
+        name: "chrome_group",
+        args: { action: "close", name: "bidsmith-h01" }
+      });
+    });
+
+    it("--group on a normal subcommand sets groupName", async () => {
+      await runArgs("navigate", "https://example.com", "--group", "bidsmith-h01");
+      expect(lastBody().args).toMatchObject({ url: "https://example.com", groupName: "bidsmith-h01" });
+    });
+
+    it("--tab wins when both --tab and --group are passed", async () => {
+      await runArgs("read", "--tab", "42", "--group", "any");
+      // Both forwarded — extension's resolveTarget enforces precedence.
+      expect(lastBody().args).toEqual({ tabId: 42, groupName: "any" });
+    });
+  });
+
   describe("viewport (§2.2)", () => {
     it("preset posts action=preset + name", async () => {
       await runArgs("viewport", "preset", "iphone-14", "--tab", "42");
