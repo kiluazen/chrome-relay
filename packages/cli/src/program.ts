@@ -91,10 +91,18 @@ Notes:
     return args;
   }
 
+  // `tabs` accepts an optional `list` verb for consistency with `group list`,
+  // `viewport list`, `network read`, etc. Bare `tabs` and `tabs list` are
+  // equivalent. Anything else after `tabs` is a positional we don't expect
+  // and Commander will reject it.
   program
-    .command("tabs")
-    .description("List open Chrome windows and tabs.")
-    .action(async () => {
+    .command("tabs [verb]")
+    .description("List open Chrome windows and tabs. (verb 'list' is accepted as alias)")
+    .action(async (verb?: string) => {
+      if (verb && verb !== "list") {
+        process.stderr.write(`unknown tabs verb: ${verb}. Use 'tabs' or 'tabs list'.\n`);
+        process.exit(1);
+      }
       await run("get_windows_and_tabs", {});
     });
 
@@ -139,6 +147,7 @@ Examples:
       .option("--bbox <rect>", "capture a region: 'x,y,width,height' (pixels)")
       .option("--selector <css>", "capture the bounding box of a CSS selector")
       .option("--padding <px>", "pixels of padding around --selector region", (v) => Number(v))
+      .option("--max-edge <px>", "downscale so longer edge ≤ this many pixels (no default; opt-in)", (v) => Number(v))
       .option("-o, --out <path>", "save image to path (base64 PNG decoded)")
       .addHelpText(
         "after",
@@ -163,6 +172,7 @@ full-tab screenshot when an agent only needs to see one component.
     if (opts.bbox) args.bbox = opts.bbox;
     if (opts.selector) args.selector = opts.selector;
     if (typeof opts.padding === "number") args.padding = opts.padding;
+    if (typeof opts.maxEdge === "number") args.maxEdge = opts.maxEdge;
     try {
       const result = await callTool("chrome_screenshot", args);
       if (opts.out && result && typeof result === "object") {
@@ -491,21 +501,44 @@ Notes:
     });
 
   // ---------- network (§2.7a — HTTP capture + HAR export) ----------
-  const network = program
-    .command("network")
-    .description("Capture HTTP request/response metadata. Ring buffer, last 200 per tab.")
+  // Filter / status / method / limit are lifted to the parent so they work
+  // with `chrome-relay network --filter X` AND `network read --filter X`.
+  // Issue #6 was that they only worked on the explicit `read` subcommand
+  // while the help advertised them on the parent.
+  function netFilterOpts(cmd: Command) {
+    return cmd
+      .option("--filter <substr>", "url substring filter")
+      .option("--status <bucket>", "ok | redirect | client_error | server_error | failed")
+      .option("--method <verb>",   "exact method, e.g. POST")
+      .option("--limit <n>",       "cap response length", (v) => Number(v));
+  }
+  function netFilterArgs(opts: { filter?: string; status?: string; method?: string; limit?: number }) {
+    const a: Record<string, unknown> = {};
+    if (opts.filter) a.filter = opts.filter;
+    if (opts.status) a.status = opts.status;
+    if (opts.method) a.method = opts.method;
+    if (typeof opts.limit === "number") a.limit = opts.limit;
+    return a;
+  }
+
+  const network = tabOpt(netFilterOpts(
+    program
+      .command("network")
+      .description("Capture HTTP request/response metadata. Ring buffer, last 200 per tab.")
+  ))
     .addHelpText(
       "after",
       `
 
 Examples:
-  chrome-relay network --tab 123                          # last 200 requests
-  chrome-relay network --tab 123 --filter api.example.com  # url substring
-  chrome-relay network --tab 123 --status failed           # only failures
+  chrome-relay network --tab 123                              # last 200 requests
+  chrome-relay network --tab 123 --filter api.example.com      # url substring
+  chrome-relay network --tab 123 --status failed
   chrome-relay network --tab 123 --method POST
-  chrome-relay network --tab 123 --body <requestId>        # lazy body fetch
-  chrome-relay network --tab 123 har > capture.har         # HAR export
-  chrome-relay network --tab 123 --clear
+  chrome-relay network body <requestId> --tab 123              # lazy body fetch
+  chrome-relay network har --tab 123 > capture.har             # HAR (metadata only)
+  chrome-relay network har --tab 123 --with-bodies > full.har  # HAR with bodies
+  chrome-relay network clear --tab 123
 
 Privacy:
   Capturing network traffic includes Authorization headers, cookies, and
@@ -515,25 +548,23 @@ Privacy:
 
 Notes:
   Bodies are NOT eagerly buffered — Chrome GCs response bodies ~30s after
-  the request finishes. Use \`--body <id>\` promptly. WebSocket frames and
-  SSE streams are out of scope.
+  the request finishes. Use \`--body <id>\` or \`har --with-bodies\` promptly.
+  WebSocket frames and SSE streams are out of scope.
 `
-    );
+    )
+    // Default action: read. Triggered by `chrome-relay network --tab N [--filter X]`
+    // because we don't declare an explicit `read` subcommand.
+    .action(async (opts) => {
+      const args: Record<string, unknown> = { ...baseArgs(opts), ...netFilterArgs(opts) };
+      await run("chrome_network", args);
+    });
 
-  tabOpt(
-    network
-      .command("read", { isDefault: true })
-      .description("List captured network entries.")
-      .option("--filter <substr>", "url substring filter")
-      .option("--status <bucket>", "ok | redirect | client_error | server_error | failed")
-      .option("--method <verb>",   "exact method, e.g. POST")
-      .option("--limit <n>",       "cap response length", (v) => Number(v))
-  ).action(async (opts) => {
-    const args: Record<string, unknown> = baseArgs(opts);
-    if (opts.filter) args.filter = opts.filter;
-    if (opts.status) args.status = opts.status;
-    if (opts.method) args.method = opts.method;
-    if (typeof opts.limit === "number") args.limit = opts.limit;
+  // `network read` as an explicit verb alias — same behavior as the parent's
+  // default action. Kept for consistency with `group list` / `viewport list`.
+  tabOpt(netFilterOpts(
+    network.command("read").description("(alias) list captured network entries.")
+  )).action(async (opts) => {
+    const args: Record<string, unknown> = { ...baseArgs(opts), ...netFilterArgs(opts) };
     await run("chrome_network", args);
   });
 
@@ -541,21 +572,29 @@ Notes:
     network
       .command("body <requestId>")
       .description("Fetch the response body for one request (lazy; may fail if GC'd).")
+      .option("--head <bytes>", "truncate to first N bytes", (v) => Number(v))
+      .option("--full",         "return the full body — default truncates to 8 KB")
   ).action(async (requestId: string, opts) => {
     const args: Record<string, unknown> = { ...baseArgs(opts), action: "body", requestId };
+    if (opts.full) args.full = true;
+    if (typeof opts.head === "number") args.head = opts.head;
     await run("chrome_network", args);
   });
 
-  tabOpt(
+  tabOpt(netFilterOpts(
     network
       .command("har")
       .description("Emit HAR-compatible JSON for the captured entries.")
-      .option("--filter <substr>", "url substring filter")
-      .option("--status <bucket>", "status bucket filter")
-  ).action(async (opts) => {
-    const args: Record<string, unknown> = { ...baseArgs(opts), action: "har" };
-    if (opts.filter) args.filter = opts.filter;
-    if (opts.status) args.status = opts.status;
+      .option("--with-bodies", "fetch response bodies before emitting (best-effort; bodies GC'd by Chrome become null)")
+  )).action(async (opts) => {
+    const args: Record<string, unknown> = { ...baseArgs(opts), ...netFilterArgs(opts), action: "har" };
+    if (opts.withBodies) args.withBodies = true;
+    else {
+      process.stderr.write(
+        "[chrome-relay] HAR exported WITHOUT response bodies. Pass --with-bodies to include them " +
+          "(best-effort; bodies older than ~30s may be unavailable).\n"
+      );
+    }
     await run("chrome_network", args);
   });
 

@@ -181,11 +181,26 @@ const handlers: Record<ToolName, ToolHandler> = {
 
     const result = await send<{ data: string }>(tabId, "Page.captureScreenshot", params);
 
+    // #2 — optional downscale via OffscreenCanvas. Agents under image-size caps
+    // (most multimodal APIs limit to ~2000 px on the longer edge) can pass
+    // --max-edge to keep mobile-DPR captures under the limit without doing a
+    // post-process step on their side. No default — full fidelity stays opt-out.
+    let outData = result.data;
+    let downscaled: { from: { width: number; height: number }; to: { width: number; height: number } } | null = null;
+    if (typeof args.maxEdge === "number" && args.maxEdge > 0) {
+      const ds = await downscalePngToMaxEdge(result.data, args.maxEdge);
+      outData = ds.data;
+      if (ds.from.width !== ds.to.width || ds.from.height !== ds.to.height) {
+        downscaled = { from: ds.from, to: ds.to };
+      }
+    }
+
     return {
       tabId,
       windowId: tab.windowId,
-      dataUrl: `data:image/png;base64,${result.data}`,
-      ...(clipMeta ? { clip: clipMeta } : {})
+      dataUrl: `data:image/png;base64,${outData}`,
+      ...(clipMeta ? { clip: clipMeta } : {}),
+      ...(downscaled ? { downscaled } : {})
     };
   },
 
@@ -367,10 +382,13 @@ const handlers: Record<ToolName, ToolHandler> = {
         ? { type: "portraitPrimary", angle: 0 }
         : { type: "landscapePrimary", angle: 0 }
     });
-    await send(tabId, "Emulation.setTouchEmulationEnabled", {
-      enabled: spec.hasTouch,
-      maxTouchPoints: spec.hasTouch ? 1 : 0
-    });
+    // CDP rejects maxTouchPoints: 0 ("must be between 1 and 16"). When
+    // disabling touch, omit the field — `enabled: false` alone is valid.
+    await send(tabId, "Emulation.setTouchEmulationEnabled",
+      spec.hasTouch
+        ? { enabled: true, maxTouchPoints: 1 }
+        : { enabled: false }
+    );
     if (spec.userAgent) {
       await send(tabId, "Emulation.setUserAgentOverride", { userAgent: spec.userAgent });
     }
@@ -486,7 +504,19 @@ const handlers: Record<ToolName, ToolHandler> = {
     if (action === "body") {
       const requestId = typeof args.requestId === "string" ? args.requestId : "";
       if (!requestId) throw new Error("chrome_network body requires --request-id.");
-      return getBody(tabId, requestId);
+      const result = await getBody(tabId, requestId);
+      // §5 — default truncate to 8KB head to keep agent contexts manageable.
+      // --full bypasses; --head <bytes> caps explicitly.
+      const full = args.full === true;
+      const head = typeof args.head === "number" ? args.head : (full ? Infinity : 8 * 1024);
+      const truncated = result.body.length > head;
+      return {
+        body: truncated ? result.body.slice(0, head) : result.body,
+        base64Encoded: result.base64Encoded,
+        truncated,
+        totalBytes: result.body.length,
+        ...(truncated ? { hint: "pass --full to get the entire body" } : {})
+      };
     }
 
     const filter = typeof args.filter === "string" ? args.filter : undefined;
@@ -495,7 +525,12 @@ const handlers: Record<ToolName, ToolHandler> = {
     const limit  = typeof args.limit === "number" ? args.limit : undefined;
 
     if (action === "har") {
-      return buildHar(tabId, { filter, status: status as "ok" | "redirect" | "client_error" | "server_error" | "failed" | undefined, method, limit });
+      const withBodies = args.withBodies === true;
+      return buildHar(
+        tabId,
+        { filter, status: status as "ok" | "redirect" | "client_error" | "server_error" | "failed" | undefined, method, limit },
+        withBodies
+      );
     }
     return readNetwork(tabId, { filter, status: status as "ok" | "redirect" | "client_error" | "server_error" | "failed" | undefined, method, limit });
   }
@@ -512,6 +547,46 @@ function parseLevels(input: unknown): ConsoleLevel[] | undefined {
     return input.filter((s): s is ConsoleLevel => typeof s === "string" && valid.has(s as ConsoleLevel));
   }
   return undefined;
+}
+
+// Downscale a base64 PNG so its longer edge ≤ maxEdge. Uses OffscreenCanvas
+// (available in MV3 service workers). Returns the original bytes unchanged
+// if the image is already within the limit.
+async function downscalePngToMaxEdge(
+  base64Png: string,
+  maxEdge: number
+): Promise<{ data: string; from: { width: number; height: number }; to: { width: number; height: number } }> {
+  const binary = atob(base64Png);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes as BlobPart], { type: "image/png" });
+  const bitmap = await createImageBitmap(blob);
+  const fromW = bitmap.width, fromH = bitmap.height;
+  const longer = Math.max(fromW, fromH);
+  if (longer <= maxEdge) {
+    bitmap.close();
+    return { data: base64Png, from: { width: fromW, height: fromH }, to: { width: fromW, height: fromH } };
+  }
+  const scale = maxEdge / longer;
+  const toW = Math.max(1, Math.round(fromW * scale));
+  const toH = Math.max(1, Math.round(fromH * scale));
+  const canvas = new OffscreenCanvas(toW, toH);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    bitmap.close();
+    throw new Error("OffscreenCanvas 2d context unavailable");
+  }
+  ctx.drawImage(bitmap, 0, 0, toW, toH);
+  bitmap.close();
+  const outBlob = await canvas.convertToBlob({ type: "image/png" });
+  const outBuf = await outBlob.arrayBuffer();
+  const outBytes = new Uint8Array(outBuf);
+  // btoa(String.fromCharCode(...bytes)) — chunked to avoid call-stack overflow
+  let outBin = "";
+  for (let i = 0; i < outBytes.length; i += 8192) {
+    outBin += String.fromCharCode.apply(null, Array.from(outBytes.subarray(i, i + 8192)));
+  }
+  return { data: btoa(outBin), from: { width: fromW, height: fromH }, to: { width: toW, height: toH } };
 }
 
 // Parse "x,y,w,h" → CDP clip object. Strict: rejects negative or non-numeric.

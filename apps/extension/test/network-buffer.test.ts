@@ -183,7 +183,8 @@ describe("network-buffer", () => {
         mimeType: "application/json"
       }
     });
-    const har = m.buildHar(8) as { log: { entries: Array<{ request: any; response: any; timings: any; _chrome_relay: any }> } };
+    // buildHar is async now (withBodies pre-fetch path); always await.
+    const har = (await m.buildHar(8)) as { log: { entries: Array<{ request: any; response: any; timings: any; _chrome_relay: any }> } };
     expect(har.log.entries).toHaveLength(1);
     const e = har.log.entries[0];
     expect(e.request).toMatchObject({ method: "POST", url: "https://x.com/y" });

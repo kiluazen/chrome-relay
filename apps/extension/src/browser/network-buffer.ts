@@ -129,6 +129,9 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
   switch (method) {
     case "Network.requestWillBeSent": {
       const evt = params as RequestWillBeSentEvt;
+      // Filter out our own injected console-recorder and any other
+      // chrome-extension://-origin noise. Agents shouldn't see this.
+      if (evt.request.url.startsWith("chrome-extension://")) return;
       // Same requestId can fire twice in redirect chains; the second wins.
       const existing = buf.byId.get(evt.requestId);
       const entry: NetworkEntry = existing ?? {
@@ -260,8 +263,40 @@ export function clearNetwork(tabId: number): { cleared: number } {
 // (Postman, Charles, browser DevTools "Import HAR") read entries first and
 // ignore the rest. Strict-HAR consumers (Wireshark) may complain; we accept
 // that tradeoff in exchange for ~150 LOC of spec compliance we don't need yet.
-export function buildHar(tabId: number, q: NetworkQuery = {}): unknown {
+//
+// withBodies: best-effort body fetch via Network.getResponseBody. Bodies that
+// Chrome has GC'd (>~30s) become null and are reported as `text: ""` —
+// silently rather than failing the whole export. The `_chrome_relay.bodyState`
+// per-entry is "fetched" | "missing" | "skipped" so callers can audit.
+export async function buildHar(
+  tabId: number,
+  q: NetworkQuery = {},
+  withBodies = false
+): Promise<unknown> {
   const { entries } = readNetwork(tabId, q);
+
+  // Pre-fetch bodies in parallel (cap at 8 concurrent so we don't pound CDP).
+  const bodyState = new Map<string, "fetched" | "missing" | "skipped">();
+  const bodyText  = new Map<string, { text: string; base64Encoded: boolean }>();
+  if (withBodies) {
+    const concurrency = 8;
+    for (let i = 0; i < entries.length; i += concurrency) {
+      const slice = entries.slice(i, i + concurrency);
+      await Promise.all(slice.map(async (e) => {
+        if (e.failed || typeof e.status !== "number") {
+          bodyState.set(e.id, "skipped");
+          return;
+        }
+        try {
+          const r = await getBody(tabId, e.id);
+          bodyText.set(e.id, r);
+          bodyState.set(e.id, "fetched");
+        } catch {
+          bodyState.set(e.id, "missing");
+        }
+      }));
+    }
+  }
   return {
     log: {
       version: "1.2",
@@ -286,11 +321,18 @@ export function buildHar(tabId: number, q: NetworkQuery = {}): unknown {
           httpVersion: "HTTP/1.1",
           cookies: [],
           headers: Object.entries(e.responseHeaders ?? {}).map(([name, value]) => ({ name, value: String(value) })),
-          content: {
-            size: e.decodedBodySize ?? -1,
-            mimeType: e.mimeType ?? ""
-            // text omitted — bodies are lazy. Call `chrome-relay network --body <id>` to fetch.
-          },
+          content: (() => {
+            const body = bodyText.get(e.id);
+            const c: Record<string, unknown> = {
+              size: e.decodedBodySize ?? -1,
+              mimeType: e.mimeType ?? ""
+            };
+            if (body) {
+              c.text = body.text;
+              if (body.base64Encoded) c.encoding = "base64";
+            }
+            return c;
+          })(),
           redirectURL: e.responseHeaders?.["location"] ?? e.responseHeaders?.["Location"] ?? "",
           headersSize: -1,
           bodySize: e.encodedBodySize ?? -1
@@ -309,7 +351,8 @@ export function buildHar(tabId: number, q: NetworkQuery = {}): unknown {
           requestId: e.id,
           fromDiskCache: e.fromDiskCache,
           fromServiceWorker: e.fromServiceWorker,
-          failed: e.failed
+          failed: e.failed,
+          bodyState: bodyState.get(e.id) ?? (withBodies ? "missing" : "skipped")
         }
       }))
     }

@@ -115,26 +115,67 @@ describe("CLI argument parsing", () => {
       await runArgs("network", "--tab", "42");
       expect(lastBody()).toEqual({ name: "chrome_network", args: { tabId: 42 } });
     });
-    it("filter + status + method + limit are forwarded", async () => {
+    it("filter + status + method + limit are forwarded (Issue #6: parent-level flags)", async () => {
+      // These flags now live on the parent `network` command, so `chrome-relay network --filter X`
+      // works without spelling out `read`.
       await runArgs("network", "--tab", "42", "--filter", "api.", "--status", "ok", "--method", "POST", "--limit", "10");
       expect(lastBody().args).toEqual({
         tabId: 42, filter: "api.", status: "ok", method: "POST", limit: 10
       });
     });
-    it("body subcommand sets action=body + requestId", async () => {
+    it("network read alias still works with the same flags", async () => {
+      await runArgs("network", "read", "--tab", "42", "--filter", "api.");
+      expect(lastBody().args).toEqual({ tabId: 42, filter: "api." });
+    });
+    it("body subcommand sets action=body + requestId (default 8KB truncation server-side)", async () => {
       await runArgs("network", "body", "req-123", "--tab", "42");
       expect(lastBody()).toEqual({
         name: "chrome_network",
         args: { tabId: 42, action: "body", requestId: "req-123" }
       });
     });
+    it("body --full opts out of the 8KB head truncation (Issue #5)", async () => {
+      await runArgs("network", "body", "req-1", "--tab", "42", "--full");
+      expect(lastBody().args).toEqual({ tabId: 42, action: "body", requestId: "req-1", full: true });
+    });
+    it("body --head <bytes> caps explicitly (Issue #5)", async () => {
+      await runArgs("network", "body", "req-1", "--tab", "42", "--head", "1024");
+      expect(lastBody().args).toEqual({ tabId: 42, action: "body", requestId: "req-1", head: 1024 });
+    });
     it("har subcommand sets action=har", async () => {
       await runArgs("network", "har", "--tab", "42");
       expect(lastBody().args).toMatchObject({ tabId: 42, action: "har" });
     });
+    it("har --with-bodies opts into the eager-fetch path (Issue #3)", async () => {
+      await runArgs("network", "har", "--tab", "42", "--with-bodies");
+      expect(lastBody().args).toMatchObject({ tabId: 42, action: "har", withBodies: true });
+    });
+    it("har prints the bodyless warning to stderr when --with-bodies is omitted (Issue #3)", async () => {
+      await runArgs("network", "har", "--tab", "42");
+      const stderrText = stderrSpy.mock.calls.map((c) => c[0]).join("");
+      expect(stderrText).toMatch(/HAR exported WITHOUT response bodies/);
+    });
     it("clear subcommand sets action=clear", async () => {
       await runArgs("network", "clear", "--tab", "42");
       expect(lastBody().args).toMatchObject({ tabId: 42, action: "clear" });
+    });
+  });
+
+  describe("screenshot --max-edge (Issue #2)", () => {
+    it("forwards --max-edge as maxEdge", async () => {
+      await runArgs("screenshot", "--tab", "42", "--max-edge", "1600");
+      expect(lastBody().args).toEqual({ tabId: 42, maxEdge: 1600 });
+    });
+  });
+
+  describe("tabs list alias (Issue #7)", () => {
+    it("bare `tabs` still works", async () => {
+      await runArgs("tabs");
+      expect(lastBody()).toEqual({ name: "get_windows_and_tabs", args: {} });
+    });
+    it("`tabs list` is accepted as an alias", async () => {
+      await runArgs("tabs", "list");
+      expect(lastBody()).toEqual({ name: "get_windows_and_tabs", args: {} });
     });
   });
 
