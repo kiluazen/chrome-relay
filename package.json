@@ -1,0 +1,23 @@
+{
+  "name": "chrome-relay-workspace",
+  "private": true,
+  "version": "0.2.4",
+  "packageManager": "pnpm@10.6.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "build:cli": "pnpm --filter chrome-relay build",
+    "build:extension": "pnpm --filter chrome-relay-extension build",
+    "dev:extension": "pnpm --filter chrome-relay-extension dev",
+    "lint": "pnpm -r lint",
+    "store:zip": "pnpm --filter chrome-relay-extension zip",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r --workspace-concurrency=1 test",
+    "test:e2e": "pnpm --filter chrome-relay-extension test:e2e",
+    "test:all": "pnpm test && pnpm test:e2e"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.0.0"
+  }
+}

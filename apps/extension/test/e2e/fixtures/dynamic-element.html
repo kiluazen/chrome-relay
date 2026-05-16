@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>dynamic-element</title></head>
+<body>
+  <h1>Dynamic element</h1>
+  <div id="container">loading...</div>
+
+  <script>
+    // The button only exists 300ms after page load. Tests should be aware
+    // and either poll or use Playwright's auto-waiting before clicking.
+    setTimeout(() => {
+      const btn = document.createElement("button");
+      btn.id = "ready";
+      btn.textContent = "ready";
+      btn.addEventListener("click", () => {
+        document.getElementById("container").dataset.clicked = "true";
+        document.getElementById("container").textContent = "clicked";
+      });
+      document.getElementById("container").innerHTML = "";
+      document.getElementById("container").appendChild(btn);
+    }, 300);
+
+    window.__diag = () => ({
+      hasButton: !!document.getElementById("ready"),
+      clicked: document.getElementById("container").dataset.clicked === "true"
+    });
+  </script>
+</body>
+</html>

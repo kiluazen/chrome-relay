@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>js-async</title></head>
+<body>
+  <h1>JS async + framework internals</h1>
+  <div id="root"></div>
+
+  <script>
+    // Page exposes a "framework state" only reachable via a global. Mimics React
+    // dev internals or a Redux store. A `js` call in MAIN world should reach it.
+    window.__APP_STATE__ = {
+      user: { id: 42, name: "kushal", email: "kushal@example.com" },
+      cart: [{ id: "a", price: 10 }, { id: "b", price: 20 }]
+    };
+
+    // Async API the agent might call via `js`.
+    window.__delayedFetch = (ms = 50) =>
+      new Promise((resolve) => {
+        setTimeout(() => resolve({ status: "ok", n: 7 }), ms);
+      });
+
+    // Sets a value when the agent invokes it via `js`.
+    window.__setState = (k, v) => { window.__APP_STATE__[k] = v; };
+
+    document.getElementById("root").textContent = "ready";
+  </script>
+</body>
+</html>

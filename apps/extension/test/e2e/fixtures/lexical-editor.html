@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>lexical-editor</title></head>
+<body>
+  <h1>Lexical-style contenteditable</h1>
+  <div id="editor" contenteditable="true" role="textbox" data-testid="editor"></div>
+  <pre id="trace"></pre>
+
+  <script>
+    // Lexical/Draft.js/ProseMirror all listen on `beforeinput` and `input` rather
+    // than synthetic KeyboardEvents. Only trusted CDP-issued input events fire
+    // these correctly with insertText semantics.
+    const editor = document.getElementById("editor");
+    const trace = document.getElementById("trace");
+    const events = [];
+
+    editor.addEventListener("beforeinput", (e) => {
+      events.push({ type: "beforeinput", inputType: e.inputType, data: e.data, isTrusted: e.isTrusted });
+      trace.textContent = JSON.stringify(events, null, 2);
+    });
+
+    editor.addEventListener("input", (e) => {
+      events.push({ type: "input", inputType: e.inputType, isTrusted: e.isTrusted, text: editor.textContent });
+      trace.textContent = JSON.stringify(events, null, 2);
+    });
+
+    window.__diag = () => ({
+      text: editor.textContent,
+      eventCount: events.length,
+      trustedBeforeInputs: events.filter(e => e.type === "beforeinput" && e.isTrusted).length
+    });
+  </script>
+</body>
+</html>

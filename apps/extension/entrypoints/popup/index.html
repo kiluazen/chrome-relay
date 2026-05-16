@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chrome Relay</title>
+    <script type="module" src="./main.ts"></script>
+    <style>
+      body {
+        margin: 0;
+        min-width: 380px;
+        font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(120, 245, 201, 0.16), transparent 36%),
+          linear-gradient(135deg, #f8f4ea 0%, #f2ecdf 100%);
+        color: #171717;
+      }
+
+      main {
+        padding: 16px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 19px;
+        letter-spacing: -0.02em;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+      }
+
+      .brand img {
+        width: 34px;
+        height: 34px;
+        border-radius: 10px;
+        box-shadow: 0 8px 18px rgba(18, 60, 68, 0.18);
+      }
+
+      .eyebrow {
+        color: #5f665f;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .card {
+        border: 1px solid #d7d3c8;
+        border-radius: 12px;
+        background: #fffdf7;
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+
+      .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: #b91c1c;
+      }
+
+      .dot.connected {
+        background: #15803d;
+      }
+
+      dl {
+        margin: 0;
+        display: grid;
+        grid-template-columns: 88px 1fr;
+        gap: 8px;
+        font-size: 12px;
+      }
+
+      dt {
+        color: #57534e;
+      }
+
+      dd {
+        margin: 0;
+        word-break: break-word;
+      }
+
+      .hint {
+        font-size: 12px;
+        color: #57534e;
+        line-height: 1.5;
+      }
+
+      .local-note {
+        color: #44403c;
+        font-size: 12px;
+        line-height: 1.45;
+        margin: 8px 0 0;
+      }
+
+      .copy-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .command {
+        flex: 1;
+        overflow-wrap: anywhere;
+        border: 1px solid #e7e0d2;
+        border-radius: 8px;
+        background: #f6f1e7;
+        padding: 8px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+      }
+
+      button.copy {
+        border: 1px solid #171717;
+        border-radius: 8px;
+        background: #171717;
+        color: #fffdf7;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 8px 10px;
+      }
+
+      h2 {
+        margin: 0 0 8px;
+        font-size: 13px;
+      }
+
+      .recent {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 8px;
+      }
+
+      .tool {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 3px 8px;
+        border-left: 3px solid #15803d;
+        padding-left: 8px;
+      }
+
+      .tool.error {
+        border-left-color: #b91c1c;
+      }
+
+      .tool-name {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .tool-meta {
+        color: #57534e;
+        font-size: 11px;
+      }
+
+      .tool-summary {
+        grid-column: 1 / -1;
+        color: #44403c;
+        font-size: 11px;
+        line-height: 1.35;
+        overflow-wrap: anywhere;
+      }
+
+      .empty {
+        color: #78716c;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <img src="/icons/icon-popup.png" alt="" />
+        <div>
+          <div class="eyebrow">Chrome Relay</div>
+        </div>
+      </div>
+
+      <section class="card">
+        <h2>Agent skill</h2>
+        <div class="copy-row">
+          <code id="skill-command" class="command">npx skills add kiluazen/chrome-relay</code>
+          <button id="copy-skill-command" class="copy" type="button">Copy</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Recent tool executions</h2>
+        <ol id="recent-tools" class="recent">
+          <li class="empty">No tool executions yet.</li>
+        </ol>
+      </section>
+      
+    </main>
+  </body>
+  </html>

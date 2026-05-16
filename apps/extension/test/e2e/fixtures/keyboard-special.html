@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>keyboard-special</title></head>
+<body>
+  <h1>Keyboard special-key dispatch</h1>
+  <input id="probe" autofocus />
+  <pre id="report"></pre>
+
+  <script>
+    const events = [];
+    const report = document.getElementById("report");
+    document.getElementById("probe").focus();
+
+    document.addEventListener("keydown", (e) => {
+      events.push({
+        type: "keydown",
+        key: e.key,
+        code: e.code,
+        keyCode: e.keyCode,
+        modifiers: {
+          alt: e.altKey,
+          ctrl: e.ctrlKey,
+          meta: e.metaKey,
+          shift: e.shiftKey
+        },
+        isTrusted: e.isTrusted
+      });
+      report.textContent = JSON.stringify(events.slice(-3), null, 2);
+    });
+
+    window.__diag = () => events;
+    window.__last = () => events.at(-1);
+  </script>
+</body>
+</html>

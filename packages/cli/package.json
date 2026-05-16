@@ -1,0 +1,32 @@
+{
+  "name": "chrome-relay",
+  "version": "0.2.4",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "chrome-relay": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "description": "Connect your local Chrome browser to coding agents through a local bridge.",
+  "keywords": ["chrome", "browser", "automation", "agents", "native-messaging"],
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "fastify": "^5.3.2"
+  },
+  "devDependencies": {
+    "@chrome-relay/protocol": "workspace:*",
+    "tsup": "^8.4.0",
+    "vitest": "^3.0.0"
+  }
+}

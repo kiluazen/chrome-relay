@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>is-trusted-click</title></head>
+<body>
+  <h1>Click trustedness check</h1>
+  <button id="btn">click me</button>
+  <pre id="report"></pre>
+
+  <script>
+    // Some anti-bot dropdowns / Cloudflare turnstiles / custom date pickers
+    // refuse to act on synthetic clicks (`event.isTrusted === false`).
+    // CDP `Input.dispatchMouseEvent` produces trusted events; `el.click()` does not.
+    const btn = document.getElementById("btn");
+    const report = document.getElementById("report");
+    const counts = { trusted: 0, untrusted: 0 };
+    const events = [];
+
+    btn.addEventListener("click", (e) => {
+      events.push({ trusted: e.isTrusted, x: e.clientX, y: e.clientY });
+      if (e.isTrusted) counts.trusted++;
+      else counts.untrusted++;
+      report.textContent = JSON.stringify({ counts, last: events.at(-1) }, null, 2);
+    });
+
+    window.__diag = () => counts;
+  </script>
+</body>
+</html>

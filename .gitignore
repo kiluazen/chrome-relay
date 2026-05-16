@@ -1,0 +1,30 @@
+# deps
+node_modules/
+
+# build outputs
+**/dist/
+apps/extension/build/
+apps/extension/.wxt/
+apps/extension/.output/
+
+# test artifacts
+**/.test-results/
+**/coverage/
+**/playwright-report/
+**/test-results/
+
+# cloudflare workers / pages local state
+.wrangler/
+
+# os
+.DS_Store
+Thumbs.db
+
+# editor
+.idea/
+.vscode/
+
+# misc
+*.log
+.env
+.env.local

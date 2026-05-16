@@ -1,0 +1,29 @@
+{
+  "name": "chrome-relay-extension",
+  "version": "0.2.4",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "wxt build",
+    "dev": "wxt",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "zip": "wxt zip",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:install": "playwright install chromium"
+  },
+  "dependencies": {
+    "@chrome-relay/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "@types/chrome": "^0.0.318",
+    "@types/node": "^22.15.3",
+    "@vitest/expect": "^3.0.0",
+    "jsdom": "^26.0.0",
+    "vitest": "^3.0.0",
+    "wxt": "^0.20.0"
+  }
+}

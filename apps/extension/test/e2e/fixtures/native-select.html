@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>native-select</title></head>
+<body>
+  <h1>Native select</h1>
+  <select id="country">
+    <option value="us">United States</option>
+    <option value="in">India</option>
+    <option value="jp">Japan</option>
+  </select>
+  <div id="last-change"></div>
+
+  <script>
+    const sel = document.getElementById("country");
+    const lastChange = document.getElementById("last-change");
+    let changeCount = 0;
+    sel.addEventListener("change", () => {
+      changeCount++;
+      lastChange.textContent = sel.value;
+      lastChange.dataset.value = sel.value;
+    });
+    window.__diag = () => ({ value: sel.value, changeCount });
+  </script>
+</body>
+</html>

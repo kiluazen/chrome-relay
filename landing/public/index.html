@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chrome Relay - Terminal to Chrome</title>
+    <meta name="description" content="Chrome Relay lets local coding agents drive an open Chrome session through a local CLI bridge. Cookies, SSO, extensions, localhost. No remote relay." />
+    <meta property="og:title" content="Chrome Relay" />
+    <meta property="og:description" content="Let local coding agents use the browser session you already have open." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://chrome-relay.kushalsm.com" />
+    <meta property="og:image" content="https://chrome-relay.kushalsm.com/ext-index.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Chrome Relay" />
+    <meta name="twitter:description" content="A local bridge between Chrome and your coding agent." />
+    <link rel="canonical" href="https://chrome-relay.kushalsm.com" />
+    <link rel="icon" type="image/png" href="/icon-128.png" />
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f7f3e8;
+        --ink: #181818;
+        --muted: #58544c;
+        --line: #d6d0c2;
+        --panel: #fffdf6;
+        --green: #1f7a4d;
+        --green-soft: #e6f2eb;
+        --shadow: 0 22px 70px rgba(16, 24, 32, 0.18);
+      }
+
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; }
+
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--paper);
+        color: var(--ink);
+        line-height: 1.55;
+        overflow-x: hidden;
+      }
+
+      a { color: inherit; }
+
+      .hero { min-height: min(860px, calc(100svh - 78px)); }
+
+      .nav, .hero-inner, .footer {
+        width: min(1240px, calc(100% - 56px));
+        margin: 0 auto;
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 24px 0;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        font-weight: 750;
+      }
+
+      .brand img { width: 36px; height: 36px; border-radius: 8px; }
+
+      .hero-inner {
+        padding: clamp(42px, 6vw, 74px) 0 clamp(62px, 8vw, 96px);
+        display: grid;
+        grid-template-columns: minmax(330px, 0.72fr) minmax(520px, 1.18fr);
+        gap: clamp(34px, 5vw, 72px);
+        align-items: center;
+      }
+
+      .hero-inner > * { min-width: 0; }
+
+      .hero-copy { max-width: 620px; }
+
+      .demo {
+        position: relative;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+        aspect-ratio: 1512 / 800;
+        width: min(100%, 840px);
+        justify-self: end;
+      }
+
+      .demo img,
+      .demo video {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+
+      .demo .demo-caption {
+        position: absolute;
+        left: 12px;
+        bottom: 10px;
+        padding: 4px 10px;
+        background: rgba(24, 24, 24, 0.78);
+        color: var(--paper);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        border-radius: 4px;
+      }
+
+      h1 {
+        margin: 0 0 18px;
+        font-size: clamp(68px, 8.2vw, 118px);
+        line-height: 0.9;
+        font-weight: 760;
+        letter-spacing: -0.055em;
+      }
+
+      h1 .line { display: inline; }
+
+      .lede {
+        margin: 0 0 28px;
+        color: #38352f;
+        font-size: clamp(18px, 2vw, 23px);
+        line-height: 1.45;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 54px;
+        padding: 0 22px;
+        border: 1px solid var(--ink);
+        border-radius: 8px;
+        background: var(--ink);
+        color: #fffdf6;
+        font-size: 17px;
+        font-weight: 760;
+        text-decoration: none;
+      }
+
+      .button.secondary { background: transparent; color: var(--ink); }
+      .button:hover { transform: translateY(-1px); }
+
+      .skill-wrap {
+        border-top: 1px solid var(--line);
+        background: var(--paper);
+      }
+
+      .skill-section {
+        width: min(760px, calc(100% - 56px));
+        margin: 0 auto;
+        display: grid;
+        align-items: center;
+        justify-items: center;
+        gap: 14px;
+        padding: 40px 0;
+        text-align: center;
+      }
+
+      .skill-copy {
+        display: grid;
+        justify-items: center;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .skill-label {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .skill-help {
+        margin: 0;
+        color: #38352f;
+        font-size: 15px;
+        max-width: 54ch;
+      }
+
+      .command-card {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 8px 6px 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #181818;
+        color: var(--panel);
+      }
+
+      .command-card code {
+        white-space: nowrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 14px;
+        color: #c8f7d4;
+      }
+
+      .copy-button {
+        padding: 4px 10px;
+        border: 1px solid rgba(255, 253, 246, 0.18);
+        border-radius: 6px;
+        background: transparent;
+        color: var(--panel);
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .copy-button:hover { background: rgba(255, 253, 246, 0.1); }
+
+      .contact-wrap {
+        border-top: 1px solid var(--line);
+      }
+
+      .contact-form {
+        width: min(760px, calc(100% - 56px));
+        margin: 0 auto;
+        padding: 54px 0 58px;
+        text-align: center;
+      }
+
+      .contact-label {
+        display: block;
+        margin: 0 0 10px;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .contact-row {
+        display: flex;
+        justify-content: center;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .contact-row input {
+        flex: 1 1 auto;
+        min-width: 0;
+        min-height: 44px;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--ink);
+        font: inherit;
+        font-size: 15px;
+      }
+
+      .contact-row input:focus { outline: 2px solid rgba(31, 122, 77, 0.35); outline-offset: 2px; }
+
+      .contact-row button {
+        flex: 0 0 auto;
+        min-height: 44px;
+        min-width: 96px;
+        padding: 0 18px;
+        border: 1px solid var(--ink);
+        border-radius: 8px;
+        background: var(--ink);
+        color: var(--panel);
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .contact-row button:disabled { opacity: 0.6; cursor: default; }
+
+      .contact-note {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .contact-note:empty { display: none; }
+
+      .footer-wrap { border-top: 1px solid var(--line); }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 28px 0 40px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 16px;
+      }
+
+      .footer a { text-decoration: none; }
+      .footer a:hover { color: var(--ink); }
+
+      @media (max-width: 1120px) {
+        .hero {
+          min-height: auto;
+        }
+        .hero-inner {
+          grid-template-columns: 1fr;
+          gap: 40px;
+        }
+        .hero-copy {
+          max-width: 860px;
+        }
+        h1 {
+          font-size: clamp(64px, 8vw, 92px);
+        }
+        .demo {
+          width: 100%;
+          max-width: 900px;
+          justify-self: center;
+        }
+      }
+
+      @media (max-width: 900px) {
+        .nav, .hero-inner, .footer {
+          width: min(1120px, calc(100% - 40px));
+        }
+        .skill-section,
+        .contact-form {
+          width: min(680px, calc(100% - 40px));
+        }
+        .hero-inner {
+          padding: 34px 0 54px;
+          grid-template-columns: 1fr;
+          gap: 34px;
+        }
+        .hero-copy { max-width: 680px; }
+        .demo {
+          width: 100%;
+          justify-self: stretch;
+        }
+        .skill-section {
+          padding: 34px 0;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .nav, .hero-inner, .footer {
+          width: min(1120px, calc(100% - 28px));
+        }
+        .skill-section,
+        .contact-form {
+          width: min(520px, calc(100% - 28px));
+        }
+        .nav {
+          justify-content: center;
+          padding: 18px 0 10px;
+        }
+        .brand img { width: 30px; height: 30px; }
+        .brand { font-size: 18px; }
+        .hero-inner {
+          padding-top: 18px;
+          text-align: center;
+        }
+        h1 {
+          max-width: none;
+          margin-inline: auto;
+          font-size: clamp(46px, 12vw, 66px);
+        }
+        h1 .line { display: block; }
+        .lede {
+          max-width: 31ch;
+          margin: 0 auto 22px;
+          font-size: clamp(16px, 4.2vw, 18px);
+        }
+        .actions { justify-content: center; }
+        .button {
+          width: min(100%, 360px);
+          min-height: 58px;
+        }
+        .demo { border-radius: 8px; }
+        .demo .demo-caption { display: none; }
+        .skill-section {
+          padding: 30px 0;
+        }
+        .skill-help {
+          max-width: 31ch;
+          margin-inline: auto;
+        }
+        .command-card {
+          width: min(100%, 420px);
+          align-items: stretch;
+          flex-direction: column;
+          justify-content: center;
+          min-width: 0;
+          padding: 12px;
+        }
+        .command-card code {
+          white-space: normal;
+          overflow-wrap: anywhere;
+          font-size: clamp(14px, 4vw, 17px);
+        }
+        .copy-button {
+          padding: 9px 10px;
+          width: 100%;
+        }
+        .contact-form {
+          padding: 40px 0 42px;
+        }
+        .contact-row {
+          max-width: 420px;
+          margin: 0 auto;
+        }
+        .contact-row input,
+        .contact-row button {
+          min-height: 52px;
+        }
+        .footer { flex-direction: column; padding: 22px 0 28px; }
+        .footer-links { justify-content: center; }
+      }
+
+      @media (max-width: 760px) {
+        .contact-row {
+          flex-direction: column;
+        }
+        .contact-row button {
+          width: 100%;
+        }
+      }
+
+    </style>
+  </head>
+  <body>
+    <header class="hero">
+      <nav class="nav" aria-label="Primary">
+        <a class="brand" href="/">
+          <img src="/icon-128.png" alt="" />
+          <span>Chrome Relay</span>
+        </a>
+      </nav>
+
+      <div class="hero-inner">
+        <div class="hero-copy">
+          <h1><span class="line">Terminal to</span> <span class="line">Chrome.</span></h1>
+          <p class="lede">
+            Let local agents use the Chrome session that already has cookies, SSO, extensions, and localhost.
+            Nothing leaves the machine.
+          </p>
+          <div class="actions">
+            <a class="button" href="https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb" rel="noopener">Add to Chrome</a>
+          </div>
+        </div>
+        <div class="demo" id="demo">
+          <video autoplay loop muted playsinline preload="metadata" poster="/ext-index.png">
+            <source src="/chrome-relay-kushalsm-demo.mp4" type="video/mp4" />
+            <img src="/chrome-relay-kushalsm-demo.gif" alt="chrome-relay navigating Kushal's site from a local terminal" />
+          </video>
+          <span class="demo-caption">terminal &rarr; your real Chrome</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="skill-wrap">
+      <div class="skill-section">
+        <div class="skill-copy">
+          <span class="skill-label">Comes with an agent skill</span>
+          <p class="skill-help">Install the playbook so agents know the Chrome Relay commands.</p>
+        </div>
+        <div class="command-card">
+          <code>npx skills add kiluazen/chrome-relay</code>
+          <button class="copy-button" type="button" data-copy="npx skills add kiluazen/chrome-relay">Copy</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="contact-wrap">
+      <form class="contact-form" id="contact-form">
+        <label class="contact-label" for="contact-email">Contact me</label>
+        <div class="contact-row">
+          <input id="contact-email" name="email" type="email" required placeholder="you@company.com" autocomplete="email" />
+          <button type="submit">Send</button>
+        </div>
+        <p class="contact-note" id="contact-note" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <div class="footer-wrap">
+      <footer class="footer">
+        <a href="https://kushalsm.com">kushalsm.com</a>
+        <div class="footer-links">
+          <a href="/privacy/">Privacy</a>
+          <a href="/support/">Support</a>
+        </div>
+      </footer>
+    </div>
+    <script>
+      document.querySelectorAll("[data-copy]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          await navigator.clipboard.writeText(button.dataset.copy);
+          button.textContent = "Copied";
+          window.setTimeout(() => {
+            button.textContent = "Copy";
+          }, 1400);
+        });
+      });
+
+      const CONTACT_URL = "https://script.google.com/macros/s/AKfycbx09f-4aNddxzmVVUStNJwjzVip5u3PqVYN7GSgO83FDz5DqYLEFqy4ysARdZ6oeDo8rA/exec";
+      const PRODUCT = "chrome-relay";
+      const cForm = document.getElementById("contact-form");
+      const cNote = document.getElementById("contact-note");
+      cNote.textContent = "";
+      cForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const email = document.getElementById("contact-email").value.trim();
+        if (!email || !email.includes("@")) return;
+        const btn = cForm.querySelector("button");
+        const original = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "Sending…";
+        try {
+          await fetch(CONTACT_URL, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ product: PRODUCT, email, source: location.href }),
+          });
+          cForm.reset();
+          cNote.textContent = "Got it — I'll be in touch.";
+          btn.textContent = "Sent ✓";
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = original;
+          cNote.textContent = "Send failed. Try again or email kushalsokke@gmail.com.";
+        }
+      });
+    </script>
+  </body>
+</html>

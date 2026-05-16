@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>react-controlled-input</title></head>
+<body>
+  <h1>React-controlled input</h1>
+  <input id="target" type="text" />
+  <div id="committed">committed=</div>
+
+  <script>
+    // Simulate React's value tracker. The tracker intercepts `.value =` on the
+    // *instance* and only marks the value as "changed" when the native prototype
+    // setter is used. fillElement should use the native setter and bypass this.
+    const input = document.getElementById("target");
+    const committed = document.getElementById("committed");
+
+    let lastTrackedValue = "";
+    let directAssigns = 0;
+
+    Object.defineProperty(input, "value", {
+      configurable: true,
+      get() {
+        const proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+        return proto && proto.get ? proto.get.call(input) : "";
+      },
+      set(next) {
+        directAssigns++;
+        // On purpose: do NOT propagate, simulating the React tracker swallow.
+      }
+    });
+
+    input.addEventListener("input", () => {
+      // Read via the native getter to get the real value the native setter wrote.
+      const actual = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").get.call(input);
+      lastTrackedValue = actual;
+      committed.textContent = "committed=" + actual;
+      committed.dataset.value = actual;
+    });
+
+    window.__diag = () => ({
+      committed: lastTrackedValue,
+      directAssigns,
+      domValue: Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").get.call(input)
+    });
+  </script>
+</body>
+</html>

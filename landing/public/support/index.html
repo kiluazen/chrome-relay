@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Support - Chrome Relay</title>
+    <meta name="description" content="Support and setup help for Chrome Relay and the chrome-relay CLI." />
+    <link rel="canonical" href="https://chrome-relay.kushalsm.com/support/" />
+    <link rel="icon" type="image/png" href="/icon-128.png" />
+    <style>
+      :root { --paper: #f7f3e8; --ink: #181818; --muted: #58544c; --line: #d6d0c2; --panel: #fffdf6; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--paper); color: var(--ink); line-height: 1.65; }
+      main, header, footer { width: min(760px, calc(100% - 40px)); margin: 0 auto; }
+      header { padding: 30px 0 24px; }
+      .brand { display: inline-flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; font-weight: 760; }
+      .brand img { width: 32px; height: 32px; border-radius: 8px; }
+      main { padding: 26px 0 56px; }
+      h1 { margin: 0 0 8px; font-size: 42px; line-height: 1.05; letter-spacing: 0; }
+      h2 { margin: 34px 0 10px; font-size: 22px; }
+      p, li { color: var(--muted); font-size: 16px; }
+      p { margin: 0 0 14px; }
+      ol, ul { margin: 0 0 14px; padding-left: 22px; }
+      code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      code { font-size: 0.92em; background: #efe8d8; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
+      pre { overflow-x: auto; border: 1px solid #2d3239; border-radius: 8px; background: #20242b; color: #f7f3e8; padding: 16px; font-size: 14px; }
+      .panel { padding: 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+      a { color: var(--ink); }
+      footer { border-top: 1px solid var(--line); padding: 22px 0 34px; color: var(--muted); font-size: 13px; }
+      @media (max-width: 520px) { main, header, footer { width: min(100% - 28px, 760px); } h1 { font-size: 34px; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/">
+        <img src="/icon-128.png" alt="" />
+        <span>Chrome Relay</span>
+      </a>
+    </header>
+
+    <main>
+      <h1>Support</h1>
+      <p class="panel">
+        Chrome Relay is a local developer tool. For help, email <a href="mailto:kushalsokke@gmail.com">kushalsokke@gmail.com</a>
+        with your operating system, Chrome version, extension version, and the output of <code>chrome-relay doctor</code>.
+      </p>
+
+      <h2>Install checklist</h2>
+      <ol>
+        <li>
+          Add
+          <a href="https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb" rel="noopener">Chrome Relay from the Chrome Web Store</a>.
+        </li>
+        <li>Install the CLI package.</li>
+        <li>Register the native host.</li>
+        <li>Open the extension popup and confirm the native host is connected.</li>
+      </ol>
+
+      <pre>pnpm add -g chrome-relay
+chrome-relay install
+chrome-relay doctor
+chrome-relay tabs</pre>
+
+      <h2>Common fixes</h2>
+      <ul>
+        <li>If the popup says the host is disconnected, run <code>chrome-relay install</code> again and reload the extension.</li>
+        <li>If no tabs appear, confirm Chrome is open in the same user account where the CLI was installed.</li>
+        <li>If a command times out, refresh the target tab and run <code>chrome-relay doctor</code>.</li>
+      </ul>
+
+      <h2>Contact</h2>
+      <p>
+        Email <a href="mailto:kushalsokke@gmail.com">kushalsokke@gmail.com</a>.
+      </p>
+    </main>
+
+    <footer>
+      <a href="https://kushalsm.com">kushalsm.com</a>
+    </footer>
+  </body>
+</html>

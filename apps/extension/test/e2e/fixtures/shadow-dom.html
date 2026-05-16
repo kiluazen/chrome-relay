@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>shadow-dom</title></head>
+<body>
+  <h1>Shadow DOM piercing</h1>
+  <faceplate-textinput id="ftin"></faceplate-textinput>
+  <div id="committed"></div>
+
+  <script>
+    // Custom element with closed-ish shadow root containing a real <input>.
+    // querySelector from light DOM cannot reach the inner input — only `js`
+    // with shadow piercing can.
+    class FaceplateTextinput extends HTMLElement {
+      constructor() {
+        super();
+        const root = this.attachShadow({ mode: "open" });
+        const input = document.createElement("input");
+        input.type = "text";
+        input.id = "inner";
+        root.appendChild(input);
+        input.addEventListener("input", () => {
+          document.getElementById("committed").textContent = input.value;
+        });
+      }
+    }
+    customElements.define("faceplate-textinput", FaceplateTextinput);
+
+    window.__diag = () => {
+      const host = document.getElementById("ftin");
+      const inner = host.shadowRoot.querySelector("input");
+      return { value: inner.value };
+    };
+  </script>
+</body>
+</html>

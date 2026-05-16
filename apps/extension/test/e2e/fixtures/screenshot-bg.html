@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>screenshot-bg</title>
+  <style>
+    body { margin: 0; }
+    #marker {
+      width: 200px;
+      height: 200px;
+      background: #ff00ff;
+      margin: 50px;
+    }
+    #content {
+      padding: 16px;
+      font-family: system-ui, sans-serif;
+    }
+    #tall {
+      height: 3000px;
+      background: linear-gradient(#fff, #4444ff);
+    }
+  </style>
+</head>
+<body>
+  <div id="content">screenshot fixture loaded</div>
+  <div id="marker"></div>
+  <div id="tall"></div>
+  <script>
+    window.__diag = () => ({
+      width: document.body.scrollWidth,
+      height: document.body.scrollHeight
+    });
+  </script>
+</body>
+</html>
