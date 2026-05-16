@@ -25,7 +25,8 @@ describe("TOOL_NAMES", () => {
       "READ_PAGE",
       "SCREENSHOT",
       "SWITCH_TAB",
-      "TYPE"
+      "TYPE",
+      "VIEWPORT"
     ]);
   });
 

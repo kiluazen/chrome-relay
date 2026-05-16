@@ -21,7 +21,9 @@ export const TOOL_NAMES = {
   FILL: "chrome_fill_or_select",
   KEYBOARD: "chrome_keyboard",
   TYPE: "chrome_type",
-  EVALUATE: "chrome_evaluate"
+  EVALUATE: "chrome_evaluate",
+  // §2.2 — viewport emulation (set/preset/clear share one tool, action via args.action)
+  VIEWPORT: "chrome_viewport"
 } as const;
 
 export type ToolName = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES];

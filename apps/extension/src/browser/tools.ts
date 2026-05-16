@@ -7,6 +7,7 @@ import {
   locateForClick,
   readPageSnapshot
 } from "./page-actions";
+import { VIEWPORT_PRESETS, isPresetName, listPresets } from "./viewport-presets";
 
 type ToolHandler = (args: ToolArguments) => Promise<unknown>;
 
@@ -106,15 +107,49 @@ const handlers: Record<ToolName, ToolHandler> = {
     const tabId = requireTabId(tab);
     const fullPage = args.fullPage === true;
 
-    const result = await send<{ data: string }>(tabId, "Page.captureScreenshot", {
+    // §2.3 — region screenshots. Three input shapes (in priority order):
+    //   args.bbox     = "x,y,w,h"  → explicit rect
+    //   args.selector = "<css>"    → element bbox (in-page getBoundingClientRect)
+    //   neither                    → full viewport or full page (existing behavior)
+    //
+    // Big agent value: a header-only screenshot is ~10× cheaper than a full
+    // tab capture in both bytes and the LLM's per-image token cost.
+    const params: Record<string, unknown> = {
       format: "png",
       captureBeyondViewport: fullPage
-    });
+    };
+
+    let clipMeta: { source: "bbox" | "selector"; selector?: string; padding?: number } | null = null;
+
+    if (typeof args.bbox === "string") {
+      const clip = parseBbox(args.bbox);
+      params.clip = clip;
+      // Explicit bbox overrides fullPage — caller is being specific.
+      params.captureBeyondViewport = true;
+      clipMeta = { source: "bbox" };
+    } else if (typeof args.selector === "string" && args.selector) {
+      const padding = typeof args.padding === "number" ? args.padding : 0;
+      const rect = await evalInTab(tabId, locateForClick, [args.selector]);
+      // locateForClick gives center+size; convert to a top-left+w+h clip with padding.
+      const clip = {
+        x: Math.max(0, rect.x - rect.width / 2 - padding),
+        y: Math.max(0, rect.y - rect.height / 2 - padding),
+        width: rect.width + padding * 2,
+        height: rect.height + padding * 2,
+        scale: 1
+      };
+      params.clip = clip;
+      params.captureBeyondViewport = true;
+      clipMeta = { source: "selector", selector: args.selector, padding };
+    }
+
+    const result = await send<{ data: string }>(tabId, "Page.captureScreenshot", params);
 
     return {
       tabId,
       windowId: tab.windowId,
-      dataUrl: `data:image/png;base64,${result.data}`
+      dataUrl: `data:image/png;base64,${result.data}`,
+      ...(clipMeta ? { clip: clipMeta } : {})
     };
   },
 
@@ -225,8 +260,108 @@ const handlers: Record<ToolName, ToolHandler> = {
     });
 
     return { tabId, result: result.value, type: result.type };
+  },
+
+  // §2.2 — viewport emulation. Single tool with three actions:
+  //   action=set    width/height/dpr/mobile/hasTouch (+ optional userAgent)
+  //   action=preset name  → resolve from viewport-presets table, apply
+  //   action=clear  → drop the override
+  //   action=list   → enumerate preset names (no CDP call)
+  //
+  // Override survives navigations within the tab but is wiped on debugger
+  // detach. Closing the tab clears it. Living with that — the alternative
+  // (re-apply on every CDP attach) is a much bigger lifecycle commitment.
+  async [TOOL_NAMES.VIEWPORT](args) {
+    const action = typeof args.action === "string" ? args.action : "set";
+
+    if (action === "list") {
+      return { presets: listPresets() };
+    }
+
+    const tab = await getTargetTab(typeof args.tabId === "number" ? args.tabId : undefined);
+    const tabId = requireTabId(tab);
+
+    if (action === "clear") {
+      await send(tabId, "Emulation.clearDeviceMetricsOverride", {});
+      await send(tabId, "Emulation.setTouchEmulationEnabled", { enabled: false });
+      // No "clearUserAgentOverride" — passing empty userAgent resets.
+      await send(tabId, "Emulation.setUserAgentOverride", { userAgent: "" });
+      return { tabId, cleared: true };
+    }
+
+    let spec: { width: number; height: number; dpr: number; mobile: boolean; hasTouch: boolean; userAgent?: string };
+    let presetName: string | null = null;
+
+    if (action === "preset") {
+      const name = typeof args.name === "string" ? args.name : "";
+      if (!isPresetName(name)) {
+        throw new Error(`Unknown preset "${name}". Available: ${listPresets().join(", ")}`);
+      }
+      spec = VIEWPORT_PRESETS[name];
+      presetName = name;
+    } else if (action === "set") {
+      const width  = Number(args.width);
+      const height = Number(args.height);
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+        throw new Error("chrome_viewport set requires positive numeric width and height.");
+      }
+      spec = {
+        width,
+        height,
+        dpr: Number.isFinite(Number(args.dpr)) ? Number(args.dpr) : 1,
+        mobile: args.mobile === true,
+        hasTouch: args.hasTouch === true || args.mobile === true,
+        userAgent: typeof args.userAgent === "string" ? args.userAgent : undefined
+      };
+    } else {
+      throw new Error(`chrome_viewport: unknown action "${action}". Expected set | preset | clear | list.`);
+    }
+
+    await send(tabId, "Emulation.setDeviceMetricsOverride", {
+      width: spec.width,
+      height: spec.height,
+      deviceScaleFactor: spec.dpr,
+      mobile: spec.mobile,
+      screenWidth: spec.width,
+      screenHeight: spec.height,
+      positionX: 0,
+      positionY: 0,
+      dontSetVisibleSize: false,
+      screenOrientation: spec.mobile
+        ? { type: "portraitPrimary", angle: 0 }
+        : { type: "landscapePrimary", angle: 0 }
+    });
+    await send(tabId, "Emulation.setTouchEmulationEnabled", {
+      enabled: spec.hasTouch,
+      maxTouchPoints: spec.hasTouch ? 1 : 0
+    });
+    if (spec.userAgent) {
+      await send(tabId, "Emulation.setUserAgentOverride", { userAgent: spec.userAgent });
+    }
+
+    return {
+      tabId,
+      applied: {
+        width: spec.width,
+        height: spec.height,
+        dpr: spec.dpr,
+        mobile: spec.mobile,
+        hasTouch: spec.hasTouch,
+        userAgent: spec.userAgent ?? null,
+        preset: presetName
+      }
+    };
   }
 };
+
+// Parse "x,y,w,h" → CDP clip object. Strict: rejects negative or non-numeric.
+function parseBbox(spec: string): { x: number; y: number; width: number; height: number; scale: number } {
+  const parts = spec.split(",").map((p) => Number(p.trim()));
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n) || n < 0)) {
+    throw new Error(`Invalid --bbox "${spec}". Expected x,y,width,height (positive numbers).`);
+  }
+  return { x: parts[0], y: parts[1], width: parts[2], height: parts[3], scale: 1 };
+}
 
 export async function runTool(name: ToolName, args: ToolArguments): Promise<unknown> {
   const handler = handlers[name];

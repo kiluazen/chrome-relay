@@ -93,19 +93,104 @@ export function readPageSnapshot(interactiveOnly: boolean) {
     return label.replace(/\s+/g, " ").trim().slice(0, 200);
   };
 
+  // Read the *current* state of an interactive element. Returns an empty object
+  // for non-interactive nodes and for interactive nodes that don't carry the
+  // matching state (e.g. an <a> has no `value`).
+  //
+  // The point of this function — and why §2.8 of boundaries.md flagged it —
+  // is so `read -i` answers "what does the form currently say?" not just
+  // "what fields exist?". Halves the round-trips for form-fill verification.
+  type ElementState = {
+    value?: string;
+    checked?: boolean;
+    selected?: boolean;
+    ariaPressed?: string;
+    ariaExpanded?: string;
+    ariaChecked?: string;
+    ariaSelected?: string;
+    disabled?: boolean;
+    readonly?: boolean;
+    required?: boolean;
+    placeholder?: string;
+  };
+
+  const stateFor = (element: Element): ElementState => {
+    if (!(element instanceof HTMLElement)) return {};
+    const state: ElementState = {};
+
+    // Native value carriers
+    if (element instanceof HTMLInputElement) {
+      const t = element.type.toLowerCase();
+      if (t === "checkbox" || t === "radio") {
+        state.checked = element.checked;
+      } else {
+        // password type is intentionally NOT redacted — caller already opted
+        // into reading the DOM. Treat as input value like everything else.
+        state.value = element.value;
+      }
+      if (element.placeholder) state.placeholder = element.placeholder;
+      if (element.disabled) state.disabled = true;
+      if (element.readOnly) state.readonly = true;
+      if (element.required) state.required = true;
+    } else if (element instanceof HTMLTextAreaElement) {
+      state.value = element.value;
+      if (element.placeholder) state.placeholder = element.placeholder;
+      if (element.disabled) state.disabled = true;
+      if (element.readOnly) state.readonly = true;
+      if (element.required) state.required = true;
+    } else if (element instanceof HTMLSelectElement) {
+      state.value = element.value;
+      if (element.disabled) state.disabled = true;
+      if (element.required) state.required = true;
+    } else if (element instanceof HTMLOptionElement) {
+      state.selected = element.selected;
+      state.value = element.value;
+      if (element.disabled) state.disabled = true;
+    } else if (element instanceof HTMLButtonElement) {
+      if (element.disabled) state.disabled = true;
+    }
+
+    // ARIA mirrors — present even when the native attribute isn't.
+    const ariaPressed  = element.getAttribute("aria-pressed");
+    const ariaExpanded = element.getAttribute("aria-expanded");
+    const ariaChecked  = element.getAttribute("aria-checked");
+    const ariaSelected = element.getAttribute("aria-selected");
+    if (ariaPressed  !== null) state.ariaPressed  = ariaPressed;
+    if (ariaExpanded !== null) state.ariaExpanded = ariaExpanded;
+    if (ariaChecked  !== null) state.ariaChecked  = ariaChecked;
+    if (ariaSelected !== null) state.ariaSelected = ariaSelected;
+
+    // aria-disabled on a non-form element (e.g. a div acting as a button).
+    if (state.disabled === undefined && element.getAttribute("aria-disabled") === "true") {
+      state.disabled = true;
+    }
+
+    return state;
+  };
+
   const elements = Array.from(document.querySelectorAll("*"))
     .filter((element) => isVisible(element))
     .filter((element) => (interactiveOnly ? isInteractive(element) : true))
     .slice(0, 250)
     .map((element, index) => {
       const rect = (element as HTMLElement).getBoundingClientRect();
-      return {
+      const isInter = isInteractive(element);
+      const node: {
+        ref: string;
+        tagName: string;
+        role: string | null;
+        text: string;
+        selector: string;
+        interactive: boolean;
+        bounds: { x: number; y: number; width: number; height: number };
+        state?: ElementState;
+      } = {
         ref: `ref_${index + 1}`,
         tagName: element.tagName.toLowerCase(),
         role: element.getAttribute("role"),
         text: textFor(element),
         selector: makeSelector(element),
-        interactive: isInteractive(element),
+        interactive: isInter,
         bounds: {
           x: Math.round(rect.x),
           y: Math.round(rect.y),
@@ -113,6 +198,14 @@ export function readPageSnapshot(interactiveOnly: boolean) {
           height: Math.round(rect.height)
         }
       };
+      // Only attach `state` for interactive nodes (the common case where it
+      // matters) and only when it has at least one entry — keeps the payload
+      // tight for the non-form majority of pages.
+      if (isInter) {
+        const s = stateFor(element);
+        if (Object.keys(s).length > 0) node.state = s;
+      }
+      return node;
     });
 
   return {

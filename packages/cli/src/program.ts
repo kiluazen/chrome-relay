@@ -113,6 +113,9 @@ Examples:
       .command("screenshot")
       .description("Capture a screenshot of any tab without activating it.")
       .option("--full", "capture beyond the viewport (full page)")
+      .option("--bbox <rect>", "capture a region: 'x,y,width,height' (pixels)")
+      .option("--selector <css>", "capture the bounding box of a CSS selector")
+      .option("--padding <px>", "pixels of padding around --selector region", (v) => Number(v))
       .option("-o, --out <path>", "save image to path (base64 PNG decoded)")
       .addHelpText(
         "after",
@@ -122,12 +125,21 @@ Examples:
   chrome-relay screenshot -o active-tab.png
   chrome-relay screenshot --tab 123456789 -o evidence.png
   chrome-relay screenshot --tab 123456789 --full -o full-page.png
+  chrome-relay screenshot --tab 123456789 --bbox 0,0,1280,80 -o header.png
+  chrome-relay screenshot --tab 123456789 --selector "header" -o header.png
+  chrome-relay screenshot --tab 123456789 --selector ".card:nth-child(3)" --padding 8 -o card.png
+
+Region screenshots (--bbox / --selector) are ~10x cheaper in tokens than a
+full-tab screenshot when an agent only needs to see one component.
 `
       )
   ).action(async (opts) => {
     const args: Record<string, unknown> = {};
     if (opts.tab !== undefined) args.tabId = opts.tab;
     if (opts.full) args.fullPage = true;
+    if (opts.bbox) args.bbox = opts.bbox;
+    if (opts.selector) args.selector = opts.selector;
+    if (typeof opts.padding === "number") args.padding = opts.padding;
     try {
       const result = await callTool("chrome_screenshot", args);
       if (opts.out && result && typeof result === "object") {
@@ -276,6 +288,75 @@ Notes:
     .action(async (tool: string, json?: string) => {
       const args = json ? JSON.parse(json) : {};
       await run(tool, args);
+    });
+
+  // ---------- viewport (§2.2 — device-metrics emulation) ----------
+  const viewport = program
+    .command("viewport")
+    .description("Emulate device viewport, DPR, mobile flag, touch, and user agent.")
+    .addHelpText(
+      "after",
+      `
+
+Examples:
+  chrome-relay viewport preset iphone-14 --tab 123
+  chrome-relay viewport preset desktop-1440 --tab 123
+  chrome-relay viewport set --tab 123 --width 414 --height 896 --mobile --dpr 3
+  chrome-relay viewport clear --tab 123
+  chrome-relay viewport list
+
+Notes:
+  The override survives navigations within the tab but is wiped when the
+  debugger detaches (e.g. another extension takes over). Closing the tab
+  clears it. Re-run after detach if the page snaps back to its default size.
+`
+    );
+
+  tabOpt(
+    viewport
+      .command("set")
+      .description("Apply explicit viewport dimensions.")
+      .requiredOption("--width <px>",  "viewport width in CSS pixels", (v) => Number(v))
+      .requiredOption("--height <px>", "viewport height in CSS pixels", (v) => Number(v))
+      .option("--dpr <ratio>", "device pixel ratio (1, 2, 3...)", (v) => Number(v))
+      .option("--mobile", "set the mobile flag (affects meta viewport interpretation)")
+      .option("--touch", "enable touch event emulation")
+      .option("--user-agent <ua>", "override the User-Agent header")
+  ).action(async (opts) => {
+    const args: Record<string, unknown> = { action: "set", width: opts.width, height: opts.height };
+    if (opts.tab !== undefined)  args.tabId = opts.tab;
+    if (opts.dpr !== undefined)  args.dpr = opts.dpr;
+    if (opts.mobile)             args.mobile = true;
+    if (opts.touch)              args.hasTouch = true;
+    if (opts.userAgent)          args.userAgent = opts.userAgent;
+    await run("chrome_viewport", args);
+  });
+
+  tabOpt(
+    viewport
+      .command("preset <name>")
+      .description("Apply a named device preset (iphone-14, pixel-7, desktop-1440, etc).")
+  ).action(async (name: string, opts) => {
+    const args: Record<string, unknown> = { action: "preset", name };
+    if (opts.tab !== undefined) args.tabId = opts.tab;
+    await run("chrome_viewport", args);
+  });
+
+  tabOpt(
+    viewport
+      .command("clear")
+      .description("Drop the viewport override and return the tab to its native size.")
+  ).action(async (opts) => {
+    const args: Record<string, unknown> = { action: "clear" };
+    if (opts.tab !== undefined) args.tabId = opts.tab;
+    await run("chrome_viewport", args);
+  });
+
+  viewport
+    .command("list")
+    .description("List available presets.")
+    .action(async () => {
+      await run("chrome_viewport", { action: "list" });
     });
 
   return program;

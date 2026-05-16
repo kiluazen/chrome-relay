@@ -98,6 +98,64 @@ describe("CLI argument parsing", () => {
       await runArgs("screenshot", "--tab", "42", "--full");
       expect(lastBody().args).toEqual({ tabId: 42, fullPage: true });
     });
+
+    it("forwards --bbox unchanged (parsing happens in the extension)", async () => {
+      await runArgs("screenshot", "--tab", "42", "--bbox", "0,0,1280,80");
+      expect(lastBody().args).toEqual({ tabId: 42, bbox: "0,0,1280,80" });
+    });
+
+    it("forwards --selector + --padding", async () => {
+      await runArgs("screenshot", "--tab", "42", "--selector", ".card", "--padding", "8");
+      expect(lastBody().args).toEqual({ tabId: 42, selector: ".card", padding: 8 });
+    });
+  });
+
+  describe("viewport (§2.2)", () => {
+    it("preset posts action=preset + name", async () => {
+      await runArgs("viewport", "preset", "iphone-14", "--tab", "42");
+      expect(lastBody()).toEqual({
+        name: "chrome_viewport",
+        args: { action: "preset", name: "iphone-14", tabId: 42 }
+      });
+    });
+
+    it("set requires width and height; forwards dpr + mobile + touch + ua", async () => {
+      await runArgs(
+        "viewport", "set",
+        "--tab", "42",
+        "--width", "390", "--height", "844",
+        "--dpr", "3",
+        "--mobile",
+        "--touch",
+        "--user-agent", "Mozilla/5.0 (iPhone)..."
+      );
+      expect(lastBody().args).toEqual({
+        action: "set",
+        tabId: 42,
+        width: 390,
+        height: 844,
+        dpr: 3,
+        mobile: true,
+        hasTouch: true,
+        userAgent: "Mozilla/5.0 (iPhone)..."
+      });
+    });
+
+    it("clear posts action=clear", async () => {
+      await runArgs("viewport", "clear", "--tab", "42");
+      expect(lastBody()).toEqual({
+        name: "chrome_viewport",
+        args: { action: "clear", tabId: 42 }
+      });
+    });
+
+    it("list posts action=list with no tab", async () => {
+      await runArgs("viewport", "list");
+      expect(lastBody()).toEqual({
+        name: "chrome_viewport",
+        args: { action: "list" }
+      });
+    });
   });
 
   describe("read", () => {
