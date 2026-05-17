@@ -12,6 +12,15 @@ import type { Command } from "commander";
 import { RelayError } from "@chrome-relay/protocol";
 import { callTool } from "../client/call.js";
 
+// Shared context passed to every command-group registration function.
+// Each per-domain module imports CommandContext and registers its
+// subcommands against ctx.program using the helpers.
+export interface CommandContext {
+  program: Command;
+  baseArgs: (opts: { tab?: number; workspace?: string; group?: string }) => Record<string, unknown>;
+  run: typeof runToolImpl;
+}
+
 // Attach --tab / --workspace / --group to a subcommand.
 export function tabOpt(cmd: Command): Command {
   return cmd
@@ -90,7 +99,7 @@ function emitTargetOverride(kind: string, from: string, to: string): void {
 // Standard tool-result printer. JSON for objects, raw string for strings.
 // RelayError gets a structured stderr dump alongside the human message so
 // agents can parse `{relayError: {...}}` mechanically without a separate flag.
-export async function runTool(name: string, args: Record<string, unknown>): Promise<void> {
+async function runToolImpl(name: string, args: Record<string, unknown>): Promise<void> {
   try {
     const result = await callTool(name, args);
     if (typeof result === "string") {
@@ -110,3 +119,5 @@ export async function runTool(name: string, args: Record<string, unknown>): Prom
     process.exit(1);
   }
 }
+
+export const runTool = runToolImpl;

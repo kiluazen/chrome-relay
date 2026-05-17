@@ -9,6 +9,12 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.9": [
+    "Internal refactor (code-quality-hardening PR 7): program.ts and tools.ts split into per-domain modules. Pure code motion, no behavior change.",
+    "CLI: packages/cli/src/program.ts shrank from 1041 → 75 lines. Per-domain modules now live in packages/cli/src/commands/{install-update,navigation,input,capture,sessions}.ts.",
+    "Extension: apps/extension/src/browser/tools.ts shrank from 891 → 34 lines. Per-domain handler modules live in apps/extension/src/browser/handlers/{target,navigation,input,capture,sessions}.ts.",
+    "All 355 tests still pass without modification — the dispatcher contract (runTool name dispatch) is unchanged."
+  ],
   "0.5.8": [
     "Internal refactor (code-quality-hardening PR 6, first cut): shared CLI helpers moved out of program.ts into packages/cli/src/commands/shared.ts.",
     "tabOpt(), makeBaseArgs(program), and runTool() are now importable from `./commands/shared.js`. program.ts dropped ~100 lines.",
