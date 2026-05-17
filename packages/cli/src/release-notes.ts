@@ -9,6 +9,13 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.5": [
+    "BEHAVIOR CHANGE — `chrome_navigate --new` no longer silently falls back to 'wherever Chrome picks' when an explicit routing intent fails (code-quality-hardening PR 3).",
+    "`navigate --new --tab <id>` where <id> doesn't exist now throws `target_not_found` instead of silently letting Chrome drop the tab in the focused (often the user's) window.",
+    "`navigate --new --group <name>` where the group-join fails now throws `partial_success_disallowed`. The new tab IS created (we don't roll back) so the agent can clean it up; the error details include `createdTabId` and `groupName`.",
+    "Both new strict paths accept `allowPartial: true` as an arg to opt back into the legacy best-effort behavior. With allowPartial, the success result carries `partial: true` and a `warnings[]` array naming what didn't happen.",
+    "Tightened `chrome_navigate` argument errors to RelayError(invalid_arguments) — missing url, non-numeric tabId."
+  ],
   "0.5.4": [
     "Strict target routing (code-quality-hardening PR 2). Within a single scope, --tab / --workspace / --group are mutually exclusive — passing more than one on the same subcommand (or both at the program level) now fails with `target_conflict` and exit code 2.",
     "Cross-scope override is still allowed but visible: `chrome-relay --workspace W <cmd> --workspace W2` works, but stderr prints a `target_overridden: workspace W → W2` notice so the agent (or user) knows what happened.",

@@ -124,36 +124,70 @@ const handlers: Record<ToolName, ToolHandler> = {
   async [TOOL_NAMES.NAVIGATE](args) {
     const url = typeof args.url === "string" ? args.url : "";
     if (!url) {
-      throw new Error("chrome_navigate requires a url.");
+      throw new RelayError({
+        code: "invalid_arguments",
+        message: "chrome_navigate requires a url.",
+        tool: TOOL_NAMES.NAVIGATE,
+        phase: "parse_arguments",
+        retryable: false
+      });
     }
 
     const newTab = args.newTab === true;
     const active = args.active !== false;
+    // Opt-in flag: when true, restores the pre-0.5.5 silent best-effort
+    // behavior for windowId resolution + group-join — failures degrade
+    // to "tab landed somewhere, group not joined" instead of erroring.
+    // Default is strict (PR 3 of code-quality-hardening).
+    const allowPartial = args.allowPartial === true;
 
     if (newTab) {
-      // Route the new tab into the right window. Without this, chrome.tabs.create
-      // drops the tab into whichever window happens to be focused — which, for
-      // a user with their own Chrome session up, is theirs (not the agent's
-      // workspace window). Pre-0.4.0 this manifested as `--group X navigate --new`
-      // sending tabs into the user's own window instead of group X's. Same
-      // routing logic applies now to --workspace W and --group G.
-      //
-      // We also support: --new --group G means "open a new tab AND drop it
-      // into tab-group G." That requires creating the tab first then calling
-      // chrome.tabs.group({ tabIds, groupId }).
+      // Route the new tab into the right window. Without this,
+      // chrome.tabs.create drops the tab into whichever window happens to
+      // be focused — which, for a user with their own Chrome session up,
+      // is theirs (not the agent's workspace window). Pre-0.4.0 this
+      // manifested as `--group X navigate --new` sending tabs into the
+      // user's own window instead of group X's. Same logic applies now to
+      // --workspace W and --group G.
       const createOpts: chrome.tabs.CreateProperties = { url, active };
       let joinTabGroupName: string | undefined;
       if (typeof args.tabId === "number" || typeof args.tabId === "string") {
         const numeric = Number(args.tabId);
-        if (Number.isFinite(numeric)) {
-          try {
-            const ref = await chrome.tabs.get(numeric);
-            if (typeof ref.windowId === "number") createOpts.windowId = ref.windowId;
-          } catch { /* fall through; chrome will pick a window */ }
+        if (!Number.isFinite(numeric)) {
+          throw new RelayError({
+            code: "invalid_arguments",
+            message: `chrome_navigate: invalid tabId ${JSON.stringify(args.tabId)}. Expected a number.`,
+            tool: TOOL_NAMES.NAVIGATE,
+            phase: "resolve_reference_tab",
+            details: { received: args.tabId },
+            retryable: false
+          });
+        }
+        try {
+          const ref = await chrome.tabs.get(numeric);
+          if (typeof ref.windowId === "number") createOpts.windowId = ref.windowId;
+        } catch (e) {
+          // Strict: if the agent named a specific reference tab and that
+          // tab doesn't exist, the routing intent can't be honored. Failing
+          // here prevents the new tab from silently landing in the user's
+          // focused window. Pass allowPartial: true to fall back to
+          // "wherever Chrome picks" with a warning in the result.
+          if (!allowPartial) {
+            throw new RelayError({
+              code: "target_not_found",
+              message: `chrome_navigate: reference tab ${numeric} not found; refusing to silently route to a different window. Re-run with allowPartial: true to let Chrome pick.`,
+              tool: TOOL_NAMES.NAVIGATE,
+              phase: "resolve_reference_tab",
+              details: { tabId: numeric, underlying: e instanceof Error ? e.message : String(e) },
+              retryable: false
+            });
+          }
         }
       } else if (typeof args.groupName === "string" && args.groupName) {
         // A tab-group lives inside one window; route the new tab to that
-        // window AND remember to join the group after creation.
+        // window AND remember to join the group after creation. If the
+        // group doesn't exist resolveTabGroupTarget throws — that already
+        // fails loudly today.
         const groupTab = await resolveTabGroupTarget(args.groupName);
         if (typeof groupTab.windowId === "number") createOpts.windowId = groupTab.windowId;
         joinTabGroupName = args.groupName;
@@ -162,15 +196,43 @@ const handlers: Record<ToolName, ToolHandler> = {
         if (typeof wsTab.windowId === "number") createOpts.windowId = wsTab.windowId;
       }
       const tab = await chrome.tabs.create(createOpts);
+      const warnings: Array<{ code: string; message: string }> = [];
       if (joinTabGroupName && typeof tab.id === "number") {
         try {
           await addToTabGroup(joinTabGroupName, [tab.id]);
-        } catch {
-          // Don't fail navigate over an inability to join the group; the
-          // tab still loaded the URL. The caller can re-issue `group add`.
+        } catch (e) {
+          // Strict by default: a `navigate --new --group G` that creates
+          // the tab but fails to join G is a partial success — the agent
+          // wanted both. Surfacing the failure prevents downstream code
+          // from operating on the tab assuming it's inside the group.
+          // allowPartial:true falls back to the legacy behavior (warning
+          // attached to the success result, no error).
+          if (!allowPartial) {
+            throw new RelayError({
+              code: "partial_success_disallowed",
+              message: `chrome_navigate: created tab ${tab.id} but failed to add it to group ${joinTabGroupName}. Pass allowPartial: true to keep the tab and emit a warning instead.`,
+              tool: TOOL_NAMES.NAVIGATE,
+              phase: "join_tab_group",
+              details: {
+                createdTabId: tab.id,
+                groupName: joinTabGroupName,
+                underlying: e instanceof Error ? e.message : String(e)
+              },
+              retryable: false
+            });
+          }
+          warnings.push({
+            code: "group_join_failed",
+            message: `Tab ${tab.id} was created but could not be added to group ${joinTabGroupName}.`
+          });
         }
       }
-      return { tabId: tab.id, windowId: tab.windowId, url: tab.url };
+      const result: Record<string, unknown> = { tabId: tab.id, windowId: tab.windowId, url: tab.url };
+      if (warnings.length > 0) {
+        result.partial = true;
+        result.warnings = warnings;
+      }
+      return result;
     }
 
     const current = await resolveTarget(args);
