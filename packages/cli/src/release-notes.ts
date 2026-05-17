@@ -9,6 +9,11 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.6": [
+    "BEHAVIOR CHANGE — `chrome-relay network har --with-bodies` is now strict by default (code-quality-hardening PR 4). When ANY body fails to fetch, the call throws `partial_success_disallowed` with details about which entries failed.",
+    "New `--best-effort-bodies` flag restores the legacy behavior: HAR still emits, missing/errored bodies are recorded per-entry in `_chrome_relay.bodyState` and `_chrome_relay.bodyError` (with code, message, and phase).",
+    "New `bodyState: 'error'` value (was just 'missing' before). 'error' fires when the CDP call threw; 'missing' fires when the body returned empty. Lets the caller distinguish 'Chrome GC'd it' from 'still in flight' from 'permission denied.'"
+  ],
   "0.5.5": [
     "BEHAVIOR CHANGE — `chrome_navigate --new` no longer silently falls back to 'wherever Chrome picks' when an explicit routing intent fails (code-quality-hardening PR 3).",
     "`navigate --new --tab <id>` where <id> doesn't exist now throws `target_not_found` instead of silently letting Chrome drop the tab in the focused (often the user's) window.",

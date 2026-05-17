@@ -809,7 +809,8 @@ const handlers: Record<ToolName, ToolHandler> = {
 
     if (action === "har") {
       const withBodies = args.withBodies === true;
-      return buildHar(tabId, { filter, status, method, limit }, withBodies);
+      const bestEffortBodies = args.bestEffortBodies === true;
+      return buildHar(tabId, { filter, status, method, limit }, withBodies, bestEffortBodies);
     }
     if (action !== "read") {
       throw new RelayError({

@@ -806,14 +806,16 @@ Notes:
     network
       .command("har")
       .description("Emit HAR-compatible JSON for the captured entries.")
-      .option("--with-bodies", "fetch response bodies before emitting (best-effort; bodies GC'd by Chrome become null)")
+      .option("--with-bodies", "fetch response bodies before emitting; strict by default — fails if any body cannot be fetched")
+      .option("--best-effort-bodies", "with --with-bodies: keep the HAR even when some bodies are missing/errored (legacy behavior); per-entry _chrome_relay.bodyState/bodyError records what failed")
   )).action(async (opts) => {
     const args: Record<string, unknown> = { ...baseArgs(opts), ...netFilterArgs(opts), action: "har" };
     if (opts.withBodies) args.withBodies = true;
-    else {
+    if (opts.bestEffortBodies) args.bestEffortBodies = true;
+    if (!opts.withBodies) {
       process.stderr.write(
         "[chrome-relay] HAR exported WITHOUT response bodies. Pass --with-bodies to include them " +
-          "(best-effort; bodies older than ~30s may be unavailable).\n"
+          "(strict by default; add --best-effort-bodies to allow per-entry misses).\n"
       );
     }
     await run("chrome_network", args);

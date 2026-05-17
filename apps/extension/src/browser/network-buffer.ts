@@ -264,22 +264,33 @@ export function clearNetwork(tabId: number): { cleared: number } {
 // ignore the rest. Strict-HAR consumers (Wireshark) may complain; we accept
 // that tradeoff in exchange for ~150 LOC of spec compliance we don't need yet.
 //
-// withBodies: best-effort body fetch via Network.getResponseBody. Bodies that
-// Chrome has GC'd (>~30s) become null and are reported as `text: ""` —
-// silently rather than failing the whole export. The `_chrome_relay.bodyState`
-// per-entry is "fetched" | "missing" | "skipped" so callers can audit.
+// withBodies: body fetch via Network.getResponseBody.
+//
+// Code-quality-hardening PR 4 (Risk 6): bodyState is one of
+//   "fetched"        — body retrieved and present in entry.response.content.text
+//   "skipped"        — request was failed / no status → never tried
+//   "missing"        — fetch attempted, returned null/empty
+//   "error"          — fetch threw (CDP error, GC'd, permission denied, etc.)
+// When state is "error", `_chrome_relay.bodyError` is populated with the
+// CDP failure reason so the caller can distinguish "GC'd" from "permission
+// denied" from "request still in flight."
+//
+// bestEffortBodies (default false): when withBodies is requested and ANY
+// body fails to fetch, the whole call throws partial_success_disallowed
+// — the agent asked for bodies, they didn't all arrive. Pass
+// bestEffortBodies:true to keep the legacy behavior: missing bodies are
+// reported per-entry, no global failure.
 export async function buildHar(
   tabId: number,
   q: NetworkQuery = {},
-  withBodies = false
+  withBodies = false,
+  bestEffortBodies = false
 ): Promise<unknown> {
   const { entries } = readNetwork(tabId, q);
 
   // Pre-fetch bodies in parallel (cap at 8 concurrent so we don't pound CDP).
-  const bodyState = new Map<string, "fetched" | "missing" | "skipped">();
-  // Mirrors getBody's return shape exactly. The earlier declaration claimed
-  // `{ text }` while we were storing `{ body }` — TypeScript blessed the
-  // misread, which is what hid issue #3 in the first place.
+  const bodyState = new Map<string, "fetched" | "missing" | "skipped" | "error">();
+  const bodyError = new Map<string, { code: string; message: string; phase: string }>();
   const bodyText  = new Map<string, { body: string; base64Encoded: boolean }>();
   if (withBodies) {
     const concurrency = 8;
@@ -292,12 +303,49 @@ export async function buildHar(
         }
         try {
           const r = await getBody(tabId, e.id);
+          if (!r.body) {
+            bodyState.set(e.id, "missing");
+            return;
+          }
           bodyText.set(e.id, r);
           bodyState.set(e.id, "fetched");
-        } catch {
-          bodyState.set(e.id, "missing");
+        } catch (err) {
+          bodyState.set(e.id, "error");
+          bodyError.set(e.id, {
+            code: "cdp_error",
+            message: err instanceof Error ? err.message : String(err),
+            phase: "Network.getResponseBody"
+          });
         }
       }));
+    }
+  }
+
+  // Strict by default: if withBodies was requested and any body failed
+  // (error OR missing), surface the failure. Caller opts into the legacy
+  // behavior via bestEffortBodies:true.
+  if (withBodies && !bestEffortBodies) {
+    const failed: Array<{ id: string; url: string; state: string }> = [];
+    for (const e of entries) {
+      const st = bodyState.get(e.id);
+      if (st === "error" || st === "missing") {
+        failed.push({ id: e.id, url: e.url, state: st });
+      }
+    }
+    if (failed.length > 0) {
+      const { RelayError } = await import("@chrome-relay/protocol");
+      throw new RelayError({
+        code: "partial_success_disallowed",
+        message: `chrome_network har --with-bodies: ${failed.length} of ${entries.length} bodies failed to fetch. Pass bestEffortBodies:true to keep the HAR with per-entry bodyState/bodyError.`,
+        tool: "chrome_network",
+        phase: "fetch_bodies",
+        details: {
+          totalEntries: entries.length,
+          failedCount: failed.length,
+          failed: failed.slice(0, 10)
+        },
+        retryable: false
+      });
     }
   }
   return {
@@ -354,13 +402,18 @@ export async function buildHar(
           wait: e.timings?.receiveHeadersEnd ?? -1,
           receive: -1
         },
-        _chrome_relay: {
-          requestId: e.id,
-          fromDiskCache: e.fromDiskCache,
-          fromServiceWorker: e.fromServiceWorker,
-          failed: e.failed,
-          bodyState: bodyState.get(e.id) ?? (withBodies ? "missing" : "skipped")
-        }
+        _chrome_relay: (() => {
+          const meta: Record<string, unknown> = {
+            requestId: e.id,
+            fromDiskCache: e.fromDiskCache,
+            fromServiceWorker: e.fromServiceWorker,
+            failed: e.failed,
+            bodyState: bodyState.get(e.id) ?? (withBodies ? "missing" : "skipped")
+          };
+          const err = bodyError.get(e.id);
+          if (err) meta.bodyError = err;
+          return meta;
+        })()
       }))
     }
   };

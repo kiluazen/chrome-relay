@@ -255,6 +255,68 @@ describe("network-buffer", () => {
     expect(har.log.entries[0].response.content.encoding).toBe("base64");
   });
 
+  // PR 4 of code-quality-hardening: HAR body transparency.
+  // Strict by default — withBodies fails when any body can't be fetched.
+  // bestEffortBodies:true restores the legacy permissive behavior.
+  it("buildHar(withBodies=true) throws partial_success_disallowed when bodies fail", async () => {
+    const m = await load();
+    const { RelayError } = await import("@chrome-relay/protocol");
+    await m.ensureNetworkCapture(20);
+    dispatch(20, "Network.requestWillBeSent", {
+      requestId: "req-gc",
+      request: { url: "https://x.com/gone", method: "GET" },
+      timestamp: 0, wallTime: 1700000000
+    });
+    dispatch(20, "Network.responseReceived", {
+      requestId: "req-gc",
+      response: { url: "https://x.com/gone", status: 200, statusText: "OK", headers: {}, mimeType: "text/plain" }
+    });
+    dispatch(20, "Network.loadingFinished", { requestId: "req-gc", timestamp: 0.5, encodedDataLength: 5 });
+
+    // Simulate Chrome having GC'd the body — getResponseBody throws.
+    sendMock.mockImplementation(async (_t: number, method: string) => {
+      if (method === "Network.getResponseBody") throw new Error("No data found for resource");
+      return undefined;
+    });
+
+    let caught: unknown;
+    try {
+      await m.buildHar(20, {}, true);
+    } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(RelayError);
+    expect((caught as InstanceType<typeof RelayError>).code).toBe("partial_success_disallowed");
+    expect((caught as InstanceType<typeof RelayError>).phase).toBe("fetch_bodies");
+  });
+
+  it("buildHar(withBodies=true, bestEffortBodies=true) records bodyError instead of throwing", async () => {
+    const m = await load();
+    await m.ensureNetworkCapture(21);
+    dispatch(21, "Network.requestWillBeSent", {
+      requestId: "req-bad",
+      request: { url: "https://x.com/bad", method: "GET" },
+      timestamp: 0, wallTime: 1700000000
+    });
+    dispatch(21, "Network.responseReceived", {
+      requestId: "req-bad",
+      response: { url: "https://x.com/bad", status: 200, statusText: "OK", headers: {}, mimeType: "text/plain" }
+    });
+    dispatch(21, "Network.loadingFinished", { requestId: "req-bad", timestamp: 0.5, encodedDataLength: 5 });
+
+    sendMock.mockImplementation(async (_t: number, method: string) => {
+      if (method === "Network.getResponseBody") throw new Error("No data found for resource");
+      return undefined;
+    });
+
+    const har = (await m.buildHar(21, {}, true, true)) as {
+      log: { entries: Array<{ _chrome_relay: { bodyState: string; bodyError?: { code: string; message: string; phase: string } } }> }
+    };
+    expect(har.log.entries[0]._chrome_relay.bodyState).toBe("error");
+    expect(har.log.entries[0]._chrome_relay.bodyError).toBeDefined();
+    expect(har.log.entries[0]._chrome_relay.bodyError?.code).toBe("cdp_error");
+    expect(har.log.entries[0]._chrome_relay.bodyError?.phase).toBe("Network.getResponseBody");
+    expect(har.log.entries[0]._chrome_relay.bodyError?.message).toMatch(/No data found/);
+  });
+
   it("getBody throws clearly when the request isn't in the buffer", async () => {
     const m = await load();
     await m.ensureNetworkCapture(9);
