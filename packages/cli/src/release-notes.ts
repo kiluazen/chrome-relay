@@ -9,6 +9,11 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.8": [
+    "Internal refactor (code-quality-hardening PR 6, first cut): shared CLI helpers moved out of program.ts into packages/cli/src/commands/shared.ts.",
+    "tabOpt(), makeBaseArgs(program), and runTool() are now importable from `./commands/shared.js`. program.ts dropped ~100 lines.",
+    "No behavior change — all 355 tests still pass. Future PRs can split per-domain command groups (navigation, input, capture, sessions) into their own modules without churning helpers."
+  ],
   "0.5.7": [
     "`chrome-relay update` returns structured verification metadata (code-quality-hardening PR 5). Output now has `install: { attempted, packageManager, status, command }`, `binary: { path, reexeced }`, `releaseNotes: { source: 'current_process' | 'updated_binary', changes }`, and a `warnings[]` array.",
     "Surfaces the 'install said success but binary didn't change' failure mode (PATH mismatch, stale shim, cross-package-manager confusion) as `warnings[].code === 'update_not_verified'`. Agents can branch on it.",
