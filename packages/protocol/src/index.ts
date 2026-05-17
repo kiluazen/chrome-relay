@@ -68,6 +68,28 @@ export interface LocalBridgeCallRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Target selector (code-quality-hardening PR 2).
+//
+// Currently the wire still carries `tabId`, `workspaceName`, and `groupName`
+// as three loose fields in ToolArguments — that's existing behavior and the
+// extension keeps reading them. TargetSelector is the *intended* shape:
+// exactly one of "active" | "tab" | "workspace" | "group" per call. Future
+// PRs migrate the wire to a single `target` field that the extension
+// resolves.
+//
+// CLI enforces the conflict rules today (see packages/cli/src/program.ts
+// baseArgs()) so the loose fields on the wire are guaranteed to obey them
+// when produced by the CLI. Third-party callers POSTing directly to
+// /call still bear the responsibility — until the extension also enforces
+// in a later PR.
+
+export type TargetSelector =
+  | { kind: "active" }
+  | { kind: "tab"; tabId: number }
+  | { kind: "workspace"; name: string }
+  | { kind: "group"; name: string };
+
+// ---------------------------------------------------------------------------
 // Structured errors + notices (code-quality-hardening PR 1).
 //
 // Why: a string error loses code-able context. An agent that gets

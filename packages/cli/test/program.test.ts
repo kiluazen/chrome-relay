@@ -229,10 +229,15 @@ describe("CLI argument parsing", () => {
       expect(lastBody().args).toMatchObject({ url: "https://example.com", workspaceName: "bidsmith-h01" });
     });
 
-    it("--tab wins when both --tab and --workspace are passed", async () => {
+    it("rejects --tab + --workspace on the same subcommand (PR 2 strict)", async () => {
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
       await runArgs("read", "--tab", "42", "--workspace", "any");
-      // Both forwarded — extension's resolveTarget enforces precedence.
-      expect(lastBody().args).toEqual({ tabId: 42, workspaceName: "any" });
+      const stderrText = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(stderrText).toMatch(/target_conflict.*subcommand.*--tab.*--workspace/);
+      expect(exitSpy).toHaveBeenCalledWith(2);
+      exitSpy.mockRestore();
+      stderrSpy.mockRestore();
     });
   });
 

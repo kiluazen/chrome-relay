@@ -9,6 +9,13 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.4": [
+    "Strict target routing (code-quality-hardening PR 2). Within a single scope, --tab / --workspace / --group are mutually exclusive — passing more than one on the same subcommand (or both at the program level) now fails with `target_conflict` and exit code 2.",
+    "Cross-scope override is still allowed but visible: `chrome-relay --workspace W <cmd> --workspace W2` works, but stderr prints a `target_overridden: workspace W → W2` notice so the agent (or user) knows what happened.",
+    "Fixed silent drops: `viewport set` and `console` previously hand-rolled their args and ignored global --workspace/--group. They now route through baseArgs() like every other targetable command.",
+    "New target-routing test matrix (55 tests) proves every targetable subcommand forwards --tab, --workspace, and --group correctly — and that the strict-conflict + override behavior holds. If you add a new targetable command to the CLI, add it to TARGETABLE_COMMANDS in packages/cli/test/target-routing.test.ts.",
+    "New TargetSelector type in @chrome-relay/protocol (future-proofing). Wire still carries the three loose fields; a future PR migrates the extension to read a single structured `target` field."
+  ],
   "0.5.3": [
     "Structured errors and notices (code-quality-hardening PR 1). New `BridgeError` and `BridgeNotice` types in @chrome-relay/protocol carry a code, tool, phase, and details — agents can branch on `errorDetails.code === 'invalid_arguments'` instead of regex-matching message strings.",
     "Tool result JSON now carries BOTH the legacy fields (`error: string`, `notice: string`) AND the new structured fields (`errorDetails: BridgeError`, `notices: BridgeNotice[]`). Old consumers keep working; new consumers prefer the structured shape.",

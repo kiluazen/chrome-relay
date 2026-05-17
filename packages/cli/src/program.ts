@@ -159,20 +159,77 @@ Notes:
 
   // Build a base args object from common options. Every subcommand that
   // takes a tab/workspace/group routes through here so the precedence rules
-  // (--tab > --group > --workspace) stay in one place.
+  // and the conflict-rejection live in one place.
   //
-  // Sub-vs-parent precedence: subcommand-level flag wins over program-level
-  // (parent) flag. Lets `chrome-relay --workspace default <cmd> --workspace override`
-  // do the right thing for ad-hoc one-offs in a session.
+  // Strict target rules (code-quality-hardening PR 2):
+  //
+  //   1. Within ONE scope (subcommand-level OR program-level), at most one
+  //      of --tab / --workspace / --group may be set. Two on the same
+  //      subcommand → reject with invalid_arguments.
+  //   2. ACROSS scopes, subcommand-level overrides program-level. The
+  //      override is allowed but emits a `target_overridden` notice on
+  //      stderr so the agent/user can see what happened.
+  //   3. --tab is mutually exclusive with --workspace/--group on the same
+  //      scope (a specific tab can't also "be in" a named workspace from
+  //      the agent's perspective — they're three different selectors).
   function baseArgs(opts: { tab?: number; workspace?: string; group?: string }): Record<string, unknown> {
+    const parentOpts = program.opts() as { workspace?: string; group?: string };
+
+    rejectIntraScopeConflict("subcommand", {
+      tab: opts.tab, workspace: opts.workspace, group: opts.group
+    });
+    rejectIntraScopeConflict("program-level", {
+      workspace: parentOpts.workspace, group: parentOpts.group
+    });
+
+    // Cross-scope override notice. Only fires when both scopes set a
+    // value and they differ.
+    if (opts.workspace && parentOpts.workspace && opts.workspace !== parentOpts.workspace) {
+      emitTargetOverride("workspace", parentOpts.workspace, opts.workspace);
+    }
+    if (opts.group && parentOpts.group && opts.group !== parentOpts.group) {
+      emitTargetOverride("group", parentOpts.group, opts.group);
+    }
+    // If subcommand picked --tab and program-level had --workspace/--group,
+    // the tab wins. Still announce the override.
+    if (opts.tab !== undefined && (parentOpts.workspace || parentOpts.group)) {
+      const prior = parentOpts.workspace ? `workspace=${parentOpts.workspace}` : `group=${parentOpts.group}`;
+      emitTargetOverride("tab", prior, String(opts.tab));
+    }
+
     const args: Record<string, unknown> = {};
     if (opts.tab !== undefined)      args.tabId = opts.tab;
-    const parentOpts = program.opts() as { workspace?: string; group?: string };
+    // Subcommand-level wins over program-level (intentional precedence —
+    // see the override notice above).
     const effectiveWorkspace = opts.workspace ?? parentOpts.workspace;
     const effectiveGroup     = opts.group     ?? parentOpts.group;
-    if (effectiveWorkspace)          args.workspaceName = effectiveWorkspace;
-    if (effectiveGroup)              args.groupName     = effectiveGroup;
+    if (opts.tab === undefined && effectiveWorkspace) args.workspaceName = effectiveWorkspace;
+    if (opts.tab === undefined && effectiveGroup)     args.groupName     = effectiveGroup;
     return args;
+  }
+
+  // Helpers extracted from baseArgs so they're testable in isolation and
+  // the rules are obvious in one place.
+  function rejectIntraScopeConflict(
+    scope: "subcommand" | "program-level",
+    fields: { tab?: number; workspace?: string; group?: string }
+  ): void {
+    const present: string[] = [];
+    if (fields.tab !== undefined) present.push("--tab");
+    if (fields.workspace) present.push("--workspace");
+    if (fields.group) present.push("--group");
+    if (present.length > 1) {
+      process.stderr.write(
+        `[chrome-relay] target_conflict: ${scope} flags ${present.join(" + ")} are mutually exclusive. Pass exactly one of --tab, --workspace, or --group on the same ${scope}.\n`
+      );
+      process.exit(2);
+    }
+  }
+
+  function emitTargetOverride(kind: string, from: string, to: string): void {
+    process.stderr.write(
+      `[chrome-relay] target_overridden: ${kind} ${from} → ${to} (subcommand-level overrides program-level)\n`
+    );
   }
 
   // `tabs` accepts an optional `list` verb for consistency with `group list`,
@@ -441,7 +498,7 @@ Notes:
       .option("--user-agent <ua>", "override the User-Agent header")
   ).action(async (opts) => {
     const args: Record<string, unknown> = { action: "set", width: opts.width, height: opts.height };
-    if (opts.tab !== undefined)  args.tabId = opts.tab;
+    Object.assign(args, baseArgs(opts));
     if (opts.dpr !== undefined)  args.dpr = opts.dpr;
     if (opts.mobile)             args.mobile = true;
     if (opts.touch)              args.hasTouch = true;
@@ -797,8 +854,7 @@ Notes:
 `
       )
   ).action(async (opts) => {
-    const args: Record<string, unknown> = {};
-    if (opts.tab !== undefined)    args.tabId = opts.tab;
+    const args: Record<string, unknown> = baseArgs(opts);
     if (opts.clear)                args.action = "clear";
     if (opts.level)                args.levels = opts.level;
     if (typeof opts.since === "number") args.since = opts.since;
