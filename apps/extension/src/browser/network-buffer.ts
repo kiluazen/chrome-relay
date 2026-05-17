@@ -277,7 +277,10 @@ export async function buildHar(
 
   // Pre-fetch bodies in parallel (cap at 8 concurrent so we don't pound CDP).
   const bodyState = new Map<string, "fetched" | "missing" | "skipped">();
-  const bodyText  = new Map<string, { text: string; base64Encoded: boolean }>();
+  // Mirrors getBody's return shape exactly. The earlier declaration claimed
+  // `{ text }` while we were storing `{ body }` — TypeScript blessed the
+  // misread, which is what hid issue #3 in the first place.
+  const bodyText  = new Map<string, { body: string; base64Encoded: boolean }>();
   if (withBodies) {
     const concurrency = 8;
     for (let i = 0; i < entries.length; i += concurrency) {
@@ -322,14 +325,18 @@ export async function buildHar(
           cookies: [],
           headers: Object.entries(e.responseHeaders ?? {}).map(([name, value]) => ({ name, value: String(value) })),
           content: (() => {
-            const body = bodyText.get(e.id);
+            const fetched = bodyText.get(e.id);
             const c: Record<string, unknown> = {
               size: e.decodedBodySize ?? -1,
               mimeType: e.mimeType ?? ""
             };
-            if (body) {
-              c.text = body.text;
-              if (body.base64Encoded) c.encoding = "base64";
+            // Fix #3 (chrome-relay 0.3.3): the CDP Network.getResponseBody
+            // response field is `body`, not `text`. Reading `.text` silently
+            // returned undefined → HAR entries had no text even with
+            // --with-bodies. The fetch was working; the write was broken.
+            if (fetched) {
+              c.text = fetched.body;
+              if (fetched.base64Encoded) c.encoding = "base64";
             }
             return c;
           })(),

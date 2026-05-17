@@ -177,6 +177,42 @@ describe("console-buffer", () => {
     expect(entries[1]).toMatchObject({ level: "error", text: "[security] CSP blocked inline script" });
   });
 
+  // Regression for issues.md #9 (fixed in 0.3.3): inline-eval frames (what
+  // chrome-relay's own `js` tool produces) come through with url="". With
+  // the old code an agent looking at the console couldn't tell its own
+  // injection apart from real page-script logs. We now tag the synthetic
+  // url so it's at least visible.
+  it("inline-eval console entries (url='') are tagged as <chrome-relay:js>", async () => {
+    const listenerSpy = vi.fn();
+    (globalThis as any).chrome.debugger.onEvent.addListener = listenerSpy;
+    const m = await loadModule();
+    await m.ensureConsoleCapture(14);
+    const onEvent = listenerSpy.mock.calls[0][0] as (s: any, method: string, params: any) => void;
+    onEvent({ tabId: 14 }, "Runtime.consoleAPICalled", {
+      type: "log",
+      args: [{ type: "string", value: "from eval" }],
+      stackTrace: { callFrames: [{ url: "", lineNumber: 0, columnNumber: 8 }] }
+    });
+    const { entries } = m.readConsole(14);
+    expect(entries[0].url).toBe("<chrome-relay:js>");
+  });
+
+  it("real-page console entries keep their real source URL untouched", async () => {
+    const listenerSpy = vi.fn();
+    (globalThis as any).chrome.debugger.onEvent.addListener = listenerSpy;
+    const m = await loadModule();
+    await m.ensureConsoleCapture(15);
+    const onEvent = listenerSpy.mock.calls[0][0] as (s: any, method: string, params: any) => void;
+    onEvent({ tabId: 15 }, "Runtime.consoleAPICalled", {
+      type: "log",
+      args: [{ type: "string", value: "from page" }],
+      stackTrace: { callFrames: [{ url: "https://example.com/app.js", lineNumber: 42, columnNumber: 7 }] }
+    });
+    const { entries } = m.readConsole(15);
+    expect(entries[0].url).toBe("https://example.com/app.js");
+    expect(entries[0].line).toBe(42);
+  });
+
   it("events for an un-subscribed tab are dropped (no implicit subscribe)", async () => {
     const listenerSpy = vi.fn();
     (globalThis as any).chrome.debugger.onEvent.addListener = listenerSpy;

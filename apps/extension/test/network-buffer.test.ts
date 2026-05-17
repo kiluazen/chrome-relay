@@ -193,6 +193,68 @@ describe("network-buffer", () => {
     expect(e._chrome_relay.requestId).toBe("req-har");
   });
 
+  // Regression for issues.md #3 (fixed in 0.3.3): the --with-bodies path was
+  // fetching response bodies correctly via Network.getResponseBody, but the
+  // entry-merge step read the wrong field name (`text` instead of `body`)
+  // and silently dropped the payload. HAR entries came out with no `text`
+  // even when bodies were on disk. This test pins the field plumbing so the
+  // typo can't come back.
+  it("buildHar(withBodies=true) writes the fetched body into entry.response.content.text", async () => {
+    const m = await load();
+    await m.ensureNetworkCapture(11);
+    dispatch(11, "Network.requestWillBeSent", {
+      requestId: "req-body",
+      request: { url: "https://x.com/y", method: "GET" },
+      timestamp: 0,
+      wallTime: 1700000000
+    });
+    dispatch(11, "Network.responseReceived", {
+      requestId: "req-body",
+      response: { url: "https://x.com/y", status: 200, statusText: "OK", headers: {}, mimeType: "text/plain" }
+    });
+    dispatch(11, "Network.loadingFinished", { requestId: "req-body", timestamp: 0.5, encodedDataLength: 11 });
+
+    // Stub Network.getResponseBody so we don't need a real CDP session.
+    sendMock.mockImplementation(async (_t: number, method: string) => {
+      if (method === "Network.getResponseBody") return { body: "hello world", base64Encoded: false };
+      return undefined;
+    });
+
+    const har = (await m.buildHar(11, {}, true)) as {
+      log: { entries: Array<{ response: { content: { text?: string; encoding?: string; size: number; mimeType: string } } }> }
+    };
+    expect(har.log.entries).toHaveLength(1);
+    expect(har.log.entries[0].response.content.text).toBe("hello world");
+    expect(har.log.entries[0].response.content.encoding).toBeUndefined();
+  });
+
+  it("buildHar(withBodies=true) propagates base64Encoded as content.encoding", async () => {
+    const m = await load();
+    await m.ensureNetworkCapture(12);
+    dispatch(12, "Network.requestWillBeSent", {
+      requestId: "req-img",
+      request: { url: "https://x.com/i.png", method: "GET" },
+      timestamp: 0,
+      wallTime: 1700000000
+    });
+    dispatch(12, "Network.responseReceived", {
+      requestId: "req-img",
+      response: { url: "https://x.com/i.png", status: 200, statusText: "OK", headers: {}, mimeType: "image/png" }
+    });
+    dispatch(12, "Network.loadingFinished", { requestId: "req-img", timestamp: 0.5, encodedDataLength: 8 });
+
+    sendMock.mockImplementation(async (_t: number, method: string) => {
+      if (method === "Network.getResponseBody") return { body: "iVBORw0K", base64Encoded: true };
+      return undefined;
+    });
+
+    const har = (await m.buildHar(12, {}, true)) as {
+      log: { entries: Array<{ response: { content: { text?: string; encoding?: string } } }> }
+    };
+    expect(har.log.entries[0].response.content.text).toBe("iVBORw0K");
+    expect(har.log.entries[0].response.content.encoding).toBe("base64");
+  });
+
   it("getBody throws clearly when the request isn't in the buffer", async () => {
     const m = await load();
     await m.ensureNetworkCapture(9);

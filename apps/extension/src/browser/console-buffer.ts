@@ -107,7 +107,12 @@ function levelFromConsoleType(type: string): ConsoleLevel {
 function topFrame(stack: { callFrames?: Array<{ url: string; lineNumber: number; columnNumber: number }> } | undefined) {
   const f = stack?.callFrames?.[0];
   if (!f) return {};
-  return { url: f.url, line: f.lineNumber, column: f.columnNumber };
+  // Fix #9 (0.3.3): inline-eval frames (what chrome-relay's own `js` tool
+  // produces) come through with url="". That confuses agent reasoning —
+  // there's no breadcrumb back to the call site. Tag it explicitly so the
+  // entry is at least visibly distinguishable from real page-script logs.
+  const url = f.url === "" ? "<chrome-relay:js>" : f.url;
+  return { url, line: f.lineNumber, column: f.columnNumber };
 }
 
 // Subscribe the CDP events for a tab. Idempotent — multiple calls do nothing
