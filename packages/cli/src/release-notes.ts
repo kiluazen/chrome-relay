@@ -9,6 +9,11 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.7": [
+    "`chrome-relay update` returns structured verification metadata (code-quality-hardening PR 5). Output now has `install: { attempted, packageManager, status, command }`, `binary: { path, reexeced }`, `releaseNotes: { source: 'current_process' | 'updated_binary', changes }`, and a `warnings[]` array.",
+    "Surfaces the 'install said success but binary didn't change' failure mode (PATH mismatch, stale shim, cross-package-manager confusion) as `warnings[].code === 'update_not_verified'`. Agents can branch on it.",
+    "Falls back gracefully: when the re-exec can't be proven, release notes are read from the current (pre-update) process and marked `source: 'current_process'`. The agent knows the bullets may be stale."
+  ],
   "0.5.6": [
     "BEHAVIOR CHANGE — `chrome-relay network har --with-bodies` is now strict by default (code-quality-hardening PR 4). When ANY body fails to fetch, the call throws `partial_success_disallowed` with details about which entries failed.",
     "New `--best-effort-bodies` flag restores the legacy behavior: HAR still emits, missing/errored bodies are recorded per-entry in `_chrome_relay.bodyState` and `_chrome_relay.bodyError` (with code, message, and phase).",

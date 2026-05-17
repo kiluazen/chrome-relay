@@ -75,11 +75,41 @@ Notes:
       const fromVersion = CHROME_RELAY_VERSION;
       const { spawnSync } = await import("node:child_process");
 
+      // Code-quality-hardening PR 5: return structured update metadata so
+      // the agent can branch on whether the install was attempted, whether
+      // it succeeded, and whether the re-exec proved the active binary
+      // changed. "Install said success but binary didn't change" is a real
+      // failure mode we surface explicitly.
+      const out: {
+        updatedFrom: string;
+        updatedTo: string;
+        install: {
+          attempted: boolean;
+          packageManager?: "pnpm" | "bun" | "npm";
+          status?: number | null;
+          command?: string;
+        };
+        binary: {
+          path: string;
+          reexeced: boolean;
+        };
+        releaseNotes: {
+          source: "current_process" | "updated_binary";
+          changes: ReturnType<typeof listReleaseNotesSince>;
+        };
+        warnings: Array<{ code: string; message: string }>;
+      } = {
+        updatedFrom: fromVersion,
+        updatedTo: fromVersion,
+        install: { attempted: false },
+        binary: { path: process.argv[1] ?? "", reexeced: false },
+        releaseNotes: { source: "current_process", changes: [] },
+        warnings: []
+      };
+
       if (!opts.dryRun) {
-        // Detect package manager from the location of the running binary.
-        // Heuristic only — falls back to npm.
         const argv0 = process.argv[1] ?? "";
-        const pm =
+        const pm: "pnpm" | "bun" | "npm" =
           /[\\/](pnpm|\.pnpm)[\\/]/.test(argv0) ? "pnpm" :
           /[\\/]bun[\\/]/.test(argv0)            ? "bun" :
           "npm";
@@ -87,30 +117,77 @@ Notes:
           pm === "pnpm" ? ["pnpm", ["add", "-g", "chrome-relay@latest"]] :
           pm === "bun"  ? ["bun",  ["add", "-g", "chrome-relay@latest"]] :
                           ["npm",  ["install", "-g", "chrome-relay@latest"]];
+        out.install = {
+          attempted: true,
+          packageManager: pm,
+          command: `${cmd[0]} ${cmd[1].join(" ")}`
+        };
         process.stderr.write(`[chrome-relay] updating from ${fromVersion} via ${pm}...\n`);
         const install = spawnSync(cmd[0], cmd[1], { stdio: "inherit" });
+        out.install.status = install.status;
         if (install.status !== 0) {
-          process.stderr.write(`[chrome-relay] install failed (${pm} exited ${install.status}). Try manually: ${pm} ${cmd[1].join(" ")}\n`);
+          process.stderr.write(`[chrome-relay] install failed (${pm} exited ${install.status}). Try manually: ${cmd[0]} ${cmd[1].join(" ")}\n`);
+          out.warnings.push({
+            code: "update_install_failed",
+            message: `Package-manager exit ${install.status}. Active binary unchanged.`
+          });
+          process.stdout.write(JSON.stringify(out, null, 2) + "\n");
           process.exit(1);
         }
-        // Re-exec the just-installed binary so the printed bullets come from
-        // the NEW release-notes.ts on disk, not the in-memory one of the
-        // pre-update process. `which` is portable enough; if it fails, fall
-        // back to printing whatever this process knows.
+
+        // Re-exec the just-installed binary and ask it for its version.
+        // Three signals we can derive:
+        //   1. `which chrome-relay` returns a path — usually the new binary.
+        //   2. running that binary with --version prints something > fromVersion.
+        //   3. that path differs from argv0 (cross-package-manager re-exec).
+        // Any of these proves the active binary updated. If none, we warn.
         const which = spawnSync("which", ["chrome-relay"]);
         const newBin = which.stdout?.toString().trim();
-        if (which.status === 0 && newBin && newBin !== argv0) {
-          spawnSync(newBin, ["release-notes", "--since", fromVersion], { stdio: "inherit" });
-          return;
+        if (which.status === 0 && newBin) {
+          const versionOut = spawnSync(newBin, ["--version"]);
+          const newVersion = (versionOut.stdout?.toString() ?? "").trim();
+          out.binary.path = newBin;
+          if (newVersion && newVersion !== fromVersion) {
+            out.updatedTo = newVersion;
+            // Ask the new binary for the release notes since fromVersion.
+            // Capture stdout so we can fold it into the structured response.
+            const rn = spawnSync(newBin, ["release-notes", "--since", fromVersion]);
+            try {
+              const parsed = JSON.parse(rn.stdout?.toString() ?? "");
+              if (Array.isArray(parsed.changes)) {
+                out.releaseNotes = { source: "updated_binary", changes: parsed.changes };
+              }
+            } catch {
+              out.warnings.push({
+                code: "release_notes_parse_failed",
+                message: `Could not parse output of "${newBin} release-notes --since ${fromVersion}".`
+              });
+            }
+            out.binary.reexeced = true;
+          } else {
+            // Install said success, binary still at fromVersion. Could be
+            // an environment mismatch (npm installed into a global bin
+            // that's not first on PATH) or a stale shim.
+            out.warnings.push({
+              code: "update_not_verified",
+              message: `Install completed but \`${newBin} --version\` still reports ${newVersion || "unknown"}. The active binary may not have changed — check your PATH or run "${cmd[0]} ${cmd[1].join(" ")}" manually and verify.`
+            });
+          }
+        } else {
+          out.warnings.push({
+            code: "update_not_verified",
+            message: `Install completed but \`which chrome-relay\` did not return a path. Could not verify the active binary changed.`
+          });
         }
       }
 
-      const changes = listReleaseNotesSince(fromVersion);
-      process.stdout.write(JSON.stringify({
-        updatedFrom: fromVersion,
-        updatedTo:   CHROME_RELAY_VERSION,
-        changes
-      }, null, 2) + "\n");
+      // Fall back to local release notes when we didn't successfully
+      // re-exec the new binary. This is the dry-run path AND the
+      // could-not-verify path.
+      if (out.releaseNotes.source === "current_process") {
+        out.releaseNotes.changes = listReleaseNotesSince(fromVersion);
+      }
+      process.stdout.write(JSON.stringify(out, null, 2) + "\n");
     });
 
   program
