@@ -30,8 +30,16 @@ export const TOOL_NAMES = {
   SELF_RELOAD: "chrome_self_reload",
   // §2.7c — console capture. Ring-buffer per tab; actions read/clear via args.
   CONSOLE: "chrome_console",
-  // §2.1 — groups. Single tool with action: create | list | close.
-  // Every existing tool also accepts an optional groupName arg.
+  // Workspaces — named Chrome windows for parallel agent work. Single tool
+  // with action: create | list | close. Every existing tool also accepts an
+  // optional workspaceName arg that routes ops into that workspace's window.
+  // (Was "chrome_group" pre-0.4.0; renamed because "group" collides with
+  // Chrome's own tab-group UI primitive, which is now exposed separately.)
+  WORKSPACE: "chrome_workspace",
+  // Tab groups — Chrome's native colored, collapsible folder of tabs inside
+  // a single window. Single tool with action: create | list | close | add | remove.
+  // Every existing tool also accepts an optional groupName arg that routes
+  // ops to a tab inside that tab-group.
   GROUP: "chrome_group",
   // §2.4 — accessibility tree. ~30× smaller than DOM serialization, more
   // semantic. click_ax pairs with it: targets by backendDOMNodeId, no CSS.

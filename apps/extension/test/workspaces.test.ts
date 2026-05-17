@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
+//
+// Pre-0.4.0 this file was test/groups.test.ts and the module was groups.ts.
+// Workspaces are the same primitive (named Chrome windows for cross-agent
+// isolation), just renamed because "group" now refers to Chrome's native
+// tab-group UI element (see tab-groups.test.ts).
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// Per test we mock chrome.* with the bits the module reads.
 let stored: Record<string, unknown>;
 let windowsDb: Record<number, { id: number; tabs: Array<{ id: number; active: boolean; windowId: number }> }>;
 let tabsDb:    Record<number, { id: number; active: boolean; windowId: number }>;
@@ -56,16 +60,16 @@ function setupChrome() {
 async function freshModule() {
   setupChrome();
   vi.resetModules();
-  return await import("../src/browser/groups");
+  return await import("../src/browser/workspaces");
 }
 
-describe("groups — create / list / close", () => {
+describe("workspaces — create / list / close", () => {
   it("create opens a window and persists the record", async () => {
     const m = await freshModule();
-    const rec = await m.createGroup("bidsmith-h01", { url: "https://example.com" });
+    const rec = await m.createWorkspace("bidsmith-h01", { url: "https://example.com" });
     expect(rec.name).toBe("bidsmith-h01");
     expect(typeof rec.windowId).toBe("number");
-    const list = await m.listGroups();
+    const list = await m.listWorkspaces();
     expect(list).toHaveLength(1);
     expect(list[0].name).toBe("bidsmith-h01");
     expect(list[0].alive).toBe(true);
@@ -73,78 +77,77 @@ describe("groups — create / list / close", () => {
 
   it("create rejects names that don't match [a-z0-9][a-z0-9_.-]{0,63}", async () => {
     const m = await freshModule();
-    await expect(m.createGroup("")).rejects.toThrow(/Group name must match/);
-    await expect(m.createGroup("Invalid Spaces")).rejects.toThrow();
-    await expect(m.createGroup("_starts-with-underscore")).rejects.toThrow();
+    await expect(m.createWorkspace("")).rejects.toThrow(/Workspace name must match/);
+    await expect(m.createWorkspace("Invalid Spaces")).rejects.toThrow();
+    await expect(m.createWorkspace("_starts-with-underscore")).rejects.toThrow();
   });
 
   it("create on an already-alive name throws", async () => {
     const m = await freshModule();
-    await m.createGroup("dup");
-    await expect(m.createGroup("dup")).rejects.toThrow(/already exists/);
+    await m.createWorkspace("dup");
+    await expect(m.createWorkspace("dup")).rejects.toThrow(/already exists/);
   });
 
   it("create on an orphan name (window gone) overwrites the orphan record", async () => {
     const m = await freshModule();
-    const orig = await m.createGroup("ghost");
-    // Manually delete the window — simulate user closing it.
+    const orig = await m.createWorkspace("ghost");
     delete windowsDb[orig.windowId];
-    const fresh = await m.createGroup("ghost");
+    const fresh = await m.createWorkspace("ghost");
     expect(fresh.windowId).not.toBe(orig.windowId);
-    const list = await m.listGroups();
+    const list = await m.listWorkspaces();
     expect(list).toHaveLength(1);
   });
 
   it("list reports alive vs orphan correctly", async () => {
     const m = await freshModule();
-    const live = await m.createGroup("alive");
-    const dead = await m.createGroup("dead");
+    await m.createWorkspace("alive");
+    const dead = await m.createWorkspace("dead");
     delete windowsDb[dead.windowId];
-    const list = await m.listGroups();
-    expect(list.find((g) => g.name === "alive")?.alive).toBe(true);
-    expect(list.find((g) => g.name === "dead")?.alive).toBe(false);
+    const list = await m.listWorkspaces();
+    expect(list.find((w) => w.name === "alive")?.alive).toBe(true);
+    expect(list.find((w) => w.name === "dead")?.alive).toBe(false);
   });
 
   it("close removes the binding + the window", async () => {
     const m = await freshModule();
-    const rec = await m.createGroup("close-me");
-    const result = await m.closeGroup("close-me");
+    const rec = await m.createWorkspace("close-me");
+    const result = await m.closeWorkspace("close-me");
     expect(result.windowExisted).toBe(true);
     expect(windowsDb[rec.windowId]).toBeUndefined();
-    const list = await m.listGroups();
+    const list = await m.listWorkspaces();
     expect(list).toHaveLength(0);
   });
 
-  it("close on an unknown group throws", async () => {
+  it("close on an unknown workspace throws", async () => {
     const m = await freshModule();
-    await expect(m.closeGroup("never-made")).rejects.toThrow(/not found/);
+    await expect(m.closeWorkspace("never-made")).rejects.toThrow(/not found/);
   });
 
-  it("close on an orphan group succeeds and reports windowExisted=false", async () => {
+  it("close on an orphan workspace succeeds and reports windowExisted=false", async () => {
     const m = await freshModule();
-    const rec = await m.createGroup("orphan");
+    const rec = await m.createWorkspace("orphan");
     delete windowsDb[rec.windowId];
-    const result = await m.closeGroup("orphan");
+    const result = await m.closeWorkspace("orphan");
     expect(result.closed).toBe(true);
     expect(result.windowExisted).toBe(false);
   });
 
-  it("resolveGroupTarget returns the active tab in the group's window", async () => {
+  it("resolveWorkspaceTarget returns the active tab in the workspace's window", async () => {
     const m = await freshModule();
-    await m.createGroup("target-test");
-    const tab = await m.resolveGroupTarget("target-test");
+    await m.createWorkspace("target-test");
+    const tab = await m.resolveWorkspaceTarget("target-test");
     expect(tab.active).toBe(true);
   });
 
-  it("resolveGroupTarget throws clearly when the window is gone", async () => {
+  it("resolveWorkspaceTarget throws clearly when the window is gone", async () => {
     const m = await freshModule();
-    const rec = await m.createGroup("vanished");
+    const rec = await m.createWorkspace("vanished");
     delete windowsDb[rec.windowId];
-    await expect(m.resolveGroupTarget("vanished")).rejects.toThrow(/window .* is gone/);
+    await expect(m.resolveWorkspaceTarget("vanished")).rejects.toThrow(/window .* is gone/);
   });
 
-  it("resolveGroupTarget throws when the group name is unknown", async () => {
+  it("resolveWorkspaceTarget throws when the workspace name is unknown", async () => {
     const m = await freshModule();
-    await expect(m.resolveGroupTarget("missing")).rejects.toThrow(/not found/);
+    await expect(m.resolveWorkspaceTarget("missing")).rejects.toThrow(/not found/);
   });
 });

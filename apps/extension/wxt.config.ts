@@ -13,7 +13,7 @@ export default defineConfig({
     name: "Chrome Relay",
     short_name: "Relay",
     description: "Connect your local browser to coding agents through a local bridge.",
-    permissions: ["nativeMessaging", "debugger", "tabs", "storage"],
+    permissions: ["nativeMessaging", "debugger", "tabs", "tabGroups", "storage"],
     host_permissions: ["<all_urls>"],
     icons: {
       "16": "icons/icon-16.png",

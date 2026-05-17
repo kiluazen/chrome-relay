@@ -15,11 +15,20 @@ import {
   type ConsoleLevel
 } from "./console-buffer";
 import {
-  createGroup,
-  listGroups,
-  closeGroup,
-  resolveGroupTarget
-} from "./groups";
+  createWorkspace,
+  listWorkspaces,
+  closeWorkspace,
+  resolveWorkspaceTarget
+} from "./workspaces";
+import {
+  createTabGroup,
+  listTabGroups,
+  closeTabGroup,
+  addToTabGroup,
+  removeFromTabGroup,
+  resolveTabGroupTarget,
+  type TabGroupColor
+} from "./tab-groups";
 import { getAxTree, clickAxNode } from "./a11y";
 import {
   ensureNetworkCapture,
@@ -39,15 +48,31 @@ async function getActiveTab(): Promise<chrome.tabs.Tab> {
   return tab;
 }
 
-// Target-tab resolver. Precedence: explicit tabId → groupName → active tab in
-// current window. Documented "tab wins" contract: if both --tab and --group
-// are passed, --tab takes precedence (groupName is silently ignored).
-async function resolveTarget(args: { tabId?: unknown; groupName?: unknown }): Promise<chrome.tabs.Tab> {
+// Target-tab resolver. Precedence (most → least specific):
+//   1. explicit tabId — `--tab N` wins over everything else
+//   2. groupName     — `--group X` picks the active tab inside tab-group X
+//                      (Chrome's native colored folder)
+//   3. workspaceName — `--workspace W` picks the active tab inside the
+//                      named window W
+//   4. active tab in current window — no flag given
+//
+// If multiple flags are passed, the higher-precedence one wins silently
+// (mirrors the pre-existing "tab wins" contract). Tab-groups live inside
+// one window anyway, so passing both --group and --workspace would usually
+// be redundant; we let --group win since it's more specific.
+async function resolveTarget(args: {
+  tabId?: unknown;
+  groupName?: unknown;
+  workspaceName?: unknown;
+}): Promise<chrome.tabs.Tab> {
   if (typeof args.tabId === "number") {
     return chrome.tabs.get(args.tabId);
   }
   if (typeof args.groupName === "string" && args.groupName) {
-    return resolveGroupTarget(args.groupName);
+    return resolveTabGroupTarget(args.groupName);
+  }
+  if (typeof args.workspaceName === "string" && args.workspaceName) {
+    return resolveWorkspaceTarget(args.workspaceName);
   }
   return getActiveTab();
 }
@@ -99,7 +124,45 @@ const handlers: Record<ToolName, ToolHandler> = {
     const active = args.active !== false;
 
     if (newTab) {
-      const tab = await chrome.tabs.create({ url, active });
+      // Route the new tab into the right window. Without this, chrome.tabs.create
+      // drops the tab into whichever window happens to be focused — which, for
+      // a user with their own Chrome session up, is theirs (not the agent's
+      // workspace window). Pre-0.4.0 this manifested as `--group X navigate --new`
+      // sending tabs into the user's own window instead of group X's. Same
+      // routing logic applies now to --workspace W and --group G.
+      //
+      // We also support: --new --group G means "open a new tab AND drop it
+      // into tab-group G." That requires creating the tab first then calling
+      // chrome.tabs.group({ tabIds, groupId }).
+      const createOpts: chrome.tabs.CreateProperties = { url, active };
+      let joinTabGroupName: string | undefined;
+      if (typeof args.tabId === "number" || typeof args.tabId === "string") {
+        const numeric = Number(args.tabId);
+        if (Number.isFinite(numeric)) {
+          try {
+            const ref = await chrome.tabs.get(numeric);
+            if (typeof ref.windowId === "number") createOpts.windowId = ref.windowId;
+          } catch { /* fall through; chrome will pick a window */ }
+        }
+      } else if (typeof args.groupName === "string" && args.groupName) {
+        // A tab-group lives inside one window; route the new tab to that
+        // window AND remember to join the group after creation.
+        const groupTab = await resolveTabGroupTarget(args.groupName);
+        if (typeof groupTab.windowId === "number") createOpts.windowId = groupTab.windowId;
+        joinTabGroupName = args.groupName;
+      } else if (typeof args.workspaceName === "string" && args.workspaceName) {
+        const wsTab = await resolveWorkspaceTarget(args.workspaceName);
+        if (typeof wsTab.windowId === "number") createOpts.windowId = wsTab.windowId;
+      }
+      const tab = await chrome.tabs.create(createOpts);
+      if (joinTabGroupName && typeof tab.id === "number") {
+        try {
+          await addToTabGroup(joinTabGroupName, [tab.id]);
+        } catch {
+          // Don't fail navigate over an inability to join the group; the
+          // tab still loaded the URL. The caller can re-issue `group add`.
+        }
+      }
       return { tabId: tab.id, windowId: tab.windowId, url: tab.url };
     }
 
@@ -445,27 +508,83 @@ const handlers: Record<ToolName, ToolHandler> = {
     return clickAxNode(tabId, node);
   },
 
-  // §2.1 — groups. Named Chrome windows for parallel agent work. Single tool
-  // with action: create | list | close.
-  async [TOOL_NAMES.GROUP](args) {
+  // Workspaces — named Chrome windows for parallel agent work. Single tool
+  // with action: create | list | close. (Was chrome_group pre-0.4.0;
+  // renamed when tab-groups became a distinct primitive.)
+  async [TOOL_NAMES.WORKSPACE](args) {
     const action = typeof args.action === "string" ? args.action : "list";
     if (action === "create") {
       const name = typeof args.name === "string" ? args.name : "";
-      if (!name) throw new Error("chrome_group create requires a name.");
+      if (!name) throw new Error("chrome_workspace create requires a name.");
       const url = typeof args.url === "string" ? args.url : undefined;
       const label = typeof args.label === "string" ? args.label : undefined;
-      return createGroup(name, { url, label });
+      return createWorkspace(name, { url, label });
     }
     if (action === "list") {
-      const groups = await listGroups();
+      const workspaces = await listWorkspaces();
+      return { workspaces, count: workspaces.length };
+    }
+    if (action === "close") {
+      const name = typeof args.name === "string" ? args.name : "";
+      if (!name) throw new Error("chrome_workspace close requires a name.");
+      return closeWorkspace(name);
+    }
+    throw new Error(`chrome_workspace: unknown action "${action}". Expected create | list | close.`);
+  },
+
+  // Tab groups — Chrome's native colored, collapsible folder inside one
+  // window. Actions: create | list | close | add | remove. `--group X` on
+  // any other command targets the active tab inside this tab-group.
+  async [TOOL_NAMES.GROUP](args) {
+    const action = typeof args.action === "string" ? args.action : "list";
+
+    const parseTabIds = (raw: unknown): number[] => {
+      if (Array.isArray(raw)) return raw.map(Number).filter(Number.isFinite) as number[];
+      if (typeof raw === "string") return raw.split(",").map((s) => Number(s.trim())).filter(Number.isFinite) as number[];
+      if (typeof raw === "number") return [raw];
+      return [];
+    };
+    const VALID_COLORS: TabGroupColor[] = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
+    const parseColor = (raw: unknown): TabGroupColor | undefined => {
+      if (typeof raw !== "string") return undefined;
+      const c = raw.toLowerCase() as TabGroupColor;
+      return VALID_COLORS.includes(c) ? c : undefined;
+    };
+
+    if (action === "create") {
+      const name = typeof args.name === "string" ? args.name : "";
+      if (!name) throw new Error("chrome_group create requires a name.");
+      const tabIds = parseTabIds(args.tabIds);
+      if (tabIds.length === 0) {
+        throw new Error("chrome_group create requires at least one tabId (--tabs 1,2,3).");
+      }
+      const color = parseColor(args.color);
+      const collapsed = typeof args.collapsed === "boolean" ? args.collapsed : undefined;
+      const windowId = typeof args.windowId === "number" ? args.windowId : undefined;
+      return createTabGroup(name, { tabIds, color, collapsed, windowId });
+    }
+    if (action === "list") {
+      const groups = await listTabGroups();
       return { groups, count: groups.length };
     }
     if (action === "close") {
       const name = typeof args.name === "string" ? args.name : "";
       if (!name) throw new Error("chrome_group close requires a name.");
-      return closeGroup(name);
+      return closeTabGroup(name);
     }
-    throw new Error(`chrome_group: unknown action "${action}". Expected create | list | close.`);
+    if (action === "add") {
+      const name = typeof args.name === "string" ? args.name : "";
+      if (!name) throw new Error("chrome_group add requires a name.");
+      const tabIds = parseTabIds(args.tabIds);
+      if (tabIds.length === 0) throw new Error("chrome_group add requires --tabs <ids>.");
+      return addToTabGroup(name, tabIds);
+    }
+    if (action === "remove") {
+      const tabIds = parseTabIds(args.tabIds);
+      if (tabIds.length === 0) throw new Error("chrome_group remove requires --tabs <ids>.");
+      return removeFromTabGroup(tabIds);
+    }
+    throw new Error(`chrome_group: unknown action "${action}". Expected create | list | close | add | remove.`);
   },
 
   // §2.7c — console capture. First call on a tab subscribes; subsequent calls

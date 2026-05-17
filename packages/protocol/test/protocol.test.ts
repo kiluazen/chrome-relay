@@ -32,7 +32,8 @@ describe("TOOL_NAMES", () => {
       "SELF_RELOAD",
       "SWITCH_TAB",
       "TYPE",
-      "VIEWPORT"
+      "VIEWPORT",
+      "WORKSPACE"
     ]);
   });
 

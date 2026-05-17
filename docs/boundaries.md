@@ -72,19 +72,21 @@ Order is rough priority. Every section names the CDP primitive that unblocks the
 
 **Mechanism:**
 
-A *group* is just a named handle for a Chrome window. We store `{ name, windowId, createdAt, label }` in `chrome.storage.local`. Every tool grows an optional `--group <name>` flag; when present, "active tab" means "active tab of *that group's window*", not "any window."
+A *workspace* is a named handle for a Chrome WINDOW. We store `{ name, windowId, createdAt, label }` in `chrome.storage.local`. Every tool grows an optional `--workspace <name>` flag; when present, "active tab" means "active tab of *that workspace's window*", not "any window."
 
 ```
-chrome-relay group create bidsmith-h01     # opens new window, prints groupId
-chrome-relay group list                    # name, windowId, tabCount, foreground:bool
-chrome-relay --group bidsmith-h01 navigate https://reddit.com
-chrome-relay --group bidsmith-h01 screenshot -o evidence.png
-chrome-relay group close bidsmith-h01
+chrome-relay workspace create bidsmith-h01     # opens new window, prints windowId
+chrome-relay workspace list                    # name, windowId, tabCount, alive:bool
+chrome-relay --workspace bidsmith-h01 navigate https://reddit.com
+chrome-relay --workspace bidsmith-h01 screenshot -o evidence.png
+chrome-relay workspace close bidsmith-h01
 ```
 
 Implementation cost: extension-side routing only. Native host doesn't change. ~150 LOC.
 
-**Subtle:** the popup currently shows "one bridge, one extension." That stays correct — groups are routing inside the extension. The popup should grow a small `Groups: 2 active` line so the human can see the chrome-relay-managed windows from one place.
+**Naming history (0.4.0):** this primitive used to be called `group` until a live demo turned up the obvious collision — Chrome's UI calls something else a "group" (the colored, collapsible folder inside one window). Renamed to `workspace`; the name `group` is now used for Chrome's native tab-group primitive, which we expose separately via `chrome-relay group create <name> --tabs <ids> --color <c>`. The two coexist: `--workspace W --group G` targets the active tab in tab-group G inside window W.
+
+**Subtle:** the popup currently shows "one bridge, one extension." That stays correct — workspaces are routing inside the extension. The popup should grow a small `Workspaces: 2 active` line so the human can see the chrome-relay-managed windows from one place.
 
 ### 2.2 Viewport emulation — phone view from CLI
 

@@ -53,6 +53,15 @@ the targeted tab; nothing is logged or sent off-device.
 
 Required to list open tabs, activate a selected tab, navigate a tab, close selected tabs, and return tab IDs to the user's local agent.
 
+`tabGroups`
+
+Required to manage Chrome's native tab-groups (the colored, collapsible
+folders the user sees in their tab bar). Used by `chrome-relay group …`
+to create/list/close/add/remove named tab-groups so the local agent can
+visually bundle the tabs it's working on inside the user's own window.
+No off-device transmission; group memberships stay in Chrome's local
+extension storage.
+
 `storage`
 
 Required to persist tab-group definitions (named windows the local agent

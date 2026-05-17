@@ -199,37 +199,94 @@ describe("CLI argument parsing", () => {
     });
   });
 
-  describe("group (§2.1)", () => {
+  // 0.4.0 split: what was a "group" (= named Chrome window) is now a
+  // "workspace." The `group` subcommand now wraps Chrome's native tab-group
+  // primitive (the colored folder inside one window).
+  describe("workspace (named Chrome windows)", () => {
     it("create posts action=create + name (+ url + label)", async () => {
-      await runArgs("group", "create", "bidsmith-h01", "--url", "https://reddit.com", "--label", "ad ops");
+      await runArgs("workspace", "create", "bidsmith-h01", "--url", "https://reddit.com", "--label", "ad ops");
       expect(lastBody()).toEqual({
-        name: "chrome_group",
+        name: "chrome_workspace",
         args: { action: "create", name: "bidsmith-h01", url: "https://reddit.com", label: "ad ops" }
       });
     });
 
     it("list posts action=list with no extras", async () => {
+      await runArgs("workspace", "list");
+      expect(lastBody()).toEqual({ name: "chrome_workspace", args: { action: "list" } });
+    });
+
+    it("close posts action=close + name", async () => {
+      await runArgs("workspace", "close", "bidsmith-h01");
+      expect(lastBody()).toEqual({
+        name: "chrome_workspace",
+        args: { action: "close", name: "bidsmith-h01" }
+      });
+    });
+
+    it("--workspace on a normal subcommand sets workspaceName", async () => {
+      await runArgs("navigate", "https://example.com", "--workspace", "bidsmith-h01");
+      expect(lastBody().args).toMatchObject({ url: "https://example.com", workspaceName: "bidsmith-h01" });
+    });
+
+    it("--tab wins when both --tab and --workspace are passed", async () => {
+      await runArgs("read", "--tab", "42", "--workspace", "any");
+      // Both forwarded — extension's resolveTarget enforces precedence.
+      expect(lastBody().args).toEqual({ tabId: 42, workspaceName: "any" });
+    });
+  });
+
+  describe("group (Chrome tab-groups — colored folders inside one window)", () => {
+    it("create posts action=create + name + parsed tabIds (+ color)", async () => {
+      await runArgs("group", "create", "research", "--tabs", "123,456,789", "--color", "cyan");
+      expect(lastBody()).toEqual({
+        name: "chrome_group",
+        args: { action: "create", name: "research", tabIds: [123, 456, 789], color: "cyan" }
+      });
+    });
+
+    it("create with --collapsed forwards the flag", async () => {
+      await runArgs("group", "create", "later", "--tabs", "1", "--collapsed");
+      expect(lastBody()).toEqual({
+        name: "chrome_group",
+        args: { action: "create", name: "later", tabIds: [1], collapsed: true }
+      });
+    });
+
+    it("list posts action=list", async () => {
       await runArgs("group", "list");
       expect(lastBody()).toEqual({ name: "chrome_group", args: { action: "list" } });
     });
 
     it("close posts action=close + name", async () => {
-      await runArgs("group", "close", "bidsmith-h01");
+      await runArgs("group", "close", "research");
+      expect(lastBody()).toEqual({ name: "chrome_group", args: { action: "close", name: "research" } });
+    });
+
+    it("add posts action=add + name + tabIds", async () => {
+      await runArgs("group", "add", "research", "--tabs", "1011");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "close", name: "bidsmith-h01" }
+        args: { action: "add", name: "research", tabIds: [1011] }
+      });
+    });
+
+    it("remove posts action=remove + tabIds (no name)", async () => {
+      await runArgs("group", "remove", "--tabs", "456,789");
+      expect(lastBody()).toEqual({
+        name: "chrome_group",
+        args: { action: "remove", tabIds: [456, 789] }
       });
     });
 
     it("--group on a normal subcommand sets groupName", async () => {
-      await runArgs("navigate", "https://example.com", "--group", "bidsmith-h01");
-      expect(lastBody().args).toMatchObject({ url: "https://example.com", groupName: "bidsmith-h01" });
+      await runArgs("navigate", "https://example.com", "--group", "research");
+      expect(lastBody().args).toMatchObject({ url: "https://example.com", groupName: "research" });
     });
 
-    it("--tab wins when both --tab and --group are passed", async () => {
-      await runArgs("read", "--tab", "42", "--group", "any");
-      // Both forwarded — extension's resolveTarget enforces precedence.
-      expect(lastBody().args).toEqual({ tabId: 42, groupName: "any" });
+    it("--workspace + --group on the same command forward both", async () => {
+      await runArgs("read", "--workspace", "ws", "--group", "g");
+      expect(lastBody().args).toMatchObject({ workspaceName: "ws", groupName: "g" });
     });
   });
 

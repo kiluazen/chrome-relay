@@ -12,11 +12,17 @@ export function buildProgram(): Command {
     .description("Connect your local Chrome browser to coding agents through a local bridge.")
     .version(CHROME_RELAY_VERSION)
     .showHelpAfterError()
-    // Global --group flag: `chrome-relay --group X navigate ...` and
-    // `chrome-relay navigate --group X ...` both work. Subcommands resolve
-    // the effective value via baseArgs() which checks subcommand-level first,
+    // Global --workspace and --group flags: usable at the top level
+    // (`chrome-relay --workspace W <cmd> ...`) or on the subcommand itself
+    // (`chrome-relay <cmd> --workspace W ...`). Subcommands resolve the
+    // effective value via baseArgs() which checks subcommand-level first,
     // then falls back to the program-level (parent) option.
-    .option("--group <name>", "target the active tab of a named group window (works at top level too)")
+    //
+    //   --workspace W → target a named Chrome WINDOW (own taskbar entry)
+    //   --group     G → target a named tab-GROUP (Chrome's colored folder
+    //                   inside one window)
+    .option("--workspace <name>", "target the active tab in a named workspace window (works at top level too)")
+    .option("--group <name>",     "target the active tab in a named tab-group (works at top level too)")
     .enablePositionalOptions()
     .addHelpText(
       "after",
@@ -72,22 +78,26 @@ Notes:
 
   function tabOpt(cmd: Command) {
     return cmd
-      .option("-t, --tab <id>", "target tab ID", (v) => Number(v))
-      .option("--group <name>", "target the active tab of a named group window (see `chrome-relay group`)");
+      .option("-t, --tab <id>",      "target tab ID", (v) => Number(v))
+      .option("--workspace <name>",  "target the active tab in a named workspace window (see `chrome-relay workspace`)")
+      .option("--group <name>",      "target the active tab in a named tab-group (see `chrome-relay group`)");
   }
 
   // Build a base args object from common options. Every subcommand that
-  // takes a tab/group routes through here so the `--tab wins, --group
-  // fallback` contract stays in one place.
+  // takes a tab/workspace/group routes through here so the precedence rules
+  // (--tab > --group > --workspace) stay in one place.
   //
-  // Group precedence: subcommand-level --group wins over program-level
-  // (parent) --group. Lets `chrome-relay --group default <cmd> --group override`
+  // Sub-vs-parent precedence: subcommand-level flag wins over program-level
+  // (parent) flag. Lets `chrome-relay --workspace default <cmd> --workspace override`
   // do the right thing for ad-hoc one-offs in a session.
-  function baseArgs(opts: { tab?: number; group?: string }): Record<string, unknown> {
+  function baseArgs(opts: { tab?: number; workspace?: string; group?: string }): Record<string, unknown> {
     const args: Record<string, unknown> = {};
-    if (opts.tab !== undefined)  args.tabId = opts.tab;
-    const effectiveGroup = opts.group ?? (program.opts() as { group?: string }).group;
-    if (effectiveGroup)          args.groupName = effectiveGroup;
+    if (opts.tab !== undefined)      args.tabId = opts.tab;
+    const parentOpts = program.opts() as { workspace?: string; group?: string };
+    const effectiveWorkspace = opts.workspace ?? parentOpts.workspace;
+    const effectiveGroup     = opts.group     ?? parentOpts.group;
+    if (effectiveWorkspace)          args.workspaceName = effectiveWorkspace;
+    if (effectiveGroup)              args.groupName     = effectiveGroup;
     return args;
   }
 
@@ -452,29 +462,33 @@ Notes:
     await run("chrome_click_ax", args);
   });
 
-  // ---------- group (§2.1 — named Chrome windows for parallel agent work) ----------
-  const group = program
-    .command("group")
+  // ---------- workspace (named Chrome WINDOWS for parallel agent work) ----------
+  // Pre-0.4.0 this was called `group`. Renamed because "group" collides with
+  // Chrome's own tab-group UI primitive, which is now exposed separately
+  // via the `group` subcommand below.
+  const workspace = program
+    .command("workspace")
     .description("Manage named Chrome windows so multiple agents can drive separate windows.")
     .addHelpText(
       "after",
       `
 
 Examples:
-  chrome-relay group create bidsmith-h01 --url https://reddit.com
-  chrome-relay group list
-  chrome-relay --group bidsmith-h01 navigate https://news.ycombinator.com
-  chrome-relay --group bidsmith-h01 screenshot -o evidence.png
-  chrome-relay group close bidsmith-h01
+  chrome-relay workspace create bidsmith-h01 --url https://reddit.com
+  chrome-relay workspace list
+  chrome-relay --workspace bidsmith-h01 navigate https://news.ycombinator.com
+  chrome-relay --workspace bidsmith-h01 screenshot -o evidence.png
+  chrome-relay workspace close bidsmith-h01
 
 Notes:
-  Hard lifecycle: if you manually close the group's window, the next
-  --group operation fails loudly until you run \`group close\` + \`group create\` again.
-  If you pass both --tab and --group on the same command, --tab wins.
+  Hard lifecycle: if you manually close the workspace's window, the next
+  --workspace operation fails loudly until you run \`workspace close\` +
+  \`workspace create\` again.
+  Precedence on a single command: --tab > --group > --workspace.
 `
     );
 
-  group
+  workspace
     .command("create <name>")
     .description("Open a new Chrome window and bind it to <name>.")
     .option("--url <url>", "initial URL (default about:blank)")
@@ -483,21 +497,97 @@ Notes:
       const args: Record<string, unknown> = { action: "create", name };
       if (opts.url)   args.url = opts.url;
       if (opts.label) args.label = opts.label;
+      await run("chrome_workspace", args);
+    });
+
+  workspace
+    .command("list")
+    .description("List all known workspaces + whether their window is still alive.")
+    .action(async () => {
+      await run("chrome_workspace", { action: "list" });
+    });
+
+  workspace
+    .command("close <name>")
+    .description("Close the workspace's window (if alive) and remove the binding.")
+    .action(async (name: string) => {
+      await run("chrome_workspace", { action: "close", name });
+    });
+
+  // ---------- group (tab-GROUPS — Chrome's colored folder of tabs) ----------
+  // New in 0.4.0. Wraps chrome.tabs.group + chrome.tabGroups. Distinct from
+  // `workspace`: groups live INSIDE one window and show up as a named,
+  // colored, collapsible chip in the tab bar.
+  const group = program
+    .command("group")
+    .description("Manage Chrome tab-groups (the colored, collapsible folders inside one window).")
+    .addHelpText(
+      "after",
+      `
+
+Examples:
+  chrome-relay group create research --tabs 123,456,789 --color cyan
+  chrome-relay group list
+  chrome-relay group add research --tabs 1011
+  chrome-relay group remove --tabs 456
+  chrome-relay --group research navigate https://news.ycombinator.com
+  chrome-relay group close research
+
+Notes:
+  Tab-groups live inside ONE Chrome window. To open in a specific window,
+  pass --workspace W on \`group create\` (we'll route the underlying
+  chrome.tabs.group call there).
+  \`--group X navigate --new\` opens the new tab into the group's window AND
+  drops it inside the group.
+  Auto-pruned when the group's last tab is ungrouped or its window closes.
+  Colors: grey, blue, red, yellow, green, pink, purple, cyan, orange.
+`
+    );
+
+  group
+    .command("create <name>")
+    .description("Group existing tabs into a new tab-group bound to <name>.")
+    .requiredOption("--tabs <ids>", "comma-separated tab IDs to group, e.g. 123,456,789")
+    .option("--color <color>", "grey | blue | red | yellow | green | pink | purple | cyan | orange")
+    .option("--collapsed", "create the group in its collapsed state")
+    .action(async (name: string, opts) => {
+      const args: Record<string, unknown> = { action: "create", name };
+      args.tabIds = String(opts.tabs).split(",").map((s) => Number(s.trim())).filter(Number.isFinite);
+      if (opts.color)     args.color = opts.color;
+      if (opts.collapsed) args.collapsed = true;
       await run("chrome_group", args);
     });
 
   group
     .command("list")
-    .description("List all known groups + whether their window is still alive.")
+    .description("List all known tab-groups + their window/color/tabCount.")
     .action(async () => {
       await run("chrome_group", { action: "list" });
     });
 
   group
     .command("close <name>")
-    .description("Close the group's window (if alive) and remove the binding.")
+    .description("Ungroup the tabs in <name> and remove the binding.")
     .action(async (name: string) => {
       await run("chrome_group", { action: "close", name });
+    });
+
+  group
+    .command("add <name>")
+    .description("Add existing tabs to an existing tab-group.")
+    .requiredOption("--tabs <ids>", "comma-separated tab IDs to add")
+    .action(async (name: string, opts) => {
+      const tabIds = String(opts.tabs).split(",").map((s) => Number(s.trim())).filter(Number.isFinite);
+      await run("chrome_group", { action: "add", name, tabIds });
+    });
+
+  group
+    .command("remove")
+    .description("Ungroup specific tabs (they remain open, just outside any tab-group).")
+    .requiredOption("--tabs <ids>", "comma-separated tab IDs to ungroup")
+    .action(async (opts) => {
+      const tabIds = String(opts.tabs).split(",").map((s) => Number(s.trim())).filter(Number.isFinite);
+      await run("chrome_group", { action: "remove", tabIds });
     });
 
   // ---------- network (§2.7a — HTTP capture + HAR export) ----------
