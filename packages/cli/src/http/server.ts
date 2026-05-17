@@ -1,17 +1,43 @@
 import Fastify from "fastify";
-import { DEFAULT_HTTP_PORT, type LocalBridgeCallRequest, type ToolName } from "@chrome-relay/protocol";
+import {
+  DEFAULT_HTTP_PORT,
+  RelayError,
+  toBridgeError,
+  type BridgeError,
+  type BridgeNotice,
+  type LocalBridgeCallRequest,
+  type ToolName
+} from "@chrome-relay/protocol";
 import type { ExtensionBridge } from "../native/bridge.js";
 import { CHROME_RELAY_VERSION } from "../index.js";
 import { compareSemver } from "../release-notes.js";
 
 // Build the cli-outdated notice once per call. Returns undefined when the CLI
-// is at-or-newer than the extension (the normal case). Stable, parseable
-// string so agents can grep for the "cli-outdated:" prefix.
-function buildOutdatedNotice(bridge: ExtensionBridge): string | undefined {
+// is at-or-newer than the extension (the normal case). Returns the structured
+// BridgeNotice form; the response serializer wraps it for both legacy
+// (string) and new (array) clients.
+function buildOutdatedNotice(bridge: ExtensionBridge): BridgeNotice | undefined {
   const extVersion = bridge.getExtensionVersion();
   if (!extVersion) return undefined;
   if (compareSemver(CHROME_RELAY_VERSION, extVersion) >= 0) return undefined;
-  return `cli-outdated: ${CHROME_RELAY_VERSION} < extension ${extVersion}; run \`chrome-relay update\``;
+  return {
+    code: "cli_outdated",
+    message: `cli-outdated: ${CHROME_RELAY_VERSION} < extension ${extVersion}; run \`chrome-relay update\``,
+    details: {
+      currentVersion: CHROME_RELAY_VERSION,
+      expectedVersion: extVersion
+    },
+    action: { command: "chrome-relay update" }
+  };
+}
+
+// Serializer that emits BOTH the legacy string `notice` and the new
+// structured `notices` array. Old clients (CLI <0.5.3) keep parsing the
+// string field; new clients prefer `notices`.
+function attachNotices(payload: Record<string, unknown>, notice: BridgeNotice | undefined): void {
+  if (!notice) return;
+  payload.notice = notice.message;
+  payload.notices = [notice];
 }
 
 export class RelayHttpServer {
@@ -48,15 +74,24 @@ export class RelayHttpServer {
           (body.args ?? {}) as Record<string, unknown>
         );
         const notice = buildOutdatedNotice(this.bridge);
-        reply.send(notice ? { ok: true, data, notice } : { ok: true, data });
+        const payload: Record<string, unknown> = { ok: true, data };
+        attachNotices(payload, notice);
+        reply.send(payload);
       } catch (error) {
         const notice = buildOutdatedNotice(this.bridge);
-        const body: Record<string, unknown> = {
+        // Preserve structured BridgeError when the handler threw a
+        // RelayError; otherwise wrap as code:"internal_error" with the raw
+        // message so the agent still sees a parseable shape.
+        const errorDetails: BridgeError = error instanceof RelayError
+          ? error.toBridgeError()
+          : toBridgeError(error, body.name as ToolName);
+        const payload: Record<string, unknown> = {
           ok: false,
-          error: error instanceof Error ? error.message : String(error)
+          error: errorDetails.message,
+          errorDetails
         };
-        if (notice) body.notice = notice;
-        reply.code(500).send(body);
+        attachNotices(payload, notice);
+        reply.code(500).send(payload);
       }
     });
 

@@ -1,4 +1,4 @@
-import { TOOL_NAMES, type ToolArguments, type ToolName } from "@chrome-relay/protocol";
+import { RelayError, TOOL_NAMES, type ToolArguments, type ToolName } from "@chrome-relay/protocol";
 import { evalExpression, evalInTab, send } from "./cdp";
 import { pressKey } from "./keyboard";
 import {
@@ -435,7 +435,14 @@ const handlers: Record<ToolName, ToolHandler> = {
         userAgent: typeof args.userAgent === "string" ? args.userAgent : undefined
       };
     } else {
-      throw new Error(`chrome_viewport: unknown action "${action}". Expected set | preset | clear | list.`);
+      throw new RelayError({
+        code: "invalid_arguments",
+        message: `chrome_viewport: unknown action "${action}". Expected set | preset | clear | list.`,
+        tool: TOOL_NAMES.VIEWPORT,
+        phase: "parse_action",
+        details: { received: action, validChoices: ["set", "preset", "clear", "list"] },
+        retryable: false
+      });
     }
 
     await send(tabId, "Emulation.setDeviceMetricsOverride", {
@@ -536,7 +543,14 @@ const handlers: Record<ToolName, ToolHandler> = {
       if (!name) throw new Error("chrome_workspace close requires a name.");
       return closeWorkspace(name);
     }
-    throw new Error(`chrome_workspace: unknown action "${action}". Expected create | list | close.`);
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: `chrome_workspace: unknown action "${action}". Expected create | list | close.`,
+      tool: TOOL_NAMES.WORKSPACE,
+      phase: "parse_action",
+      details: { received: action, validChoices: ["create", "list", "close"] },
+      retryable: false
+    });
   },
 
   // Tab groups — Chrome's native colored, collapsible folder inside one
@@ -578,7 +592,14 @@ const handlers: Record<ToolName, ToolHandler> = {
       if (tabIds.length === 0) throw new Error("chrome_group remove requires --tabs <ids>.");
       return removeFromTabGroup(tabIds);
     }
-    throw new Error(`chrome_group: unknown action "${action}". Expected create | list | close | add | remove.`);
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: `chrome_group: unknown action "${action}". Expected create | list | close | add | remove.`,
+      tool: TOOL_NAMES.GROUP,
+      phase: "parse_action",
+      details: { received: action, validChoices: ["create", "list", "close", "add", "remove"] },
+      retryable: false
+    });
   },
 
   // Hover — dispatches mouseMoved at element center so :hover/:focus-within
@@ -628,9 +649,14 @@ const handlers: Record<ToolName, ToolHandler> = {
       // one of the two supported values.
       if (args.format !== undefined && args.format !== null) {
         if (args.format !== "png" && args.format !== "jpeg") {
-          throw new Error(
-            `chrome_screencast: invalid format ${JSON.stringify(args.format)}. Expected "jpeg" or "png".`
-          );
+          throw new RelayError({
+            code: "invalid_arguments",
+            message: `chrome_screencast: invalid format ${JSON.stringify(args.format)}. Expected "jpeg" or "png".`,
+            tool: TOOL_NAMES.SCREENCAST,
+            phase: "parse_format",
+            details: { received: args.format, validChoices: ["jpeg", "png"] },
+            retryable: false
+          });
         }
         opts.format = args.format;
       }
@@ -643,7 +669,14 @@ const handlers: Record<ToolName, ToolHandler> = {
     if (action === "stop") {
       return stopScreencast(tabId);
     }
-    throw new Error(`chrome_screencast: unknown action "${action}". Expected start | stop.`);
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: `chrome_screencast: unknown action "${action}". Expected start | stop.`,
+      tool: TOOL_NAMES.SCREENCAST,
+      phase: "parse_action",
+      details: { received: action, validChoices: ["start", "stop"] },
+      retryable: false
+    });
   },
 
   // §2.7c — console capture. First call on a tab subscribes; subsequent calls
@@ -659,7 +692,14 @@ const handlers: Record<ToolName, ToolHandler> = {
       return clearConsole(tabId);
     }
     if (action !== "read") {
-      throw new Error(`chrome_console: unknown action "${action}". Expected read | clear.`);
+      throw new RelayError({
+        code: "invalid_arguments",
+        message: `chrome_console: unknown action "${action}". Expected read | clear.`,
+        tool: TOOL_NAMES.CONSOLE,
+        phase: "parse_action",
+        details: { received: action, validChoices: ["read", "clear"] },
+        retryable: false
+      });
     }
 
     // Subscribe first call (cheap idempotent on subsequent calls).
@@ -710,7 +750,14 @@ const handlers: Record<ToolName, ToolHandler> = {
       return buildHar(tabId, { filter, status, method, limit }, withBodies);
     }
     if (action !== "read") {
-      throw new Error(`chrome_network: unknown action "${action}". Expected read | clear | har | body.`);
+      throw new RelayError({
+        code: "invalid_arguments",
+        message: `chrome_network: unknown action "${action}". Expected read | clear | har | body.`,
+        tool: TOOL_NAMES.NETWORK,
+        phase: "parse_action",
+        details: { received: action, validChoices: ["read", "clear", "har", "body"] },
+        retryable: false
+      });
     }
     return readNetwork(tabId, { filter, status, method, limit });
   }
@@ -769,7 +816,12 @@ function parseBbox(spec: string): { x: number; y: number; width: number; height:
 export async function runTool(name: ToolName, args: ToolArguments): Promise<unknown> {
   const handler = handlers[name];
   if (!handler) {
-    throw new Error(`Unsupported tool: ${name}`);
+    throw new RelayError({
+      code: "unsupported_tool",
+      message: `Unsupported tool: ${name}`,
+      details: { received: name },
+      retryable: false
+    });
   }
 
   return handler(args);

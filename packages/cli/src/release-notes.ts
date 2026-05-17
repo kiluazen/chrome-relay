@@ -9,6 +9,15 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.3": [
+    "Structured errors and notices (code-quality-hardening PR 1). New `BridgeError` and `BridgeNotice` types in @chrome-relay/protocol carry a code, tool, phase, and details — agents can branch on `errorDetails.code === 'invalid_arguments'` instead of regex-matching message strings.",
+    "Tool result JSON now carries BOTH the legacy fields (`error: string`, `notice: string`) AND the new structured fields (`errorDetails: BridgeError`, `notices: BridgeNotice[]`). Old consumers keep working; new consumers prefer the structured shape.",
+    "The cli-outdated notice is now a `BridgeNotice` with `code:'cli_outdated'`, `details.currentVersion`, `details.expectedVersion`, and an `action.command` field.",
+    "Every strict parser (PR 0 strict enums) now throws `RelayError` with `code:'invalid_arguments'`, the offending tool, the phase that failed, and the list of valid choices.",
+    "All action-validator throws (chrome_console, chrome_network, chrome_viewport, chrome_workspace, chrome_group, chrome_screencast) carry the same structured shape.",
+    "Unknown tool dispatch now returns `code:'unsupported_tool'`.",
+    "CLI: when a RelayError flows back, stderr prints the human message AND a `relayError` JSON object so agents can parse the structured details from stderr without needing a separate flag."
+  ],
   "0.5.2": [
     "Strict input parsers (code-quality-hardening PR 0). Invalid console levels, network status filters, tab-group colors, and tab-id lists now throw instead of being silently dropped — an agent that asks for `errors` (typo of `error`) gets a precise error rather than all levels back.",
     "Affected tools: chrome_console (levels), chrome_network (status), chrome_group (color, tabIds), chrome_screencast (format, action), chrome_network (action).",

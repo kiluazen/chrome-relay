@@ -1,6 +1,7 @@
 # Chrome Relay code quality hardening
 
-Status: draft for review, written 2026-05-17.
+Status: draft for review, written 2026-05-17. Updated after a second pass
+against the current worktree: some strict parser work has already landed.
 
 This document is a code-quality review and hardening proposal for the current
 Chrome Relay codebase. It focuses on the parts that matter most for agent use:
@@ -47,7 +48,7 @@ makes it easy to introduce exactly the failure mode we want to avoid: "the agent
 asked for X, Chrome Relay quietly did Y, and now debugging starts three layers
 downstream."
 
-The highest-leverage changes are:
+The highest-leverage remaining changes are:
 
 1. Move the tool contracts into `packages/protocol` as executable schemas.
 2. Make errors structured and preserve them across extension -> native bridge ->
@@ -56,6 +57,43 @@ The highest-leverage changes are:
 4. Split the CLI and extension tool handlers by domain.
 5. Add a routing/contract test matrix so every command proves it forwards
    `--tab`, `--workspace`, and `--group` consistently.
+
+## Current status snapshot
+
+Some of the recommendations in this document are already partially executed.
+Reviewers should treat this as a status-aware hardening plan, not a pure list of
+new work.
+
+Already landed:
+
+- Strict pure parsers exist in `apps/extension/src/browser/parsers.ts`.
+- Tab-group tab IDs now reject invalid values instead of filtering them out.
+- Tab-group colors now reject invalid values.
+- Console levels now reject invalid values.
+- Network status buckets now reject invalid values.
+- Console and network actions now reject unknown `action` values.
+- Screencast format now rejects unsupported values.
+- Parser unit tests exist in `apps/extension/test/strict-parsers.test.ts`.
+
+Partially landed:
+
+- CLI tests cover some `--workspace` and `--group` forwarding behavior.
+- Extension handlers consume the new strict parser module.
+- Strict parsing exists in the extension, but the protocol package still does
+  not own the schema.
+
+Still open:
+
+- `BridgeResponse` in `packages/protocol` still does not model `notice`.
+- Errors are still flattened to strings across the bridge.
+- Target selection is still a loose object with precedence, not a strict
+  `TargetSelector`.
+- `viewport set` and `console` still do not use the shared CLI `baseArgs()`
+  path, so global `--workspace` / `--group` can drift.
+- `chrome_navigate --new` still has silent fallback paths.
+- HAR body export still hides the body-fetch failure reason.
+- `program.ts` and `tools.ts` are still large router/implementation files.
+- `update` still has environment-dependent verification behavior.
 
 ## Product principle
 
@@ -381,7 +419,10 @@ Example strict error:
 
 ### Risk 5: invalid enums are silently dropped
 
-Some parsers intentionally ignore invalid input:
+Status: mostly executed in the extension. Keep this section as design rationale
+and to drive the remaining protocol/CLI cleanup.
+
+Earlier versions had parsers that intentionally ignored invalid input:
 
 - tab id parser drops non-numeric values
 - color parser returns `undefined` for an invalid color
@@ -399,11 +440,25 @@ chrome-relay console --level errors
 and `errors` is silently dropped, the agent may receive all levels instead of
 only errors. That is worse than failing.
 
-Recommendation:
+Current implementation:
+
+- `apps/extension/src/browser/parsers.ts` provides strict parsers for tab IDs,
+  tab-group colors, console levels, and network status buckets.
+- `apps/extension/src/browser/tools.ts` uses those parsers for `chrome_group`,
+  `chrome_console`, and `chrome_network`.
+- `apps/extension/test/strict-parsers.test.ts` covers valid and invalid values.
+- Unknown `chrome_console` and `chrome_network` actions now throw instead of
+  falling through to read behavior.
+
+Remaining recommendation:
 
 - Required enums should reject invalid values with `invalid_arguments`.
 - Optional filters should reject invalid values if they are present.
 - Only omit the field if the user truly omitted it.
+- Move the schema/validation contract up into `packages/protocol` so the CLI,
+  HTTP bridge, and extension share the same rules.
+- Convert these string errors to structured `BridgeError` values once the error
+  contract exists.
 
 Example:
 
@@ -817,13 +872,23 @@ call can be wrong.
 
 ### PR 4: strict enum/filter parsing
 
-Scope:
+Status: partially complete.
+
+Completed:
 
 - Console levels reject invalid values.
 - Network status rejects invalid values.
 - Tab group colors reject invalid values.
 - Tab id lists reject invalid values instead of filtering them out.
-- Add unit tests for each parser.
+- Unit tests exist for each parser.
+
+Remaining:
+
+- Move or mirror these parsers into `packages/protocol` so they become the
+  shared contract instead of extension-local logic.
+- Return structured `invalid_arguments` errors instead of plain strings.
+- Add CLI-level tests where Commander accepts a string that the extension later
+  rejects, so reviewers can see the boundary behavior intentionally.
 
 ### PR 5: split CLI command modules
 

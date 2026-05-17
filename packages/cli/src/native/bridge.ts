@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type {
+  BridgeError,
   BridgeMessage,
   BridgePingMessage,
   BridgeReadyMessage,
@@ -7,6 +8,7 @@ import type {
   ToolName,
   ToolResultMessage
 } from "@chrome-relay/protocol";
+import { RelayError } from "@chrome-relay/protocol";
 
 type PendingRequest = {
   resolve: (value: unknown) => void;
@@ -73,7 +75,15 @@ export class ExtensionBridge {
       return;
     }
 
-    pending.reject(new Error(message.payload.error));
+    // Reject with a RelayError carrying the structured details when the
+    // extension provided them. Falls back to a plain Error for legacy
+    // (extension <0.5.3) payloads that only carry the string `error` field.
+    const details = message.payload.errorDetails;
+    if (details) {
+      pending.reject(new RelayError(details as BridgeError));
+    } else {
+      pending.reject(new Error(message.payload.error));
+    }
   }
 
   async waitUntilReady(timeoutMs = 15_000): Promise<void> {

@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { writeFileSync } from "node:fs";
+import { RelayError } from "@chrome-relay/protocol";
 import { CHROME_RELAY_VERSION } from "./index.js";
 import { runDoctor, runInstall } from "./install/install.js";
 import { callTool } from "./client/call.js";
@@ -134,9 +135,17 @@ Notes:
         process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       }
     } catch (error) {
-      process.stderr.write(
-        (error instanceof Error ? error.message : String(error)) + "\n"
-      );
+      // RelayError gets a structured stderr dump so agents can branch on
+      // `code` mechanically. Plain Error falls back to message-only for
+      // backwards compatibility.
+      if (error instanceof RelayError) {
+        process.stderr.write(error.message + "\n");
+        process.stderr.write(JSON.stringify({ relayError: error.toBridgeError() }, null, 2) + "\n");
+      } else {
+        process.stderr.write(
+          (error instanceof Error ? error.message : String(error)) + "\n"
+        );
+      }
       process.exit(1);
     }
   }

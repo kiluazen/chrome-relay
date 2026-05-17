@@ -9,6 +9,7 @@
 // field, and the handler uses its default.
 
 import { describe, it, expect } from "vitest";
+import { RelayError } from "@chrome-relay/protocol";
 import {
   parseTabIds,
   parseTabGroupColor,
@@ -18,6 +19,22 @@ import {
   parseNetworkStatus,
   VALID_NETWORK_STATUSES
 } from "../src/browser/parsers";
+
+// Helper: assert the thrown error is a RelayError with code:"invalid_arguments"
+// and the expected tool. PR 1 of code-quality-hardening — structured errors.
+function expectInvalidArguments(fn: () => unknown, tool: string): RelayError {
+  let caught: unknown;
+  try {
+    fn();
+  } catch (e) {
+    caught = e;
+  }
+  expect(caught).toBeInstanceOf(RelayError);
+  const err = caught as RelayError;
+  expect(err.code).toBe("invalid_arguments");
+  expect(err.tool).toBe(tool);
+  return err;
+}
 
 describe("parseTabIds", () => {
   it("accepts a number", () => {
@@ -115,6 +132,13 @@ describe("parseLevels", () => {
   it("exposes every valid level via VALID_CONSOLE_LEVELS", () => {
     expect(VALID_CONSOLE_LEVELS).toEqual(["log", "info", "warn", "error", "debug", "exception"]);
   });
+
+  it("throws RelayError with code invalid_arguments + tool chrome_console", () => {
+    const err = expectInvalidArguments(() => parseLevels("errors"), "chrome_console");
+    expect(err.phase).toBe("parse_levels");
+    expect(err.details?.received).toBe("errors");
+    expect(err.details?.validChoices).toEqual(VALID_CONSOLE_LEVELS);
+  });
 });
 
 describe("parseNetworkStatus", () => {
@@ -140,5 +164,25 @@ describe("parseNetworkStatus", () => {
 
   it("lists valid choices in the error message", () => {
     expect(() => parseNetworkStatus("nope")).toThrow(/ok, redirect, client_error, server_error, failed/);
+  });
+
+  it("throws RelayError with code invalid_arguments + tool chrome_network", () => {
+    const err = expectInvalidArguments(() => parseNetworkStatus("clients_error"), "chrome_network");
+    expect(err.phase).toBe("parse_status");
+    expect(err.details?.received).toBe("clients_error");
+  });
+});
+
+describe("Structured error codes for the other parsers", () => {
+  it("parseTabIds throws RelayError with tool chrome_group", () => {
+    const err = expectInvalidArguments(() => parseTabIds("1,foo,3"), "chrome_group");
+    expect(err.phase).toBe("parse_tab_ids");
+    expect(err.details?.received).toBe("foo");
+  });
+
+  it("parseTabGroupColor throws RelayError with tool chrome_group", () => {
+    const err = expectInvalidArguments(() => parseTabGroupColor("magenta"), "chrome_group");
+    expect(err.phase).toBe("parse_color");
+    expect(err.details?.received).toBe("magenta");
   });
 });

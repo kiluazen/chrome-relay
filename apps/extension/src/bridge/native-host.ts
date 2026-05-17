@@ -4,7 +4,7 @@ import type {
   ToolCallMessage,
   ToolResultMessage
 } from "@chrome-relay/protocol";
-import { NATIVE_HOST_NAME } from "@chrome-relay/protocol";
+import { NATIVE_HOST_NAME, toBridgeError } from "@chrome-relay/protocol";
 import { runTool } from "../browser/tools";
 
 const RECONNECT_DELAY_MS = 1500;
@@ -117,12 +117,16 @@ async function handleToolCall(message: ToolCallMessage): Promise<void> {
     port.postMessage(response);
   } catch (error) {
     recordToolExecution(message, false, error);
+    // Structured BridgeError preserved alongside the legacy string for
+    // backwards compat. Native bridge + CLI both forward both shapes.
+    const errorDetails = toBridgeError(error, message.payload.name);
     const response: ToolResultMessage = {
       type: "tool.result",
       id: message.id,
       payload: {
         ok: false,
-        error: error instanceof Error ? error.message : String(error)
+        error: errorDetails.message,
+        errorDetails
       }
     };
     port.postMessage(response);
