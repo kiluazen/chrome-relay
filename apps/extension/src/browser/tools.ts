@@ -37,6 +37,7 @@ import {
   clearNetwork,
   buildHar
 } from "./network-buffer";
+import { startScreencast, stopScreencast } from "./screencast";
 
 type ToolHandler = (args: ToolArguments) => Promise<unknown>;
 
@@ -585,6 +586,62 @@ const handlers: Record<ToolName, ToolHandler> = {
       return removeFromTabGroup(tabIds);
     }
     throw new Error(`chrome_group: unknown action "${action}". Expected create | list | close | add | remove.`);
+  },
+
+  // Hover — dispatches mouseMoved at element center so :hover/:focus-within
+  // styles fire. Pair with screencast to capture micro-state animations
+  // that the existing click path skips over.
+  async [TOOL_NAMES.HOVER](args) {
+    const tab = await resolveTarget(args);
+    const tabId = requireTabId(tab);
+    let x: number | undefined;
+    let y: number | undefined;
+    if (typeof args.x === "number" && typeof args.y === "number") {
+      x = args.x;
+      y = args.y;
+    } else if (typeof args.selector === "string" && args.selector) {
+      // Resolve to element center via page eval — same mechanism click uses.
+      const result = await evalExpression<{ x: number; y: number; w: number; h: number } | null>(
+        tabId,
+        `(() => { const el = document.querySelector(${JSON.stringify(args.selector)}); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()`
+      );
+      const rect = result.value;
+      if (!rect) throw new Error(`chrome_hover: no element matches selector ${args.selector}`);
+      x = rect.x + rect.w / 2;
+      y = rect.y + rect.h / 2;
+    } else {
+      throw new Error("chrome_hover requires either --selector or --x and --y.");
+    }
+    await send(tabId, "Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x,
+      y,
+      modifiers: 0,
+      buttons: 0
+    });
+    return { hovered: true, x, y, selector: args.selector ?? null };
+  },
+
+  // Screencast — start/stop a CDP screencast stream. Frames are buffered
+  // in the SW and returned on stop. Works on backgrounded tabs (the whole
+  // point — Page.captureScreenshot doesn't).
+  async [TOOL_NAMES.SCREENCAST](args) {
+    const tab = await resolveTarget(args);
+    const tabId = requireTabId(tab);
+    const action = typeof args.action === "string" ? args.action : "start";
+    if (action === "start") {
+      const opts: Parameters<typeof startScreencast>[1] = {};
+      if (args.format === "png" || args.format === "jpeg") opts.format = args.format;
+      if (typeof args.quality === "number")       opts.quality = args.quality;
+      if (typeof args.maxWidth === "number")      opts.maxWidth = args.maxWidth;
+      if (typeof args.maxHeight === "number")     opts.maxHeight = args.maxHeight;
+      if (typeof args.everyNthFrame === "number") opts.everyNthFrame = args.everyNthFrame;
+      return startScreencast(tabId, opts);
+    }
+    if (action === "stop") {
+      return stopScreencast(tabId);
+    }
+    throw new Error(`chrome_screencast: unknown action "${action}". Expected start | stop.`);
   },
 
   // §2.7c — console capture. First call on a tab subscribes; subsequent calls

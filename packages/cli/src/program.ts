@@ -732,5 +732,199 @@ Notes:
     await run("chrome_console", args);
   });
 
+  // ---------- hover (Input.dispatchMouseEvent type=mouseMoved) ----------
+  // Triggers :hover / :focus-within / hover-driven JS handlers WITHOUT
+  // clicking. Pair with screencast to capture state changes.
+  tabOpt(
+    program
+      .command("hover [selector]")
+      .description("Move the pointer over an element or coordinates. Fires :hover styles.")
+      .option("--x <px>", "explicit x coordinate (CSS pixels)", (v) => Number(v))
+      .option("--y <px>", "explicit y coordinate (CSS pixels)", (v) => Number(v))
+      .addHelpText(
+        "after",
+        `
+
+Examples:
+  chrome-relay hover --tab 123 'button[title="Install runner"]'
+  chrome-relay hover --tab 123 --x 1327 --y 771
+
+Use before screencast to capture hover-driven micro-states (button glow,
+tooltip appearance, etc.) that a bare click would skip past too quickly.
+`
+      )
+  ).action(async (selector: string | undefined, opts) => {
+    const args: Record<string, unknown> = {};
+    Object.assign(args, baseArgs(opts));
+    if (selector) args.selector = selector;
+    if (typeof opts.x === "number" && typeof opts.y === "number") {
+      args.x = opts.x;
+      args.y = opts.y;
+    }
+    await run("chrome_hover", args);
+  });
+
+  // ---------- screencast (Page.startScreencast / stopScreencast) ----------
+  // Paint-driven JPEG frame capture. Catches CSS transitions, fade-ins,
+  // hover tooltips — everything Page.captureScreenshot polling misses.
+  // REQUIRES an active tab (Chrome doesn't paint backgrounded tabs).
+  // CLI shape: start → returns immediately, stop → returns frames JSON or
+  // writes them to disk + invokes ffmpeg if --out is given. Stop runs a
+  // SHA-256 dedupe pass by default; pass --no-dedupe to keep raw frames.
+  // See docs/recording.md.
+  const screencast = program
+    .command("screencast")
+    .description("Record a tab via CDP (paint-driven). Requires an active tab.")
+    .addHelpText(
+      "after",
+      `
+
+Examples:
+  chrome-relay screencast start --tab 123 --quality 80 --max-width 900
+  # ... drive the interaction (hover, click, etc.) ...
+  chrome-relay screencast stop --tab 123 --out /tmp/recording
+
+  # The --out path becomes a directory of frame_NNNN.jpg files. If ffmpeg
+  # is on PATH and --gif is also passed, an animated GIF is written next to
+  # the frames at /tmp/recording.gif.
+
+Notes:
+  Frames buffer in the extension service worker. A 10-second capture at
+  default settings (jpeg q=60, ~15fps, full viewport) lands ~2-3 MB.
+  Pass --max-width to downscale and lighten the buffer.
+  Each frame is base64 JPEG; the CLI decodes them when --out is given.
+`
+    );
+
+  tabOpt(
+    screencast
+      .command("start")
+      .description("Begin screencast capture on a tab.")
+      .option("--format <fmt>", "jpeg | png (default jpeg)")
+      .option("--quality <n>",  "jpeg quality 0-100 (default 80)", (v) => Number(v))
+      .option("--max-width <px>",  "downscale; aspect preserved", (v) => Number(v))
+      .option("--max-height <px>", "downscale; aspect preserved", (v) => Number(v))
+      .option("--every-nth <n>",   "throttle: keep 1 in N frames (default 1)", (v) => Number(v))
+  ).action(async (opts) => {
+    const args: Record<string, unknown> = { action: "start" };
+    Object.assign(args, baseArgs(opts));
+    if (opts.format)                       args.format = opts.format;
+    if (typeof opts.quality === "number")  args.quality = opts.quality;
+    if (typeof opts.maxWidth === "number") args.maxWidth = opts.maxWidth;
+    if (typeof opts.maxHeight === "number") args.maxHeight = opts.maxHeight;
+    if (typeof opts.everyNth === "number") args.everyNthFrame = opts.everyNth;
+    await run("chrome_screencast", args);
+  });
+
+  tabOpt(
+    screencast
+      .command("stop")
+      .description("Stop the screencast and emit frames (or write to disk).")
+      .option("-o, --out <dir>", "write frames as JPEGs into this directory (created if missing)")
+      .option("--gif",            "after writing frames, ffmpeg them into <dir>.gif")
+      .option("--mp4",            "after writing frames, ffmpeg them into <dir>.mp4")
+      .option("--fps <n>",        "assumed framerate when invoking ffmpeg (default 15)", (v) => Number(v))
+      .option("--no-dedupe",      "keep raw frames; default collapses consecutive identical frames via SHA-256")
+  ).action(async (opts) => {
+    const args: Record<string, unknown> = { action: "stop" };
+    Object.assign(args, baseArgs(opts));
+    try {
+      const result = await callTool("chrome_screencast", args) as {
+        frameCount: number;
+        durationMs: number;
+        frames: Array<{ data: string; timestamp: number; width: number; height: number }>;
+      };
+      if (!opts.out) {
+        // Without --out, just print a summary; dumping raw base64 frames to
+        // stdout would flood the terminal.
+        const { frames, ...summary } = result;
+        process.stdout.write(JSON.stringify({ ...summary, framesOmitted: frames.length, hint: "pass --out <dir> to save" }, null, 2) + "\n");
+        return;
+      }
+      const { mkdirSync, writeFileSync, renameSync, unlinkSync } = await import("node:fs");
+      const path = await import("node:path");
+      const { createHash } = await import("node:crypto");
+      mkdirSync(opts.out, { recursive: true });
+      result.frames.forEach((f, i) => {
+        const name = `frame_${String(i + 1).padStart(4, "0")}.jpg`;
+        writeFileSync(path.join(opts.out, name), Buffer.from(f.data, "base64"));
+      });
+      process.stdout.write(`Wrote ${result.frames.length} frames to ${opts.out}\n`);
+
+      // Dedupe: SHA-256 each frame, drop those whose hash matches the
+      // previous one, renumber survivors so ffmpeg's image2 reader stays
+      // happy. commander maps --no-dedupe to opts.dedupe === false.
+      const dedupeOn = opts.dedupe !== false;
+      if (dedupeOn && result.frames.length > 1) {
+        const hashes = result.frames.map((f) =>
+          createHash("sha256").update(Buffer.from(f.data, "base64")).digest("hex")
+        );
+        const kept: number[] = [];
+        let prev = "";
+        hashes.forEach((h, i) => {
+          if (h !== prev) kept.push(i);
+          prev = h;
+        });
+        const dropped = result.frames.length - kept.length;
+        if (dropped > 0) {
+          // Two-pass rename via .tmp suffix to avoid clobbering source files
+          // mid-rename (frame_0002 → frame_0001 would overwrite the original).
+          for (let i = 0; i < result.frames.length; i++) {
+            const src = path.join(opts.out, `frame_${String(i + 1).padStart(4, "0")}.jpg`);
+            try { unlinkSync(src); } catch { /* missing is fine */ }
+          }
+          kept.forEach((srcIdx, newIdx) => {
+            const tmp = path.join(opts.out, `tmp_${String(newIdx + 1).padStart(4, "0")}.jpg`);
+            writeFileSync(tmp, Buffer.from(result.frames[srcIdx].data, "base64"));
+          });
+          kept.forEach((_, newIdx) => {
+            const tmp = path.join(opts.out, `tmp_${String(newIdx + 1).padStart(4, "0")}.jpg`);
+            const final = path.join(opts.out, `frame_${String(newIdx + 1).padStart(4, "0")}.jpg`);
+            renameSync(tmp, final);
+          });
+          process.stdout.write(`Deduped: dropped ${dropped} identical frames, ${kept.length} remain.\n`);
+        } else {
+          process.stdout.write(`Deduped: no consecutive duplicates found.\n`);
+        }
+      }
+
+      if (opts.gif || opts.mp4) {
+        const fps = typeof opts.fps === "number" ? opts.fps : 15;
+        const { spawnSync } = await import("node:child_process");
+        const which = spawnSync("which", ["ffmpeg"]);
+        if (which.status !== 0) {
+          process.stderr.write("[chrome-relay] ffmpeg not on PATH — skipping --gif/--mp4.\n");
+          return;
+        }
+        if (opts.gif) {
+          const gifOut = `${opts.out.replace(/\/$/, "")}.gif`;
+          const r = spawnSync("ffmpeg", [
+            "-y", "-framerate", String(fps),
+            "-i", path.join(opts.out, "frame_%04d.jpg"),
+            "-vf", `fps=${fps},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse`,
+            "-loop", "0",
+            gifOut
+          ], { stdio: "inherit" });
+          if (r.status === 0) process.stdout.write(`Wrote ${gifOut}\n`);
+        }
+        if (opts.mp4) {
+          const mp4Out = `${opts.out.replace(/\/$/, "")}.mp4`;
+          const r = spawnSync("ffmpeg", [
+            "-y", "-framerate", String(fps),
+            "-i", path.join(opts.out, "frame_%04d.jpg"),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "20",
+            mp4Out
+          ], { stdio: "inherit" });
+          if (r.status === 0) process.stdout.write(`Wrote ${mp4Out}\n`);
+        }
+      }
+    } catch (error) {
+      process.stderr.write(
+        (error instanceof Error ? error.message : String(error)) + "\n"
+      );
+      process.exit(1);
+    }
+  });
+
   return program;
 }

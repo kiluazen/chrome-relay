@@ -46,7 +46,16 @@ export const TOOL_NAMES = {
   AX: "chrome_ax",
   CLICK_AX: "chrome_click_ax",
   // §2.7a — network capture. Ring-buffer per tab; actions read/clear/har/body.
-  NETWORK: "chrome_network"
+  NETWORK: "chrome_network",
+  // Hover — dispatches mouseMoved at element center (or x,y) so :hover/
+  // :focus-within styles fire before a click or screencast frame is read.
+  HOVER: "chrome_hover",
+  // Screencast — wraps CDP Page.startScreencast / stopScreencast. SW buffers
+  // base64 JPEG frames per tab between start and stop. Paint-driven (catches
+  // CSS transitions, fade-ins, focus-ring motion) — at the cost of requiring
+  // the tab to be ACTIVE (Chrome doesn't paint backgrounded tabs). See
+  // docs/recording.md for the active-tab matrix.
+  SCREENCAST: "chrome_screencast"
 } as const;
 
 export type ToolName = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES];
