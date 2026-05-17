@@ -18,8 +18,15 @@ export class ExtensionBridge {
   private readonly pending = new Map<string, PendingRequest>();
   private readonly readyWaiters = new Set<() => void>();
   private ready = false;
+  // Extension version captured from `bridge.ready`. Read by the HTTP server
+  // to compute the cli-outdated notice on each tool call.
+  private extensionVersion: string | undefined;
 
   constructor(private readonly send: (message: BridgeMessage) => void) {}
+
+  getExtensionVersion(): string | undefined {
+    return this.extensionVersion;
+  }
 
   handleMessage(message: BridgeMessage): void {
     if (message.type === "bridge.ready") {
@@ -43,8 +50,9 @@ export class ExtensionBridge {
     }
   }
 
-  private handleReady(_message: BridgeReadyMessage): void {
+  private handleReady(message: BridgeReadyMessage): void {
     this.ready = true;
+    this.extensionVersion = message.payload?.version;
     for (const notify of this.readyWaiters) {
       notify();
     }

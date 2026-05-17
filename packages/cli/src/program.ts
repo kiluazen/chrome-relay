@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import { CHROME_RELAY_VERSION } from "./index.js";
 import { runDoctor, runInstall } from "./install/install.js";
 import { callTool } from "./client/call.js";
+import { listReleaseNotesSince } from "./release-notes.js";
 
 export function buildProgram(): Command {
   const program = new Command();
@@ -58,6 +59,70 @@ Notes:
     .action(async () => {
       const ok = await runDoctor();
       process.exit(ok ? 0 : 1);
+    });
+
+  // ---------- update + release-notes ----------
+  // Agent-native versioning loop. `update` installs the latest CLI and then
+  // re-execs the new binary with --since <oldVersion> so the printed bullets
+  // come from the just-installed release-notes (single source of truth on
+  // disk). `release-notes` is the queryable form — same data, no install.
+  program
+    .command("update")
+    .description("Update chrome-relay CLI to the latest version and print what changed (agent-readable JSON).")
+    .option("--dry-run", "skip the install; just show what changed since the current version")
+    .action(async (opts: { dryRun?: boolean }) => {
+      const fromVersion = CHROME_RELAY_VERSION;
+      const { spawnSync } = await import("node:child_process");
+
+      if (!opts.dryRun) {
+        // Detect package manager from the location of the running binary.
+        // Heuristic only — falls back to npm.
+        const argv0 = process.argv[1] ?? "";
+        const pm =
+          /[\\/](pnpm|\.pnpm)[\\/]/.test(argv0) ? "pnpm" :
+          /[\\/]bun[\\/]/.test(argv0)            ? "bun" :
+          "npm";
+        const cmd: [string, string[]] =
+          pm === "pnpm" ? ["pnpm", ["add", "-g", "chrome-relay@latest"]] :
+          pm === "bun"  ? ["bun",  ["add", "-g", "chrome-relay@latest"]] :
+                          ["npm",  ["install", "-g", "chrome-relay@latest"]];
+        process.stderr.write(`[chrome-relay] updating from ${fromVersion} via ${pm}...\n`);
+        const install = spawnSync(cmd[0], cmd[1], { stdio: "inherit" });
+        if (install.status !== 0) {
+          process.stderr.write(`[chrome-relay] install failed (${pm} exited ${install.status}). Try manually: ${pm} ${cmd[1].join(" ")}\n`);
+          process.exit(1);
+        }
+        // Re-exec the just-installed binary so the printed bullets come from
+        // the NEW release-notes.ts on disk, not the in-memory one of the
+        // pre-update process. `which` is portable enough; if it fails, fall
+        // back to printing whatever this process knows.
+        const which = spawnSync("which", ["chrome-relay"]);
+        const newBin = which.stdout?.toString().trim();
+        if (which.status === 0 && newBin && newBin !== argv0) {
+          spawnSync(newBin, ["release-notes", "--since", fromVersion], { stdio: "inherit" });
+          return;
+        }
+      }
+
+      const changes = listReleaseNotesSince(fromVersion);
+      process.stdout.write(JSON.stringify({
+        updatedFrom: fromVersion,
+        updatedTo:   CHROME_RELAY_VERSION,
+        changes
+      }, null, 2) + "\n");
+    });
+
+  program
+    .command("release-notes")
+    .description("Print release notes since a version (no install). JSON output for agents.")
+    .option("--since <version>", "show release notes for versions newer than this", "0.0.0")
+    .action((opts: { since: string }) => {
+      const changes = listReleaseNotesSince(opts.since);
+      process.stdout.write(JSON.stringify({
+        currentVersion: CHROME_RELAY_VERSION,
+        since: opts.since,
+        changes
+      }, null, 2) + "\n");
     });
 
   async function run(name: string, args: Record<string, unknown>): Promise<void> {
