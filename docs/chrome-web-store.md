@@ -19,8 +19,11 @@ pnpm store:zip
 Upload the zip from:
 
 ```text
-apps/extension/build/chrome-relay-extension-0.2.4-chrome.zip
+apps/extension/build/chrome-relay-extension-<version>-chrome.zip
 ```
+
+The filename's `<version>` matches `apps/extension/package.json`'s `version`
+field, which WXT writes into the built manifest.
 
 ## Single Purpose
 
@@ -34,9 +37,17 @@ It does not provide a cloud account, remote relay, ad network, analytics SDK, or
 
 Required to connect the extension to the locally installed `chrome-relay` native host. The native host starts the local bridge and relays tool calls between the user's agent and the extension.
 
-`scripting`
+`debugger`
 
-Required to run the extension's bundled, fixed page helpers for reading visible page structure, clicking elements, filling inputs, and sending keyboard events. The extension does not fetch or execute remote code.
+Required to drive the Chrome DevTools Protocol (CDP) from the extension's
+service worker. Every page interaction the user's local agent issues —
+trusted keyboard/mouse input via `Input.dispatchKeyEvent` /
+`Input.dispatchMouseEvent`, viewport emulation via `Emulation.*`, network
+metadata capture via `Network.*`, accessibility-tree reads via
+`Accessibility.*`, console capture via `Runtime.consoleAPICalled`, region
+screenshots via `Page.captureScreenshot` — goes through CDP. The extension
+only attaches when an explicit local tool call asks for it and only against
+the targeted tab; nothing is logged or sent off-device.
 
 `tabs`
 
@@ -44,7 +55,10 @@ Required to list open tabs, activate a selected tab, navigate a tab, close selec
 
 `storage`
 
-Required to store the last three tool execution summaries shown in the popup. Stored summaries stay in Chrome local extension storage.
+Required to persist tab-group definitions (named windows the local agent
+targets via `--group <name>`) across service-worker restarts and to store
+the last few tool execution summaries shown in the popup. Storage stays in
+Chrome's local extension storage; nothing is sent off-device.
 
 `host_permissions: <all_urls>`
 
