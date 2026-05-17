@@ -31,6 +31,12 @@ import {
 } from "./tab-groups";
 import { getAxTree, clickAxNode } from "./a11y";
 import {
+  parseTabIds,
+  parseTabGroupColor,
+  parseLevels,
+  parseNetworkStatus
+} from "./parsers";
+import {
   ensureNetworkCapture,
   readNetwork,
   getBody,
@@ -539,19 +545,6 @@ const handlers: Record<ToolName, ToolHandler> = {
   async [TOOL_NAMES.GROUP](args) {
     const action = typeof args.action === "string" ? args.action : "list";
 
-    const parseTabIds = (raw: unknown): number[] => {
-      if (Array.isArray(raw)) return raw.map(Number).filter(Number.isFinite) as number[];
-      if (typeof raw === "string") return raw.split(",").map((s) => Number(s.trim())).filter(Number.isFinite) as number[];
-      if (typeof raw === "number") return [raw];
-      return [];
-    };
-    const VALID_COLORS: TabGroupColor[] = ["grey", "blue", "red", "yellow", "green", "pink", "purple", "cyan", "orange"];
-    const parseColor = (raw: unknown): TabGroupColor | undefined => {
-      if (typeof raw !== "string") return undefined;
-      const c = raw.toLowerCase() as TabGroupColor;
-      return VALID_COLORS.includes(c) ? c : undefined;
-    };
-
     if (action === "create") {
       const name = typeof args.name === "string" ? args.name : "";
       if (!name) throw new Error("chrome_group create requires a name.");
@@ -559,7 +552,7 @@ const handlers: Record<ToolName, ToolHandler> = {
       if (tabIds.length === 0) {
         throw new Error("chrome_group create requires at least one tabId (--tabs 1,2,3).");
       }
-      const color = parseColor(args.color);
+      const color = parseTabGroupColor(args.color);
       const collapsed = typeof args.collapsed === "boolean" ? args.collapsed : undefined;
       const windowId = typeof args.windowId === "number" ? args.windowId : undefined;
       return createTabGroup(name, { tabIds, color, collapsed, windowId });
@@ -631,7 +624,16 @@ const handlers: Record<ToolName, ToolHandler> = {
     const action = typeof args.action === "string" ? args.action : "start";
     if (action === "start") {
       const opts: Parameters<typeof startScreencast>[1] = {};
-      if (args.format === "png" || args.format === "jpeg") opts.format = args.format;
+      // Strict format: undefined/null → default jpeg; anything else must be
+      // one of the two supported values.
+      if (args.format !== undefined && args.format !== null) {
+        if (args.format !== "png" && args.format !== "jpeg") {
+          throw new Error(
+            `chrome_screencast: invalid format ${JSON.stringify(args.format)}. Expected "jpeg" or "png".`
+          );
+        }
+        opts.format = args.format;
+      }
       if (typeof args.quality === "number")       opts.quality = args.quality;
       if (typeof args.maxWidth === "number")      opts.maxWidth = args.maxWidth;
       if (typeof args.maxHeight === "number")     opts.maxHeight = args.maxHeight;
@@ -655,6 +657,9 @@ const handlers: Record<ToolName, ToolHandler> = {
 
     if (action === "clear") {
       return clearConsole(tabId);
+    }
+    if (action !== "read") {
+      throw new Error(`chrome_console: unknown action "${action}". Expected read | clear.`);
     }
 
     // Subscribe first call (cheap idempotent on subsequent calls).
@@ -696,34 +701,21 @@ const handlers: Record<ToolName, ToolHandler> = {
     }
 
     const filter = typeof args.filter === "string" ? args.filter : undefined;
-    const status = typeof args.status === "string" ? args.status : undefined;
+    const status = parseNetworkStatus(args.status);
     const method = typeof args.method === "string" ? args.method : undefined;
     const limit  = typeof args.limit === "number" ? args.limit : undefined;
 
     if (action === "har") {
       const withBodies = args.withBodies === true;
-      return buildHar(
-        tabId,
-        { filter, status: status as "ok" | "redirect" | "client_error" | "server_error" | "failed" | undefined, method, limit },
-        withBodies
-      );
+      return buildHar(tabId, { filter, status, method, limit }, withBodies);
     }
-    return readNetwork(tabId, { filter, status: status as "ok" | "redirect" | "client_error" | "server_error" | "failed" | undefined, method, limit });
+    if (action !== "read") {
+      throw new Error(`chrome_network: unknown action "${action}". Expected read | clear | har | body.`);
+    }
+    return readNetwork(tabId, { filter, status, method, limit });
   }
 };
 
-// Parse a comma string or array of strings into validated console levels.
-// Unknown levels are silently dropped — agents pass labels not enums.
-function parseLevels(input: unknown): ConsoleLevel[] | undefined {
-  const valid = new Set<ConsoleLevel>(["log", "info", "warn", "error", "debug", "exception"]);
-  if (typeof input === "string") {
-    return input.split(",").map((s) => s.trim()).filter((s): s is ConsoleLevel => valid.has(s as ConsoleLevel));
-  }
-  if (Array.isArray(input)) {
-    return input.filter((s): s is ConsoleLevel => typeof s === "string" && valid.has(s as ConsoleLevel));
-  }
-  return undefined;
-}
 
 // Downscale a base64 PNG so its longer edge ≤ maxEdge. Uses OffscreenCanvas
 // (available in MV3 service workers). Returns the original bytes unchanged

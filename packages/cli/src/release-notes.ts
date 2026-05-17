@@ -9,6 +9,11 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.2": [
+    "Strict input parsers (code-quality-hardening PR 0). Invalid console levels, network status filters, tab-group colors, and tab-id lists now throw instead of being silently dropped — an agent that asks for `errors` (typo of `error`) gets a precise error rather than all levels back.",
+    "Affected tools: chrome_console (levels), chrome_network (status), chrome_group (color, tabIds), chrome_screencast (format, action), chrome_network (action).",
+    "Parsers moved to apps/extension/src/browser/parsers.ts (pure module, no chrome runtime imports) so they're directly unit-testable. 24 new tests cover the strict paths."
+  ],
   "0.5.1": [
     "Tool results now carry a `notice` field when the CLI is older than the connected extension — agents (or humans) get a structured nudge to run `chrome-relay update`.",
     "New subcommand: `chrome-relay update` — installs the latest CLI via your package manager and prints what changed.",
