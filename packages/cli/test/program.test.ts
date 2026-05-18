@@ -242,11 +242,15 @@ describe("CLI argument parsing", () => {
   });
 
   describe("group (Chrome tab-groups — colored folders inside one window)", () => {
-    it("create posts action=create + name + parsed tabIds (+ color)", async () => {
+    // Post-0.5.14: the CLI forwards --tabs as the raw comma-separated string
+    // and the protocol parser (parseChromeGroupArgs) does the strict numeric
+    // parsing. Was previously parsed CLI-side with .filter(Number.isFinite)
+    // which silently dropped bad IDs.
+    it("create posts action=create + name + raw tabs string (+ color)", async () => {
       await runArgs("group", "create", "research", "--tabs", "123,456,789", "--color", "cyan");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "create", name: "research", tabIds: [123, 456, 789], color: "cyan" }
+        args: { action: "create", name: "research", tabIds: "123,456,789", color: "cyan" }
       });
     });
 
@@ -254,7 +258,7 @@ describe("CLI argument parsing", () => {
       await runArgs("group", "create", "later", "--tabs", "1", "--collapsed");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "create", name: "later", tabIds: [1], collapsed: true }
+        args: { action: "create", name: "later", tabIds: "1", collapsed: true }
       });
     });
 
@@ -268,19 +272,19 @@ describe("CLI argument parsing", () => {
       expect(lastBody()).toEqual({ name: "chrome_group", args: { action: "close", name: "research" } });
     });
 
-    it("add posts action=add + name + tabIds", async () => {
+    it("add posts action=add + name + raw tabs string", async () => {
       await runArgs("group", "add", "research", "--tabs", "1011");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "add", name: "research", tabIds: [1011] }
+        args: { action: "add", name: "research", tabIds: "1011" }
       });
     });
 
-    it("remove posts action=remove + tabIds (no name)", async () => {
+    it("remove posts action=remove + raw tabs string (no name)", async () => {
       await runArgs("group", "remove", "--tabs", "456,789");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "remove", tabIds: [456, 789] }
+        args: { action: "remove", tabIds: "456,789" }
       });
     });
 

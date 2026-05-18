@@ -9,6 +9,15 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.14": [
+    "Optional parser fields are now strict — passing a present-but-wrong-type value (e.g. `{newTab: 'yes'}` instead of `true`) throws RelayError(invalid_arguments) instead of silently being dropped. undefined/null still means 'caller omitted the field' and the handler uses its default.",
+    "parseTargetArgs is strict too: `{tabId: '5'}` rejects (numeric tabId required). Navigate is the one exception — it coerces string tabId for back-compat since it's used as a 'reference window' rather than a strict target.",
+    "CLI tab-group --tabs arg now forwarded as the raw comma-separated string. The protocol parser (parseChromeGroupArgs) does the strict per-element parsing so `--tabs 1,foo,3` errors instead of silently becoming [1,3].",
+    "Deleted the dead duplicate parser module at apps/extension/src/browser/parsers.ts and its test file. The protocol parsers replace them; behavior identical.",
+    "HAR creator.version now reads from chrome.runtime.getManifest() instead of the hardcoded stale '0.2.x'. Drift-proof.",
+    "New CLI helper `withBase(opts, extras)` collapses the `const args = {}; Object.assign(args, baseArgs(opts)); args.foo = bar` pattern into one expression. All four command modules migrated — `Object.assign(args, baseArgs(opts))` is gone from the codebase.",
+    "Tests: +2 strict-optional cases. Total 407 (was 433 — 28 dropped were duplicates of protocol parsers)."
+  ],
   "0.5.13": [
     "Protocol arg-parser coverage complete (code-quality-hardening Risk 1 — finished). Every one of the 22 tools now has an executable parser in @chrome-relay/protocol that returns a typed args object with `code:'invalid_arguments'` errors on malformed input.",
     "New parsers in this release: parseChrome{ReadPage,Click,Fill,Keyboard,Type,Evaluate,SwitchTab,CloseTabs,Ax,ClickAx,Screenshot,Viewport,Console,Workspace,Group,Screencast}Args, plus parseGetWindowsAndTabsArgs and parseChromeSelfReloadArgs.",

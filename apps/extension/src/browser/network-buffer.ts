@@ -351,7 +351,9 @@ export async function buildHar(
   return {
     log: {
       version: "1.2",
-      creator: { name: "chrome-relay", version: "0.2.x" },
+      // Version pulled from the live extension manifest so it can't drift
+      // out of sync. The HAR spec requires creator.version to be a string.
+      creator: { name: "chrome-relay", version: chrome.runtime?.getManifest?.().version ?? "unknown" },
       pages: [],
       entries: entries.map((e) => ({
         startedDateTime: new Date(e.startedAt).toISOString(),

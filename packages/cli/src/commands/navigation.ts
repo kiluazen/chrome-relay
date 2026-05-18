@@ -4,7 +4,7 @@
 import { tabOpt, type CommandContext } from "./shared.js";
 
 export function registerNavigation(ctx: CommandContext): void {
-  const { program, baseArgs, run } = ctx;
+  const { program, withBase, run } = ctx;
 
   // `tabs` accepts an optional `list` verb for consistency with `group list`,
   // `viewport list`, `network read`, etc. Bare `tabs` and `tabs list` are
@@ -46,11 +46,10 @@ Examples:
       process.exit(1);
     }
 
-    const args: Record<string, unknown> = { url };
-    Object.assign(args, baseArgs(opts));
-    if (opts.new) args.newTab = true;
-    if (opts.inactive) args.active = false;
-    await run("chrome_navigate", args);
+    const extras: Record<string, unknown> = { url };
+    if (opts.new) extras.newTab = true;
+    if (opts.inactive) extras.active = false;
+    await run("chrome_navigate", withBase(opts, extras));
   });
 
   program

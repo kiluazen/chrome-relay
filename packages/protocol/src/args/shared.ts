@@ -44,19 +44,45 @@ export function requireString(obj: Record<string, unknown>, key: string, tool: T
   return v;
 }
 
-export function optString(obj: Record<string, unknown>, key: string): string | undefined {
-  const v = obj[key];
-  return typeof v === "string" && v ? v : undefined;
+// Helper for "present-but-wrong-type" rejection. The parser strictness
+// principle: undefined/null = "caller omitted the field" (use defaults).
+// Anything else MUST match the expected type — silent coercion or drop
+// would let agent typos sneak past as missing-field defaults.
+function rejectWrongType(
+  obj: Record<string, unknown>,
+  key: string,
+  expected: string,
+  tool: ToolName | undefined
+): never {
+  throw new RelayError({
+    code: "invalid_arguments",
+    message: `${tool ?? "<unknown tool>"}: \`${key}\` must be ${expected} (got ${typeof obj[key]}).`,
+    tool,
+    phase: "parse_arguments",
+    details: { field: key, expected, received: obj[key] },
+    retryable: false
+  });
 }
 
-export function optNumber(obj: Record<string, unknown>, key: string): number | undefined {
+export function optString(obj: Record<string, unknown>, key: string, tool?: ToolName): string | undefined {
   const v = obj[key];
-  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== "string") rejectWrongType(obj, key, "a string", tool);
+  return v || undefined; // empty string treated as omitted; matches pre-strict behavior
 }
 
-export function optBool(obj: Record<string, unknown>, key: string): boolean | undefined {
+export function optNumber(obj: Record<string, unknown>, key: string, tool?: ToolName): number | undefined {
   const v = obj[key];
-  return typeof v === "boolean" ? v : undefined;
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== "number" || !Number.isFinite(v)) rejectWrongType(obj, key, "a finite number", tool);
+  return v;
+}
+
+export function optBool(obj: Record<string, unknown>, key: string, tool?: ToolName): boolean | undefined {
+  const v = obj[key];
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== "boolean") rejectWrongType(obj, key, "a boolean", tool);
+  return v;
 }
 
 // Target-selector triple is shared across most tools.
@@ -66,10 +92,24 @@ export interface TargetArgs {
   groupName?: string;
 }
 
-export function parseTargetArgs(obj: Record<string, unknown>): TargetArgs {
+// Strict version: present-but-wrong-type rejects. tabId as a string is
+// rejected here (callers that need string coercion — only navigate today
+// — handle it themselves before calling parseTargetArgs).
+export function parseTargetArgs(obj: Record<string, unknown>, tool?: ToolName): TargetArgs {
   const out: TargetArgs = {};
-  if (typeof obj.tabId === "number") out.tabId = obj.tabId;
-  if (typeof obj.workspaceName === "string" && obj.workspaceName) out.workspaceName = obj.workspaceName;
-  if (typeof obj.groupName === "string" && obj.groupName) out.groupName = obj.groupName;
+  if (obj.tabId !== undefined && obj.tabId !== null) {
+    if (typeof obj.tabId !== "number" || !Number.isFinite(obj.tabId)) {
+      rejectWrongType(obj, "tabId", "a finite number", tool);
+    }
+    out.tabId = obj.tabId;
+  }
+  if (obj.workspaceName !== undefined && obj.workspaceName !== null) {
+    if (typeof obj.workspaceName !== "string") rejectWrongType(obj, "workspaceName", "a string", tool);
+    if (obj.workspaceName) out.workspaceName = obj.workspaceName;
+  }
+  if (obj.groupName !== undefined && obj.groupName !== null) {
+    if (typeof obj.groupName !== "string") rejectWrongType(obj, "groupName", "a string", tool);
+    if (obj.groupName) out.groupName = obj.groupName;
+  }
   return out;
 }

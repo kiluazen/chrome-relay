@@ -12,13 +12,13 @@ export type ChromeHoverArgs =
 
 export function parseChromeHoverArgs(input: unknown): ChromeHoverArgs {
   const obj = asObject(input, TOOL_NAMES.HOVER);
-  const target = parseTargetArgs(obj);
-  const x = optNumber(obj, "x");
-  const y = optNumber(obj, "y");
+  const target = parseTargetArgs(obj, TOOL_NAMES.HOVER);
+  const x = optNumber(obj, "x", TOOL_NAMES.HOVER);
+  const y = optNumber(obj, "y", TOOL_NAMES.HOVER);
   if (x !== undefined && y !== undefined) {
     return { ...target, kind: "coords", x, y };
   }
-  const selector = optString(obj, "selector");
+  const selector = optString(obj, "selector", TOOL_NAMES.HOVER);
   if (selector) {
     return { ...target, kind: "selector", selector };
   }

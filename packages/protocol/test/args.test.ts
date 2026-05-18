@@ -57,6 +57,18 @@ describe("parseChromeNavigateArgs", () => {
     expectInvalidArguments(() => parseChromeNavigateArgs("https://x.com"));
     expectInvalidArguments(() => parseChromeNavigateArgs([{ url: "https://x.com" }]));
   });
+
+  // Post-0.5.14: optional fields are strict — present-but-wrong-type rejects.
+  it("throws invalid_arguments when newTab/active/allowPartial aren't booleans", () => {
+    expectInvalidArguments(() => parseChromeNavigateArgs({ url: "https://x.com", newTab: "yes" }));
+    expectInvalidArguments(() => parseChromeNavigateArgs({ url: "https://x.com", active: 1 }));
+    expectInvalidArguments(() => parseChromeNavigateArgs({ url: "https://x.com", allowPartial: "true" }));
+  });
+
+  it("throws invalid_arguments when workspaceName/groupName aren't strings", () => {
+    expectInvalidArguments(() => parseChromeNavigateArgs({ url: "https://x.com", workspaceName: 5 }));
+    expectInvalidArguments(() => parseChromeNavigateArgs({ url: "https://x.com", groupName: true }));
+  });
 });
 
 describe("parseChromeHoverArgs", () => {

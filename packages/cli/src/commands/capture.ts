@@ -6,7 +6,7 @@ import { tabOpt, type CommandContext } from "./shared.js";
 import { callTool } from "../client/call.js";
 
 export function registerCapture(ctx: CommandContext): void {
-  const { program, baseArgs, run } = ctx;
+  const { program, withBase, run } = ctx;
 
   tabOpt(
     program
@@ -35,13 +35,13 @@ full-tab screenshot when an agent only needs to see one component.
 `
       )
   ).action(async (opts) => {
-    const args: Record<string, unknown> = {};
-    Object.assign(args, baseArgs(opts));
-    if (opts.full) args.fullPage = true;
-    if (opts.bbox) args.bbox = opts.bbox;
-    if (opts.selector) args.selector = opts.selector;
-    if (typeof opts.padding === "number") args.padding = opts.padding;
-    if (typeof opts.maxEdge === "number") args.maxEdge = opts.maxEdge;
+    const extras: Record<string, unknown> = {};
+    if (opts.full) extras.fullPage = true;
+    if (opts.bbox) extras.bbox = opts.bbox;
+    if (opts.selector) extras.selector = opts.selector;
+    if (typeof opts.padding === "number") extras.padding = opts.padding;
+    if (typeof opts.maxEdge === "number") extras.maxEdge = opts.maxEdge;
+    const args = withBase(opts, extras);
     try {
       const result = await callTool("chrome_screenshot", args);
       if (opts.out && result && typeof result === "object") {
@@ -69,10 +69,9 @@ full-tab screenshot when an agent only needs to see one component.
       .description("Extract page structure and interactive elements.")
       .option("-i, --interactive", "return only interactive elements")
   ).action(async (opts) => {
-    const args: Record<string, unknown> = {};
-    Object.assign(args, baseArgs(opts));
-    if (opts.interactive) args.interactiveOnly = true;
-    await run("chrome_read_page", args);
+    const extras: Record<string, unknown> = {};
+    if (opts.interactive) extras.interactiveOnly = true;
+    await run("chrome_read_page", withBase(opts, extras));
   });
 
   // ---------- ax (§2.4 — accessibility tree) ----------
@@ -98,11 +97,11 @@ Notes:
 `
       )
   ).action(async (opts) => {
-    const args: Record<string, unknown> = baseArgs(opts);
-    if (opts.interactiveOnly)  args.interactiveOnly = true;
-    if (opts.root)             args.rootRole = opts.root;
-    if (opts.includeSubframes) args.includeSubframes = true;
-    await run("chrome_ax", args);
+    const extras: Record<string, unknown> = {};
+    if (opts.interactiveOnly)  extras.interactiveOnly = true;
+    if (opts.root)             extras.rootRole = opts.root;
+    if (opts.includeSubframes) extras.includeSubframes = true;
+    await run("chrome_ax", withBase(opts, extras));
   });
 
   tabOpt(
@@ -123,9 +122,7 @@ Notes:
 `
       )
   ).action(async (opts) => {
-    const args: Record<string, unknown> = baseArgs(opts);
-    args.node = opts.node;
-    await run("chrome_click_ax", args);
+    await run("chrome_click_ax", withBase(opts, { node: opts.node }));
   });
 
   // ---------- screencast (Page.startScreencast / stopScreencast) ----------
@@ -170,14 +167,13 @@ Notes:
       .option("--max-height <px>", "downscale; aspect preserved", (v) => Number(v))
       .option("--every-nth <n>",   "throttle: keep 1 in N frames (default 1)", (v) => Number(v))
   ).action(async (opts) => {
-    const args: Record<string, unknown> = { action: "start" };
-    Object.assign(args, baseArgs(opts));
-    if (opts.format)                       args.format = opts.format;
-    if (typeof opts.quality === "number")  args.quality = opts.quality;
-    if (typeof opts.maxWidth === "number") args.maxWidth = opts.maxWidth;
-    if (typeof opts.maxHeight === "number") args.maxHeight = opts.maxHeight;
-    if (typeof opts.everyNth === "number") args.everyNthFrame = opts.everyNth;
-    await run("chrome_screencast", args);
+    const extras: Record<string, unknown> = { action: "start" };
+    if (opts.format)                       extras.format = opts.format;
+    if (typeof opts.quality === "number")  extras.quality = opts.quality;
+    if (typeof opts.maxWidth === "number") extras.maxWidth = opts.maxWidth;
+    if (typeof opts.maxHeight === "number") extras.maxHeight = opts.maxHeight;
+    if (typeof opts.everyNth === "number") extras.everyNthFrame = opts.everyNth;
+    await run("chrome_screencast", withBase(opts, extras));
   });
 
   tabOpt(
@@ -191,8 +187,7 @@ Notes:
       .option("--no-dedupe",      "keep raw frames; default collapses consecutive identical frames via SHA-256")
       .option("--allow-missing-ffmpeg", "with --gif/--mp4: skip ffmpeg step (and emit a warning) if ffmpeg isn't on PATH, instead of failing with external_dependency_missing")
   ).action(async (opts) => {
-    const args: Record<string, unknown> = { action: "stop" };
-    Object.assign(args, baseArgs(opts));
+    const args: Record<string, unknown> = withBase(opts, { action: "stop" });
     try {
       const result = await callTool("chrome_screencast", args) as {
         frameCount: number;

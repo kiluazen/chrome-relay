@@ -22,7 +22,7 @@ function netFilterArgs(opts: { filter?: string; status?: string; method?: string
 }
 
 export function registerSessions(ctx: CommandContext): void {
-  const { program, baseArgs, run } = ctx;
+  const { program, withBase, run } = ctx;
 
   // ---------- viewport (§2.2 — device-metrics emulation) ----------
   const viewport = program
@@ -57,13 +57,12 @@ Notes:
       .option("--touch", "enable touch event emulation")
       .option("--user-agent <ua>", "override the User-Agent header")
   ).action(async (opts) => {
-    const args: Record<string, unknown> = { action: "set", width: opts.width, height: opts.height };
-    Object.assign(args, baseArgs(opts));
-    if (opts.dpr !== undefined)  args.dpr = opts.dpr;
-    if (opts.mobile)             args.mobile = true;
-    if (opts.touch)              args.hasTouch = true;
-    if (opts.userAgent)          args.userAgent = opts.userAgent;
-    await run("chrome_viewport", args);
+    const extras: Record<string, unknown> = { action: "set", width: opts.width, height: opts.height };
+    if (opts.dpr !== undefined)  extras.dpr = opts.dpr;
+    if (opts.mobile)             extras.mobile = true;
+    if (opts.touch)              extras.hasTouch = true;
+    if (opts.userAgent)          extras.userAgent = opts.userAgent;
+    await run("chrome_viewport", withBase(opts, extras));
   });
 
   tabOpt(
@@ -71,9 +70,7 @@ Notes:
       .command("preset <name>")
       .description("Apply a named device preset (iphone-14, pixel-7, desktop-1440, etc).")
   ).action(async (name: string, opts) => {
-    const args: Record<string, unknown> = { action: "preset", name };
-    Object.assign(args, baseArgs(opts));
-    await run("chrome_viewport", args);
+    await run("chrome_viewport", withBase(opts, { action: "preset", name }));
   });
 
   tabOpt(
@@ -81,9 +78,7 @@ Notes:
       .command("clear")
       .description("Drop the viewport override and return the tab to its native size.")
   ).action(async (opts) => {
-    const args: Record<string, unknown> = { action: "clear" };
-    Object.assign(args, baseArgs(opts));
-    await run("chrome_viewport", args);
+    await run("chrome_viewport", withBase(opts, { action: "clear" }));
   });
 
   viewport
@@ -186,8 +181,10 @@ Notes:
     .option("--color <color>", "grey | blue | red | yellow | green | pink | purple | cyan | orange")
     .option("--collapsed", "create the group in its collapsed state")
     .action(async (name: string, opts) => {
-      const args: Record<string, unknown> = { action: "create", name };
-      args.tabIds = String(opts.tabs).split(",").map((s) => Number(s.trim())).filter(Number.isFinite);
+      // Forward the raw comma-separated string. parseChromeGroupArgs
+      // in @chrome-relay/protocol does strict per-element parsing —
+      // doing it CLI-side would silently swallow bad IDs.
+      const args: Record<string, unknown> = { action: "create", name, tabIds: String(opts.tabs) };
       if (opts.color)     args.color = opts.color;
       if (opts.collapsed) args.collapsed = true;
       await run("chrome_group", args);
@@ -212,8 +209,8 @@ Notes:
     .description("Add existing tabs to an existing tab-group.")
     .requiredOption("--tabs <ids>", "comma-separated tab IDs to add")
     .action(async (name: string, opts) => {
-      const tabIds = String(opts.tabs).split(",").map((s) => Number(s.trim())).filter(Number.isFinite);
-      await run("chrome_group", { action: "add", name, tabIds });
+      // Raw string forwarded; protocol parser handles per-element strict parsing.
+      await run("chrome_group", { action: "add", name, tabIds: String(opts.tabs) });
     });
 
   group
@@ -221,8 +218,8 @@ Notes:
     .description("Ungroup specific tabs (they remain open, just outside any tab-group).")
     .requiredOption("--tabs <ids>", "comma-separated tab IDs to ungroup")
     .action(async (opts) => {
-      const tabIds = String(opts.tabs).split(",").map((s) => Number(s.trim())).filter(Number.isFinite);
-      await run("chrome_group", { action: "remove", tabIds });
+      // Raw string forwarded; protocol parser handles per-element strict parsing.
+      await run("chrome_group", { action: "remove", tabIds: String(opts.tabs) });
     });
 
   // ---------- network (§2.7a — HTTP capture + HAR export) ----------
@@ -260,15 +257,13 @@ Notes:
 `
     )
     .action(async (opts) => {
-      const args: Record<string, unknown> = { ...baseArgs(opts), ...netFilterArgs(opts) };
-      await run("chrome_network", args);
+      await run("chrome_network", withBase(opts, netFilterArgs(opts)));
     });
 
   tabOpt(netFilterOpts(
     network.command("read").description("(alias) list captured network entries.")
   )).action(async (opts) => {
-    const args: Record<string, unknown> = { ...baseArgs(opts), ...netFilterArgs(opts) };
-    await run("chrome_network", args);
+    await run("chrome_network", withBase(opts, netFilterArgs(opts)));
   });
 
   tabOpt(
@@ -278,10 +273,10 @@ Notes:
       .option("--head <bytes>", "truncate to first N bytes", (v) => Number(v))
       .option("--full",         "return the full body — default truncates to 8 KB")
   ).action(async (requestId: string, opts) => {
-    const args: Record<string, unknown> = { ...baseArgs(opts), action: "body", requestId };
-    if (opts.full) args.full = true;
-    if (typeof opts.head === "number") args.head = opts.head;
-    await run("chrome_network", args);
+    const extras: Record<string, unknown> = { action: "body", requestId };
+    if (opts.full) extras.full = true;
+    if (typeof opts.head === "number") extras.head = opts.head;
+    await run("chrome_network", withBase(opts, extras));
   });
 
   tabOpt(netFilterOpts(
@@ -291,16 +286,16 @@ Notes:
       .option("--with-bodies", "fetch response bodies before emitting; strict by default — fails if any body cannot be fetched")
       .option("--best-effort-bodies", "with --with-bodies: keep the HAR even when some bodies are missing/errored (legacy behavior); per-entry _chrome_relay.bodyState/bodyError records what failed")
   )).action(async (opts) => {
-    const args: Record<string, unknown> = { ...baseArgs(opts), ...netFilterArgs(opts), action: "har" };
-    if (opts.withBodies) args.withBodies = true;
-    if (opts.bestEffortBodies) args.bestEffortBodies = true;
+    const extras: Record<string, unknown> = { ...netFilterArgs(opts), action: "har" };
+    if (opts.withBodies) extras.withBodies = true;
+    if (opts.bestEffortBodies) extras.bestEffortBodies = true;
     if (!opts.withBodies) {
       process.stderr.write(
         "[chrome-relay] HAR exported WITHOUT response bodies. Pass --with-bodies to include them " +
           "(strict by default; add --best-effort-bodies to allow per-entry misses).\n"
       );
     }
-    await run("chrome_network", args);
+    await run("chrome_network", withBase(opts, extras));
   });
 
   tabOpt(
@@ -308,8 +303,7 @@ Notes:
       .command("clear")
       .description("Wipe the network buffer for this tab.")
   ).action(async (opts) => {
-    const args: Record<string, unknown> = { ...baseArgs(opts), action: "clear" };
-    await run("chrome_network", args);
+    await run("chrome_network", withBase(opts, { action: "clear" }));
   });
 
   // ---------- console (§2.7c — page console + exception capture) ----------
@@ -338,11 +332,11 @@ Notes:
 `
       )
   ).action(async (opts) => {
-    const args: Record<string, unknown> = baseArgs(opts);
-    if (opts.clear)                args.action = "clear";
-    if (opts.level)                args.levels = opts.level;
-    if (typeof opts.since === "number") args.since = opts.since;
-    if (typeof opts.limit === "number") args.limit = opts.limit;
-    await run("chrome_console", args);
+    const extras: Record<string, unknown> = {};
+    if (opts.clear)                extras.action = "clear";
+    if (opts.level)                extras.levels = opts.level;
+    if (typeof opts.since === "number") extras.since = opts.since;
+    if (typeof opts.limit === "number") extras.limit = opts.limit;
+    await run("chrome_console", withBase(opts, extras));
   });
 }

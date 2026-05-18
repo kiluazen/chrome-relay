@@ -3,14 +3,12 @@
 import { tabOpt, type CommandContext } from "./shared.js";
 
 export function registerInput(ctx: CommandContext): void {
-  const { program, baseArgs, run } = ctx;
+  const { program, withBase, run } = ctx;
 
   tabOpt(
     program.command("click <selector>").description("Click an element by CSS selector.")
   ).action(async (selector: string, opts) => {
-    const args: Record<string, unknown> = { selector };
-    Object.assign(args, baseArgs(opts));
-    await run("chrome_click_element", args);
+    await run("chrome_click_element", withBase(opts, { selector }));
   });
 
   tabOpt(
@@ -18,9 +16,7 @@ export function registerInput(ctx: CommandContext): void {
       .command("fill <selector> <value>")
       .description("Fill an input or textarea.")
   ).action(async (selector: string, value: string, opts) => {
-    const args: Record<string, unknown> = { selector, value };
-    Object.assign(args, baseArgs(opts));
-    await run("chrome_fill_or_select", args);
+    await run("chrome_fill_or_select", withBase(opts, { selector, value }));
   });
 
   tabOpt(
@@ -41,9 +37,7 @@ For typing text into a field, use \`chrome-relay type\` instead.
 `
       )
   ).action(async (keys: string, opts) => {
-    const args: Record<string, unknown> = { keys };
-    Object.assign(args, baseArgs(opts));
-    await run("chrome_keyboard", args);
+    await run("chrome_keyboard", withBase(opts, { keys }));
   });
 
   tabOpt(
@@ -67,10 +61,9 @@ When to pick which:
 `
       )
   ).action(async (text: string, opts) => {
-    const args: Record<string, unknown> = { text };
-    Object.assign(args, baseArgs(opts));
-    if (opts.selector) args.selector = opts.selector;
-    await run("chrome_type", args);
+    const extras: Record<string, unknown> = { text };
+    if (opts.selector) extras.selector = opts.selector;
+    await run("chrome_type", withBase(opts, extras));
   });
 
   tabOpt(
@@ -94,15 +87,12 @@ Notes:
 `
       )
   ).action(async (code: string, opts) => {
-    const args: Record<string, unknown> = { code };
-    Object.assign(args, baseArgs(opts));
-    if (typeof opts.timeoutMs === "number") args.timeoutMs = opts.timeoutMs;
-    await run("chrome_evaluate", args);
+    const extras: Record<string, unknown> = { code };
+    if (typeof opts.timeoutMs === "number") extras.timeoutMs = opts.timeoutMs;
+    await run("chrome_evaluate", withBase(opts, extras));
   });
 
   // ---------- hover (Input.dispatchMouseEvent type=mouseMoved) ----------
-  // Triggers :hover / :focus-within / hover-driven JS handlers WITHOUT
-  // clicking. Pair with screencast to capture state changes.
   tabOpt(
     program
       .command("hover [selector]")
@@ -122,13 +112,12 @@ tooltip appearance, etc.) that a bare click would skip past too quickly.
 `
       )
   ).action(async (selector: string | undefined, opts) => {
-    const args: Record<string, unknown> = {};
-    Object.assign(args, baseArgs(opts));
-    if (selector) args.selector = selector;
+    const extras: Record<string, unknown> = {};
+    if (selector) extras.selector = selector;
     if (typeof opts.x === "number" && typeof opts.y === "number") {
-      args.x = opts.x;
-      args.y = opts.y;
+      extras.x = opts.x;
+      extras.y = opts.y;
     }
-    await run("chrome_hover", args);
+    await run("chrome_hover", withBase(opts, extras));
   });
 }

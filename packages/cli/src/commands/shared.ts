@@ -19,6 +19,21 @@ export interface CommandContext {
   program: Command;
   baseArgs: (opts: { tab?: number; workspace?: string; group?: string }) => Record<string, unknown>;
   run: typeof runToolImpl;
+  withBase: (opts: { tab?: number; workspace?: string; group?: string }, extras?: Record<string, unknown>) => Record<string, unknown>;
+}
+
+// Helper that collapses the `const args = {}; Object.assign(args,
+// baseArgs(opts)); args.foo = bar; await run(...)` pattern into one
+// expression. Used by every per-domain registration module.
+export function makeWithBase(
+  baseArgs: (opts: { tab?: number; workspace?: string; group?: string }) => Record<string, unknown>
+) {
+  return function withBase(
+    opts: { tab?: number; workspace?: string; group?: string },
+    extras?: Record<string, unknown>
+  ): Record<string, unknown> {
+    return { ...baseArgs(opts), ...(extras ?? {}) };
+  };
 }
 
 // Attach --tab / --workspace / --group to a subcommand.

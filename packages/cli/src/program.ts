@@ -8,7 +8,7 @@
 
 import { Command } from "commander";
 import { CHROME_RELAY_VERSION } from "./index.js";
-import { makeBaseArgs, runTool, type CommandContext } from "./commands/shared.js";
+import { makeBaseArgs, makeWithBase, runTool, type CommandContext } from "./commands/shared.js";
 import { registerInstallUpdate } from "./commands/install-update.js";
 import { registerNavigation } from "./commands/navigation.js";
 import { registerInput } from "./commands/input.js";
@@ -58,9 +58,14 @@ Notes:
 
   // Build the context every per-domain module needs. baseArgs closes over
   // the program instance so it can read program-level (parent) flags.
+  // withBase is a one-call combiner — `withBase(opts, { foo: 1 })` =
+  // `{ ...baseArgs(opts), foo: 1 }` so command actions stop repeating
+  // the `Object.assign(args, baseArgs(opts))` boilerplate.
+  const baseArgs = makeBaseArgs(program);
   const ctx: CommandContext = {
     program,
-    baseArgs: makeBaseArgs(program),
+    baseArgs,
+    withBase: makeWithBase(baseArgs),
     run: runTool
   };
 
