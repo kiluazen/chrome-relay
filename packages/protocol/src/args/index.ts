@@ -13,3 +13,5 @@ export * from "./shared";
 export * from "./navigate";
 export * from "./hover";
 export * from "./network";
+export * from "./simple";
+export * from "./multi";

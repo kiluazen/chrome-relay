@@ -9,6 +9,13 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.13": [
+    "Protocol arg-parser coverage complete (code-quality-hardening Risk 1 — finished). Every one of the 22 tools now has an executable parser in @chrome-relay/protocol that returns a typed args object with `code:'invalid_arguments'` errors on malformed input.",
+    "New parsers in this release: parseChrome{ReadPage,Click,Fill,Keyboard,Type,Evaluate,SwitchTab,CloseTabs,Ax,ClickAx,Screenshot,Viewport,Console,Workspace,Group,Screencast}Args, plus parseGetWindowsAndTabsArgs and parseChromeSelfReloadArgs.",
+    "All extension handlers now consume their parser at the top of the handler body — silent shape drift between CLI and extension is structurally impossible.",
+    "Multi-action tools (viewport, console, network, workspace, group, screencast) return discriminated unions so the handler branches with TypeScript narrowing instead of `typeof args.action === 'string'` boilerplate.",
+    "36 new tests in packages/protocol/test/args-all.test.ts. Total now 433 (was 397)."
+  ],
   "0.5.12": [
     "Protocol-owned tool arg parsers (code-quality-hardening Risk 1). New @chrome-relay/protocol exports: `parseChromeNavigateArgs`, `parseChromeHoverArgs`, `parseChromeNetworkArgs`. Each is the single source of truth for what its tool accepts — CLI and extension consume the same parser so silent shape drift can't happen.",
     "Pattern established with 3 representative tools (navigate, hover, network — the doc-followup explicitly named these). Remaining 19 tools are mechanical follow-up (~20 lines + tests each). Each parser throws `RelayError(invalid_arguments)` with field/received/validChoices in details.",

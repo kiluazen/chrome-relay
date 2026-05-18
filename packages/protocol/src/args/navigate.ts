@@ -1,5 +1,5 @@
 // chrome_navigate arg schema.
-import { TOOL_NAMES } from "./../index";
+import { RelayError, TOOL_NAMES } from "./../index";
 import {
   asObject,
   optBool,
@@ -25,9 +25,20 @@ export function parseChromeNavigateArgs(input: unknown): ChromeNavigateArgs {
   };
   // navigate accepts string OR numeric tabId for back-compat (it's used as
   // a "reference window" rather than a strict target when --new is set).
+  // Strict: a string that doesn't parse to a finite number is rejected.
   if (typeof obj.tabId === "string" && obj.tabId) {
     const n = Number(obj.tabId);
-    if (Number.isFinite(n)) out.tabId = n;
+    if (!Number.isFinite(n)) {
+      throw new RelayError({
+        code: "invalid_arguments",
+        message: `chrome_navigate: invalid tabId ${JSON.stringify(obj.tabId)}. Expected a number.`,
+        tool: TOOL_NAMES.NAVIGATE,
+        phase: "parse_arguments",
+        details: { field: "tabId", received: obj.tabId },
+        retryable: false
+      });
+    }
+    out.tabId = n;
   } else {
     const n = optNumber(obj, "tabId");
     if (n !== undefined) out.tabId = n;

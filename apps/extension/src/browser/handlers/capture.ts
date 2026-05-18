@@ -5,7 +5,16 @@
 // parseBbox. They live here (vs. in target.ts) because nothing else uses
 // them and keeping them next to the handler that calls them reads cleanly.
 
-import { parseChromeHoverArgs, RelayError, TOOL_NAMES } from "@chrome-relay/protocol";
+import {
+  parseChromeAxArgs,
+  parseChromeClickAxArgs,
+  parseChromeHoverArgs,
+  parseChromeReadPageArgs,
+  parseChromeScreencastArgs,
+  parseChromeScreenshotArgs,
+  RelayError,
+  TOOL_NAMES
+} from "@chrome-relay/protocol";
 import { evalExpression, evalInTab, send } from "../cdp";
 import { locateForClick, readPageSnapshot } from "../page-actions";
 import { getAxTree, clickAxNode } from "../a11y";
@@ -67,9 +76,10 @@ function parseBbox(spec: string): { x: number; y: number; width: number; height:
 
 export const captureHandlers: Partial<Record<string, ToolHandler>> = {
   async [TOOL_NAMES.SCREENSHOT](args) {
-    const tab = await resolveTarget(args);
+    const parsed = parseChromeScreenshotArgs(args);
+    const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
-    const fullPage = args.fullPage === true;
+    const fullPage = parsed.fullPage === true;
 
     const params: Record<string, unknown> = {
       format: "png",
@@ -78,14 +88,14 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
 
     let clipMeta: { source: "bbox" | "selector"; selector?: string; padding?: number } | null = null;
 
-    if (typeof args.bbox === "string") {
-      const clip = parseBbox(args.bbox);
+    if (parsed.bbox) {
+      const clip = parseBbox(parsed.bbox);
       params.clip = clip;
       params.captureBeyondViewport = true;
       clipMeta = { source: "bbox" };
-    } else if (typeof args.selector === "string" && args.selector) {
-      const padding = typeof args.padding === "number" ? args.padding : 0;
-      const rect = await evalInTab(tabId, locateForClick, [args.selector]);
+    } else if (parsed.selector) {
+      const padding = parsed.padding ?? 0;
+      const rect = await evalInTab(tabId, locateForClick, [parsed.selector]);
       const clip = {
         x: Math.max(0, rect.x - rect.width / 2 - padding),
         y: Math.max(0, rect.y - rect.height / 2 - padding),
@@ -95,15 +105,15 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
       };
       params.clip = clip;
       params.captureBeyondViewport = true;
-      clipMeta = { source: "selector", selector: args.selector, padding };
+      clipMeta = { source: "selector", selector: parsed.selector, padding };
     }
 
     const result = await send<{ data: string }>(tabId, "Page.captureScreenshot", params);
 
     let outData = result.data;
     let downscaled: { from: { width: number; height: number }; to: { width: number; height: number } } | null = null;
-    if (typeof args.maxEdge === "number" && args.maxEdge > 0) {
-      const ds = await downscalePngToMaxEdge(result.data, args.maxEdge);
+    if (parsed.maxEdge && parsed.maxEdge > 0) {
+      const ds = await downscalePngToMaxEdge(result.data, parsed.maxEdge);
       outData = ds.data;
       if (ds.from.width !== ds.to.width || ds.from.height !== ds.to.height) {
         downscaled = { from: ds.from, to: ds.to };
@@ -120,34 +130,28 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
   },
 
   async [TOOL_NAMES.READ_PAGE](args) {
-    const tab = await resolveTarget(args);
+    const parsed = parseChromeReadPageArgs(args);
+    const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
-    return evalInTab(tabId, readPageSnapshot, [args.interactiveOnly === true]);
+    return evalInTab(tabId, readPageSnapshot, [parsed.interactiveOnly === true]);
   },
 
   async [TOOL_NAMES.AX](args) {
-    const tab = await resolveTarget(args);
+    const parsed = parseChromeAxArgs(args);
+    const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
     return getAxTree(tabId, {
-      interactiveOnly: args.interactiveOnly === true,
-      rootRole: typeof args.rootRole === "string" ? args.rootRole : undefined,
-      includeSubframes: args.includeSubframes === true
+      interactiveOnly: parsed.interactiveOnly === true,
+      rootRole: parsed.rootRole,
+      includeSubframes: parsed.includeSubframes === true
     });
   },
 
   async [TOOL_NAMES.CLICK_AX](args) {
-    const tab = await resolveTarget(args);
+    const parsed = parseChromeClickAxArgs(args);
+    const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
-    const node = Number(args.node ?? args.id);
-    if (!Number.isFinite(node) || node <= 0) {
-      invalidArg(
-        TOOL_NAMES.CLICK_AX,
-        "chrome_click_ax requires --node <backendDOMNodeId> (a positive integer from `chrome-relay ax`).",
-        "parse_arguments",
-        { received: args.node ?? args.id }
-      );
-    }
-    return clickAxNode(tabId, node);
+    return clickAxNode(tabId, parsed.node);
   },
 
   // Hover — dispatches mouseMoved at element center so :hover/:focus-within
@@ -194,40 +198,19 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
   // in the SW and returned on stop. Requires an active tab (Chrome doesn't
   // paint backgrounded tabs).
   async [TOOL_NAMES.SCREENCAST](args) {
-    const tab = await resolveTarget(args);
+    const parsed = parseChromeScreencastArgs(args);
+    const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
-    const action = typeof args.action === "string" ? args.action : "start";
-    if (action === "start") {
-      const opts: Parameters<typeof startScreencast>[1] = {};
-      if (args.format !== undefined && args.format !== null) {
-        if (args.format !== "png" && args.format !== "jpeg") {
-          throw new RelayError({
-            code: "invalid_arguments",
-            message: `chrome_screencast: invalid format ${JSON.stringify(args.format)}. Expected "jpeg" or "png".`,
-            tool: TOOL_NAMES.SCREENCAST,
-            phase: "parse_format",
-            details: { received: args.format, validChoices: ["jpeg", "png"] },
-            retryable: false
-          });
-        }
-        opts.format = args.format;
-      }
-      if (typeof args.quality === "number")       opts.quality = args.quality;
-      if (typeof args.maxWidth === "number")      opts.maxWidth = args.maxWidth;
-      if (typeof args.maxHeight === "number")     opts.maxHeight = args.maxHeight;
-      if (typeof args.everyNthFrame === "number") opts.everyNthFrame = args.everyNthFrame;
-      return startScreencast(tabId, opts);
-    }
-    if (action === "stop") {
+    if (parsed.action === "stop") {
       return stopScreencast(tabId);
     }
-    throw new RelayError({
-      code: "invalid_arguments",
-      message: `chrome_screencast: unknown action "${action}". Expected start | stop.`,
-      tool: TOOL_NAMES.SCREENCAST,
-      phase: "parse_action",
-      details: { received: action, validChoices: ["start", "stop"] },
-      retryable: false
-    });
+    // parsed.action === "start"
+    const opts: Parameters<typeof startScreencast>[1] = {};
+    if (parsed.format)                  opts.format = parsed.format;
+    if (parsed.quality !== undefined)   opts.quality = parsed.quality;
+    if (parsed.maxWidth !== undefined)  opts.maxWidth = parsed.maxWidth;
+    if (parsed.maxHeight !== undefined) opts.maxHeight = parsed.maxHeight;
+    if (parsed.everyNthFrame !== undefined) opts.everyNthFrame = parsed.everyNthFrame;
+    return startScreencast(tabId, opts);
   }
 };
