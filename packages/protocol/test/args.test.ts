@@ -96,9 +96,17 @@ describe("parseChromeHoverArgs", () => {
 
   it("throws invalid_arguments when neither selector nor x,y is provided", () => {
     expectInvalidArguments(() => parseChromeHoverArgs({}));
-    expectInvalidArguments(() => parseChromeHoverArgs({ x: 1 }));  // missing y
-    expectInvalidArguments(() => parseChromeHoverArgs({ y: 2 }));  // missing x
     expectInvalidArguments(() => parseChromeHoverArgs({ selector: "" })); // empty string
+  });
+
+  // Post-0.5.16: partial-coordinate intent rejects explicitly. Used to
+  // silently fall through to selector-mode and lose the half-passed
+  // coordinate.
+  it("throws invalid_arguments on x-without-y (and vice versa)", () => {
+    expectInvalidArguments(() => parseChromeHoverArgs({ x: 10 }));
+    expectInvalidArguments(() => parseChromeHoverArgs({ y: 20 }));
+    expectInvalidArguments(() => parseChromeHoverArgs({ x: 10, selector: "b" }));
+    expectInvalidArguments(() => parseChromeHoverArgs({ y: 20, selector: "b" }));
   });
 });
 

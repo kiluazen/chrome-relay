@@ -14,7 +14,7 @@ export type ConsoleLevel = "log" | "info" | "warn" | "error" | "debug" | "except
 export interface ConsoleEntry {
   id: number;                 // monotonic per-tab
   level: ConsoleLevel;
-  text: string;               // serialized args (max 1000 chars per entry)
+  text: string;               // serialized args (truncated to CONSOLE_ENTRY_TEXT_MAX_CHARS)
   timestamp: number;          // Date.now() at capture
   url?: string;               // source URL when available
   line?: number;
@@ -23,9 +23,12 @@ export interface ConsoleEntry {
 }
 
 // Pulled from @chrome-relay/protocol so docs + tests + this file can't drift.
-import { CONSOLE_BUFFER_MAX_ENTRIES, CONSOLE_BUFFER_MAX_BYTES } from "@chrome-relay/protocol";
-const PER_TAB_MAX = CONSOLE_BUFFER_MAX_ENTRIES;
-const PER_TAB_MAX_BYTES = CONSOLE_BUFFER_MAX_BYTES;
+import {
+  CONSOLE_BUFFER_MAX_ENTRIES,
+  CONSOLE_BUFFER_MAX_BYTES,
+  CONSOLE_ENTRY_TEXT_MAX_CHARS,
+  CONSOLE_ENTRY_STACK_MAX_CHARS
+} from "@chrome-relay/protocol";
 
 interface TabBuffer {
   entries: ConsoleEntry[];
@@ -51,7 +54,7 @@ function push(tabId: number, entry: Omit<ConsoleEntry, "id">) {
   buf.entries.push(full);
   buf.byteSize += full.text.length + (full.stack?.length ?? 0);
   // Drop oldest until we're under both caps.
-  while (buf.entries.length > PER_TAB_MAX || buf.byteSize > PER_TAB_MAX_BYTES) {
+  while (buf.entries.length > CONSOLE_BUFFER_MAX_ENTRIES || buf.byteSize > CONSOLE_BUFFER_MAX_BYTES) {
     const removed = buf.entries.shift();
     if (!removed) break;
     buf.byteSize -= removed.text.length + (removed.stack?.length ?? 0);
@@ -72,7 +75,7 @@ function formatArgs(args: Array<{ value?: unknown; description?: string; type: s
       return a.description ?? `<${a.type}>`;
     })
     .join(" ")
-    .slice(0, 1000);
+    .slice(0, CONSOLE_ENTRY_TEXT_MAX_CHARS);
 }
 
 // CDP event payloads (subset of what we care about)
@@ -156,12 +159,12 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
       const frame = topFrame(d.stackTrace);
       push(source.tabId, {
         level: "exception",
-        text: (d.exception?.description ?? d.text ?? "<exception>").slice(0, 1000),
+        text: (d.exception?.description ?? d.text ?? "<exception>").slice(0, CONSOLE_ENTRY_TEXT_MAX_CHARS),
         timestamp: evt.timestamp,
         url: d.url ?? frame.url,
         line: d.lineNumber ?? frame.line,
         column: d.columnNumber ?? frame.column,
-        stack: d.exception?.description?.slice(0, 1000)
+        stack: d.exception?.description?.slice(0, CONSOLE_ENTRY_STACK_MAX_CHARS)
       });
       break;
     }
@@ -171,7 +174,7 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
       const entry = (params as { entry: { level: string; text: string; source: string; timestamp: number; url?: string; lineNumber?: number } }).entry;
       push(source.tabId, {
         level: entry.level === "error" ? "error" : entry.level === "warning" ? "warn" : "info",
-        text: `[${entry.source}] ${entry.text}`.slice(0, 1000),
+        text: `[${entry.source}] ${entry.text}`.slice(0, CONSOLE_ENTRY_TEXT_MAX_CHARS),
         timestamp: entry.timestamp,
         url: entry.url,
         line: entry.lineNumber

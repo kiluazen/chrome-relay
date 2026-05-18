@@ -9,6 +9,15 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.16": [
+    "chrome_hover now rejects partial-coordinate intent (`--x 10` without `--y`, or vice versa) instead of silently falling through to selector-mode and losing the half-passed coordinate. CLI forwards even partial input so the protocol parser sees it.",
+    "Network body errors are now structured RelayError instead of plain Error. `getBody` for a request that's not in the buffer → `target_not_found`; CDP failure (Chrome GC'd the body, permission denied, etc.) → `cdp_error` with the original message under `details.underlying`. Agents can branch on the code instead of pattern-matching the message.",
+    "Console truncation cap (1000 chars) consolidated into limits.ts as CONSOLE_ENTRY_TEXT_MAX_CHARS / CONSOLE_ENTRY_STACK_MAX_CHARS. 4 hardcoded sites in console-buffer.ts now reference the constants.",
+    "CLI help text interpolates limits from @chrome-relay/protocol. `chrome-relay network --help` and `chrome-relay console --help` no longer hardcode '200' or '256 KB' — they read from NETWORK_BUFFER_MAX_ENTRIES / CONSOLE_BUFFER_MAX_ENTRIES / CONSOLE_BUFFER_MAX_BYTES. Future bumps propagate without manual edits.",
+    "Removed the PER_TAB_MAX / PER_TAB_MAX_BYTES alias indirection in network-buffer.ts and console-buffer.ts. The protocol constants have good names; aliasing them was leftover from before they existed.",
+    "Softened the over-claiming parser comments in args/index.ts and shared.ts — they correctly describe the extension as the trust boundary that runs the parsers (CLI doesn't pre-validate today; that's a documented future PR).",
+    "Tests: +1 hover partial-coord + 2 network getBody structured-error coverage. Total 417 (was 416)."
+  ],
   "0.5.15": [
     "Tab-id coercion is now strict against blank strings. `--tabs '1,,3'` (or `[\"\"]`, or `[' ']`) used to silently become `[1, 0, 3]` because Number('') === 0 — and tab 0 is a real Chrome target. Now throws RelayError(invalid_arguments). Affects chrome_group create/add/remove, chrome_switch_tab, chrome_close_tabs.",
     "Numeric range validation added across the parsers. `optPositiveNumber` (> 0) and `optNonNegativeNumber` (>= 0) helpers reject out-of-range values at the parser boundary instead of letting nonsense through to CDP / handler logic. Affects: chrome_evaluate timeoutMs, chrome_screenshot maxEdge + padding, chrome_screencast quality/maxWidth/maxHeight/everyNthFrame, chrome_network body head.",

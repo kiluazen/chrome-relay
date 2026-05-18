@@ -114,10 +114,11 @@ tooltip appearance, etc.) that a bare click would skip past too quickly.
   ).action(async (selector: string | undefined, opts) => {
     const extras: Record<string, unknown> = {};
     if (selector) extras.selector = selector;
-    if (typeof opts.x === "number" && typeof opts.y === "number") {
-      extras.x = opts.x;
-      extras.y = opts.y;
-    }
+    // Forward whatever was passed — even partial (x without y). The
+    // protocol parser rejects with invalid_arguments so the agent sees
+    // the typo instead of silently falling back to selector mode.
+    if (typeof opts.x === "number") extras.x = opts.x;
+    if (typeof opts.y === "number") extras.y = opts.y;
     await run("chrome_hover", withBase(opts, extras));
   });
 }

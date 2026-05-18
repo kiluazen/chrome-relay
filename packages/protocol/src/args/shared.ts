@@ -1,10 +1,9 @@
 // Shared building blocks for tool-arg parsers.
 //
 // Each parser is a `(input: unknown) => TArgs` function that throws a
-// RelayError(invalid_arguments) on a structural mismatch. The CLI uses
-// these to validate outgoing args; the extension uses the same parser at
-// the trust boundary so the contract is single-sourced from
-// @chrome-relay/protocol.
+// RelayError(invalid_arguments) on a structural mismatch. The extension
+// runs the parser at the trust boundary (top of each handler); the CLI
+// currently doesn't pre-validate. See args/index.ts for the tradeoff.
 //
 // Pattern: lots of `typeof args.foo === "string" ? args.foo : undefined`
 // boilerplate moves out of every handler into one well-tested place.

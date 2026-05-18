@@ -1,9 +1,12 @@
 // Tool-arg parsers — protocol-owned single source of truth.
 //
 // Code-quality-hardening Risk 1: every tool's args go through one of these
-// parsers. Both CLI (when constructing outgoing args) and extension (at
-// the trust boundary, top of each handler) consume the same parser, so
-// silent shape drift between them is structurally impossible.
+// parsers at the extension's trust boundary (top of each handler). The
+// CLI itself doesn't currently re-validate — it constructs the JSON via
+// commander and forwards. That's a tradeoff: the parser fires at the
+// extension, agents get RelayError(invalid_arguments) with structured
+// fields back through the bridge, but bad CLI input pays one round-trip
+// before failing. Future PR could move validation closer to the CLI.
 //
 // Coverage: every tool in TOOL_NAMES is covered.
 //   navigate.ts   chrome_navigate

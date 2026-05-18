@@ -13,11 +13,13 @@
 //
 // WebSocket / SSE frames are explicitly out of scope (design call #3).
 
-import { NETWORK_BUFFER_MAX_ENTRIES, NETWORK_BUFFER_MAX_BYTES } from "@chrome-relay/protocol";
+import {
+  NETWORK_BUFFER_MAX_ENTRIES,
+  NETWORK_BUFFER_MAX_BYTES,
+  RelayError,
+  TOOL_NAMES
+} from "@chrome-relay/protocol";
 import { ensureAttached, send } from "./cdp";
-
-const PER_TAB_MAX = NETWORK_BUFFER_MAX_ENTRIES;
-const PER_TAB_MAX_BYTES = NETWORK_BUFFER_MAX_BYTES;
 
 export interface NetworkEntry {
   id: string;                  // requestId from CDP, used to fetch body on demand
@@ -65,7 +67,7 @@ function getBuffer(tabId: number): TabBuffer {
 }
 
 function pruneIfFull(buf: TabBuffer) {
-  while (buf.entries.length > PER_TAB_MAX || buf.byteSize > PER_TAB_MAX_BYTES) {
+  while (buf.entries.length > NETWORK_BUFFER_MAX_ENTRIES || buf.byteSize > NETWORK_BUFFER_MAX_BYTES) {
     const oldest = buf.entries.shift();
     if (!oldest) break;
     buf.byId.delete(oldest.id);
@@ -236,16 +238,29 @@ function bucketStatus(e: NetworkEntry): "ok" | "redirect" | "client_error" | "se
 export async function getBody(tabId: number, requestId: string): Promise<{ body: string; base64Encoded: boolean }> {
   const buf = buffers.get(tabId);
   if (!buf || !buf.byId.has(requestId)) {
-    throw new Error(`Request ${requestId} not in this tab's network buffer.`);
+    throw new RelayError({
+      code: "target_not_found",
+      message: `Request ${requestId} not in this tab's network buffer.`,
+      tool: TOOL_NAMES.NETWORK,
+      phase: "lookup_request",
+      details: { tabId, requestId },
+      retryable: false
+    });
   }
   try {
     const resp = await send<{ body: string; base64Encoded: boolean }>(tabId, "Network.getResponseBody", { requestId });
     return resp;
   } catch (e) {
-    throw new Error(
-      `Response body for ${requestId} is no longer available (Chrome GCs bodies after ~30s). ` +
-        `Capture again or fetch the body sooner. (${e instanceof Error ? e.message : String(e)})`
-    );
+    throw new RelayError({
+      code: "cdp_error",
+      message:
+        `Response body for ${requestId} is no longer available (Chrome GCs bodies after ~30s). ` +
+        `Capture again or fetch the body sooner.`,
+      tool: TOOL_NAMES.NETWORK,
+      phase: "Network.getResponseBody",
+      details: { tabId, requestId, underlying: e instanceof Error ? e.message : String(e) },
+      retryable: false
+    });
   }
 }
 

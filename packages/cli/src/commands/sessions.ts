@@ -2,7 +2,15 @@
 // and capture-buffer commands that share filter/limit options.
 
 import type { Command } from "commander";
+import {
+  CONSOLE_BUFFER_MAX_ENTRIES,
+  CONSOLE_BUFFER_MAX_BYTES,
+  NETWORK_BUFFER_MAX_ENTRIES
+} from "@chrome-relay/protocol";
 import { tabOpt, type CommandContext } from "./shared.js";
+
+// Inline KB so we can interpolate "256 KB" cleanly into help strings.
+const CONSOLE_BUFFER_MAX_KB = Math.round(CONSOLE_BUFFER_MAX_BYTES / 1024);
 
 function netFilterOpts(cmd: Command) {
   return cmd
@@ -228,14 +236,14 @@ Notes:
   const network = tabOpt(netFilterOpts(
     program
       .command("network")
-      .description("Capture HTTP request/response metadata. Ring buffer, last 200 per tab.")
+      .description(`Capture HTTP request/response metadata. Ring buffer, last ${NETWORK_BUFFER_MAX_ENTRIES} per tab.`)
   ))
     .addHelpText(
       "after",
       `
 
 Examples:
-  chrome-relay network --tab 123                              # last 200 requests
+  chrome-relay network --tab 123                              # last ${NETWORK_BUFFER_MAX_ENTRIES} requests
   chrome-relay network --tab 123 --filter api.example.com      # url substring
   chrome-relay network --tab 123 --status failed
   chrome-relay network --tab 123 --method POST
@@ -310,7 +318,7 @@ Notes:
   tabOpt(
     program
       .command("console")
-      .description("Read console.log/warn/error + page exceptions (ring buffer, last 200).")
+      .description(`Read console.log/warn/error + page exceptions (ring buffer, last ${CONSOLE_BUFFER_MAX_ENTRIES}).`)
       .option("--level <levels>", "comma-separated: log,info,warn,error,debug,exception")
       .option("--since <id>",     "only return entries with id > since (live-tail-ish)", (v) => Number(v))
       .option("--limit <n>",      "cap response length", (v) => Number(v))
@@ -326,7 +334,7 @@ Examples:
   chrome-relay console --tab 123 --clear
 
 Notes:
-  Ring buffer holds the last 200 entries per tab (or 256 KB, whichever first).
+  Ring buffer holds the last ${CONSOLE_BUFFER_MAX_ENTRIES} entries per tab (or ${CONSOLE_BUFFER_MAX_KB} KB, whichever first).
   Wipes on tab close. First call on a tab subscribes; subsequent calls are
   instant in-memory reads.
 `

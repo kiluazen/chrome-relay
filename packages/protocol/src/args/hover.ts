@@ -15,6 +15,19 @@ export function parseChromeHoverArgs(input: unknown): ChromeHoverArgs {
   const target = parseTargetArgs(obj, TOOL_NAMES.HOVER);
   const x = optNumber(obj, "x", TOOL_NAMES.HOVER);
   const y = optNumber(obj, "y", TOOL_NAMES.HOVER);
+  // Strict: x without y (or vice versa) is a typo/incomplete-intent.
+  // The old behavior silently fell through to selector-mode, losing the
+  // coordinate intent. Reject explicitly.
+  if ((x !== undefined) !== (y !== undefined)) {
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: "chrome_hover: pass BOTH x and y, or neither (selector mode).",
+      tool: TOOL_NAMES.HOVER,
+      phase: "parse_arguments",
+      details: { received: { x: obj.x, y: obj.y } },
+      retryable: false
+    });
+  }
   if (x !== undefined && y !== undefined) {
     return { ...target, kind: "coords", x, y };
   }

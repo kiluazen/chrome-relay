@@ -314,16 +314,27 @@ describe("network-buffer", () => {
     expect(har.log.entries[0]._chrome_relay.bodyError).toBeDefined();
     expect(har.log.entries[0]._chrome_relay.bodyError?.code).toBe("cdp_error");
     expect(har.log.entries[0]._chrome_relay.bodyError?.phase).toBe("Network.getResponseBody");
-    expect(har.log.entries[0]._chrome_relay.bodyError?.message).toMatch(/No data found/);
+    // Post-0.5.16: getBody throws a structured RelayError; the buildHar
+    // bodyError.message reflects the user-facing GC-explanation rather
+    // than the raw underlying CDP string. (The underlying CDP message is
+    // still preserved inside bodyError.details when present.)
+    expect(har.log.entries[0]._chrome_relay.bodyError?.message).toMatch(/no longer available/);
   });
 
-  it("getBody throws clearly when the request isn't in the buffer", async () => {
+  it("getBody throws RelayError(target_not_found) when the request isn't in the buffer", async () => {
     const m = await load();
+    const { RelayError } = await import("@chrome-relay/protocol");
     await m.ensureNetworkCapture(9);
-    await expect(m.getBody(9, "unknown-req")).rejects.toThrow(/not in this tab's network buffer/);
+    let caught: unknown;
+    try { await m.getBody(9, "unknown-req"); } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(RelayError);
+    const err = caught as InstanceType<typeof RelayError>;
+    expect(err.code).toBe("target_not_found");
+    expect(err.tool).toBe("chrome_network");
+    expect(err.details?.requestId).toBe("unknown-req");
   });
 
-  it("getBody throws a descriptive error when CDP says body is gone", async () => {
+  it("getBody throws RelayError(cdp_error) when CDP says body is gone", async () => {
     const m = await load();
     await m.ensureNetworkCapture(10);
     dispatch(10, "Network.requestWillBeSent", { requestId: "r1", request: { url: "https://x", method: "GET" }, timestamp: 0, wallTime: 0 });
@@ -336,6 +347,18 @@ describe("network-buffer", () => {
       if (method === "Network.getResponseBody") throw new Error("body no longer available");
       return undefined;
     });
-    await expect(m.getBody(10, "r1")).rejects.toThrow(/no longer available/);
+    const { RelayError } = await import("@chrome-relay/protocol");
+    let caught: unknown;
+    try { await m.getBody(10, "r1"); } catch (e) { caught = e; }
+    expect(caught).toBeInstanceOf(RelayError);
+    const err = caught as InstanceType<typeof RelayError>;
+    expect(err.code).toBe("cdp_error");
+    expect(err.phase).toBe("Network.getResponseBody");
+    expect(err.message).toMatch(/no longer available/);
+    // The underlying CDP error is captured in details for debuggability;
+    // the exact string depends on which mockImplementation handler the
+    // test setup hits first, so just assert it's a non-empty string.
+    expect(typeof err.details?.underlying).toBe("string");
+    expect((err.details?.underlying as string).length).toBeGreaterThan(0);
   });
 });

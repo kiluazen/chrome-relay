@@ -41,3 +41,7 @@ export const NETWORK_BUFFER_MAX_BYTES = 512 * 1024;
 export const CONSOLE_BUFFER_MAX_ENTRIES = 200;
 /** Console ring buffer: max bytes per tab. */
 export const CONSOLE_BUFFER_MAX_BYTES = 256 * 1024;
+/** Per-entry text length cap (truncated when exceeded). */
+export const CONSOLE_ENTRY_TEXT_MAX_CHARS = 1000;
+/** Per-entry stack-trace length cap. */
+export const CONSOLE_ENTRY_STACK_MAX_CHARS = 1000;
