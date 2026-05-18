@@ -9,6 +9,10 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.11": [
+    "Tests-only: 6 new edge-case tests for `chrome-relay update`. Covers --dry-run, install failure, install-success-but-binary-version-unchanged (PATH mismatch / stale shim), install-success-but-which-fails, install-success-but-release-notes-parse-fails, and the happy path. Locks in the structured-metadata contract from 0.5.7.",
+    "Total tests now 378 (was 372)."
+  ],
   "0.5.10": [
     "Direct /call target conflict enforcement. Third-party callers posting to /call with multiple loose target fields (tabId + workspaceName, etc.) now throw `target_conflict` instead of silently applying precedence. Matches the CLI rule the CLI itself enforced since 0.5.4.",
     "All useful plain Error throws in extension handlers converted to RelayError(invalid_arguments). Affected tools: chrome_click_element, chrome_fill_or_select, chrome_keyboard, chrome_type, chrome_evaluate, chrome_switch_tab, chrome_close_tabs, chrome_viewport (preset name + width/height), chrome_workspace (create/close), chrome_group (create/close/add/remove), chrome_network (body without --request-id), chrome_hover (no selector or x,y), chrome_click_ax (no --node), and bbox parser. Agents can now branch on `errorDetails.code === 'invalid_arguments'` for all of these.",
