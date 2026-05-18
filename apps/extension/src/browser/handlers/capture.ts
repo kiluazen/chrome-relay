@@ -5,7 +5,7 @@
 // parseBbox. They live here (vs. in target.ts) because nothing else uses
 // them and keeping them next to the handler that calls them reads cleanly.
 
-import { RelayError, TOOL_NAMES } from "@chrome-relay/protocol";
+import { parseChromeHoverArgs, RelayError, TOOL_NAMES } from "@chrome-relay/protocol";
 import { evalExpression, evalInTab, send } from "../cdp";
 import { locateForClick, readPageSnapshot } from "../page-actions";
 import { getAxTree, clickAxNode } from "../a11y";
@@ -152,43 +152,42 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
 
   // Hover — dispatches mouseMoved at element center so :hover/:focus-within
   // styles fire. Pair with screencast to capture micro-state animations.
+  // Args parsed via protocol-owned parseChromeHoverArgs (PR 12).
   async [TOOL_NAMES.HOVER](args) {
-    const tab = await resolveTarget(args);
+    const parsed = parseChromeHoverArgs(args);
+    const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
-    let x: number | undefined;
-    let y: number | undefined;
-    if (typeof args.x === "number" && typeof args.y === "number") {
-      x = args.x;
-      y = args.y;
-    } else if (typeof args.selector === "string" && args.selector) {
+    let x: number;
+    let y: number;
+    if (parsed.kind === "coords") {
+      x = parsed.x;
+      y = parsed.y;
+    } else {
       const result = await evalExpression<{ x: number; y: number; w: number; h: number } | null>(
         tabId,
-        `(() => { const el = document.querySelector(${JSON.stringify(args.selector)}); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()`
+        `(() => { const el = document.querySelector(${JSON.stringify(parsed.selector)}); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()`
       );
       const rect = result.value;
       if (!rect) {
         throw new RelayError({
           code: "element_not_found",
-          message: `chrome_hover: no element matches selector ${args.selector}`,
+          message: `chrome_hover: no element matches selector ${parsed.selector}`,
           tool: TOOL_NAMES.HOVER,
           phase: "locate_element",
-          details: { selector: args.selector },
+          details: { selector: parsed.selector },
           retryable: false
         });
       }
       x = rect.x + rect.w / 2;
       y = rect.y + rect.h / 2;
-    } else {
-      invalidArg(TOOL_NAMES.HOVER, "chrome_hover requires either --selector or --x and --y.");
     }
     await send(tabId, "Input.dispatchMouseEvent", {
       type: "mouseMoved",
-      x,
-      y,
+      x, y,
       modifiers: 0,
       buttons: 0
     });
-    return { hovered: true, x, y, selector: args.selector ?? null };
+    return { hovered: true, x, y, selector: parsed.kind === "selector" ? parsed.selector : null };
   },
 
   // Screencast — start/stop a CDP screencast stream. Frames are buffered

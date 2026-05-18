@@ -9,6 +9,12 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.12": [
+    "Protocol-owned tool arg parsers (code-quality-hardening Risk 1). New @chrome-relay/protocol exports: `parseChromeNavigateArgs`, `parseChromeHoverArgs`, `parseChromeNetworkArgs`. Each is the single source of truth for what its tool accepts — CLI and extension consume the same parser so silent shape drift can't happen.",
+    "Pattern established with 3 representative tools (navigate, hover, network — the doc-followup explicitly named these). Remaining 19 tools are mechanical follow-up (~20 lines + tests each). Each parser throws `RelayError(invalid_arguments)` with field/received/validChoices in details.",
+    "chrome_hover handler refactored to use the new parser end-to-end. Hover args now collapse into a discriminated union (`{kind:'selector', selector}` | `{kind:'coords', x, y}`) so the handler branches without re-doing the typeof dance.",
+    "19 new tests in packages/protocol/test/args.test.ts. Total now 397."
+  ],
   "0.5.11": [
     "Tests-only: 6 new edge-case tests for `chrome-relay update`. Covers --dry-run, install failure, install-success-but-binary-version-unchanged (PATH mismatch / stale shim), install-success-but-which-fails, install-success-but-release-notes-parse-fails, and the happy path. Locks in the structured-metadata contract from 0.5.7.",
     "Total tests now 378 (was 372)."
