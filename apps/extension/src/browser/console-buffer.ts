@@ -22,8 +22,10 @@ export interface ConsoleEntry {
   stack?: string;             // exception stack (truncated)
 }
 
-const PER_TAB_MAX = 200;          // entries in the ring
-const PER_TAB_MAX_BYTES = 256 * 1024;  // hard memory ceiling
+// Pulled from @chrome-relay/protocol so docs + tests + this file can't drift.
+import { CONSOLE_BUFFER_MAX_ENTRIES, CONSOLE_BUFFER_MAX_BYTES } from "@chrome-relay/protocol";
+const PER_TAB_MAX = CONSOLE_BUFFER_MAX_ENTRIES;
+const PER_TAB_MAX_BYTES = CONSOLE_BUFFER_MAX_BYTES;
 
 interface TabBuffer {
   entries: ConsoleEntry[];

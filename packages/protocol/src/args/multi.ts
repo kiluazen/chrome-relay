@@ -4,8 +4,11 @@
 import { RelayError, TOOL_NAMES } from "./../index";
 import {
   asObject,
+  coerceTabId,
   optBool,
+  optNonNegativeNumber,
   optNumber,
+  optPositiveNumber,
   optString,
   parseTargetArgs,
   requireString,
@@ -172,24 +175,12 @@ export type ChromeGroupArgs =
   | { action: "remove"; tabIds: number[] };
 
 function parseTabIds(raw: unknown): number[] {
-  const reject = (bad: unknown): never => {
-    throw new RelayError({
-      code: "invalid_arguments",
-      message: `${TOOL_NAMES.GROUP}: invalid tabId ${JSON.stringify(bad)}. Expected a number or a comma-separated list of numbers.`,
-      tool: TOOL_NAMES.GROUP,
-      phase: "parse_tab_ids",
-      details: { received: bad },
-      retryable: false
-    });
-  };
-  const coerce = (v: unknown): number => {
-    const n = Number(typeof v === "string" ? v.trim() : v);
-    if (!Number.isFinite(n)) reject(v);
-    return n;
-  };
-  if (Array.isArray(raw)) return raw.map(coerce);
-  if (typeof raw === "string") return raw.split(",").map(coerce);
-  if (typeof raw === "number") return [raw];
+  // coerceTabId rejects blank/whitespace strings — `Number("") === 0`
+  // would otherwise silently make `--tabs "1,,3"` mean `[1, 0, 3]` (tab
+  // id 0 = "first tab in this window"; agent definitely did not mean that).
+  if (Array.isArray(raw)) return raw.map((v) => coerceTabId(v, TOOL_NAMES.GROUP));
+  if (typeof raw === "string") return raw.split(",").map((s) => coerceTabId(s, TOOL_NAMES.GROUP));
+  if (typeof raw === "number") return [coerceTabId(raw, TOOL_NAMES.GROUP)];
   return [];
 }
 
@@ -321,9 +312,24 @@ export function parseChromeScreencastArgs(input: unknown): ChromeScreencastArgs 
     }
     out.format = obj.format;
   }
-  const q  = optNumber(obj, "quality");       if (q !== undefined)  out.quality = q;
-  const mw = optNumber(obj, "maxWidth");      if (mw !== undefined) out.maxWidth = mw;
-  const mh = optNumber(obj, "maxHeight");     if (mh !== undefined) out.maxHeight = mh;
-  const en = optNumber(obj, "everyNthFrame"); if (en !== undefined) out.everyNthFrame = en;
+  // quality is 0-100 (percent); the others must be > 0 to make any sense.
+  // Out-of-range values fail with invalid_arguments instead of being silently
+  // passed through to CDP (which would have its own opaque failures).
+  const q  = optNonNegativeNumber(obj, "quality", TOOL_NAMES.SCREENCAST);
+  if (q !== undefined) {
+    if (q > 100) {
+      throw new RelayError({
+        code: "invalid_arguments",
+        message: `${TOOL_NAMES.SCREENCAST}: quality must be 0-100 (got ${q}).`,
+        tool: TOOL_NAMES.SCREENCAST, phase: "parse_arguments",
+        details: { field: "quality", received: q, range: [0, 100] },
+        retryable: false
+      });
+    }
+    out.quality = q;
+  }
+  const mw = optPositiveNumber(obj, "maxWidth", TOOL_NAMES.SCREENCAST);      if (mw !== undefined) out.maxWidth = mw;
+  const mh = optPositiveNumber(obj, "maxHeight", TOOL_NAMES.SCREENCAST);     if (mh !== undefined) out.maxHeight = mh;
+  const en = optPositiveNumber(obj, "everyNthFrame", TOOL_NAMES.SCREENCAST); if (en !== undefined) out.everyNthFrame = en;
   return out;
 }

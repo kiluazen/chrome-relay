@@ -13,10 +13,11 @@
 //
 // WebSocket / SSE frames are explicitly out of scope (design call #3).
 
+import { NETWORK_BUFFER_MAX_ENTRIES, NETWORK_BUFFER_MAX_BYTES } from "@chrome-relay/protocol";
 import { ensureAttached, send } from "./cdp";
 
-const PER_TAB_MAX = 200;             // entries in the ring
-const PER_TAB_MAX_BYTES = 512 * 1024; // metadata only — bodies aren't stored
+const PER_TAB_MAX = NETWORK_BUFFER_MAX_ENTRIES;
+const PER_TAB_MAX_BYTES = NETWORK_BUFFER_MAX_BYTES;
 
 export interface NetworkEntry {
   id: string;                  // requestId from CDP, used to fetch body on demand

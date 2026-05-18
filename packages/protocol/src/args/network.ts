@@ -6,7 +6,7 @@
 // the handler used to do per-action, AND removes the silent-default risk
 // (`action` defaulting to "read" on a typo).
 import { RelayError, TOOL_NAMES } from "./../index";
-import { asObject, optString, optNumber, optBool, parseTargetArgs, type TargetArgs } from "./shared";
+import { asObject, optString, optNumber, optBool, optPositiveNumber, parseTargetArgs, type TargetArgs } from "./shared";
 
 export type NetworkStatusBucket = "ok" | "redirect" | "client_error" | "server_error" | "failed";
 const VALID_STATUSES: readonly NetworkStatusBucket[] = ["ok", "redirect", "client_error", "server_error", "failed"];
@@ -71,7 +71,9 @@ export function parseChromeNetworkArgs(input: unknown): ChromeNetworkArgs {
       ...target, action: "body", requestId
     };
     const full = optBool(obj, "full"); if (full !== undefined) out.full = full;
-    const head = optNumber(obj, "head"); if (head !== undefined) out.head = head;
+    // head is a byte-truncation length — must be > 0. `--head -1` reaching
+    // body.slice(0, -1) would silently return all-but-the-last-byte.
+    const head = optPositiveNumber(obj, "head", TOOL_NAMES.NETWORK); if (head !== undefined) out.head = head;
     return out;
   }
   if (action === "har") {

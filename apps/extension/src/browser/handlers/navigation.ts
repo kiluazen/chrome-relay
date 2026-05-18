@@ -5,6 +5,7 @@ import {
   parseChromeCloseTabsArgs,
   parseChromeNavigateArgs,
   parseChromeSwitchTabArgs,
+  parseGetWindowsAndTabsArgs,
   RelayError,
   TOOL_NAMES
 } from "@chrome-relay/protocol";
@@ -14,7 +15,8 @@ import { resolveWorkspaceTarget } from "../workspaces";
 import { resolveTarget, requireTabId, type ToolHandler } from "./target";
 
 export const navigationHandlers: Partial<Record<string, ToolHandler>> = {
-  async [TOOL_NAMES.GET_WINDOWS_AND_TABS]() {
+  async [TOOL_NAMES.GET_WINDOWS_AND_TABS](args) {
+    parseGetWindowsAndTabsArgs(args);
     const windows = await chrome.windows.getAll({ populate: true });
     return {
       windowCount: windows.length,

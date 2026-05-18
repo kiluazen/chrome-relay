@@ -2,6 +2,7 @@
 //   CLICK, FILL, KEYBOARD, TYPE, EVALUATE
 
 import {
+  DEFAULT_EVAL_TIMEOUT_MS,
   parseChromeClickArgs,
   parseChromeFillArgs,
   parseChromeKeyboardArgs,
@@ -86,7 +87,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
     const parsed = parseChromeEvaluateArgs(args);
     const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
-    const timeout = parsed.timeoutMs ?? 15_000;
+    const timeout = parsed.timeoutMs ?? DEFAULT_EVAL_TIMEOUT_MS;
     const expression = `(async () => { ${parsed.code} })()`;
 
     const result = await evalExpression(tabId, expression, {

@@ -20,6 +20,7 @@ import {
   parseChromeScreenshotArgs,
   parseChromeViewportArgs,
   parseChromeConsoleArgs,
+  parseChromeNetworkArgs,
   parseChromeWorkspaceArgs,
   parseChromeGroupArgs,
   parseChromeScreencastArgs
@@ -98,6 +99,19 @@ describe("simple-tool parsers", () => {
     expect(parseChromeCloseTabsArgs({ tabIds: ["1", "2"] })).toEqual({ tabIds: [1, 2] });
   });
 
+  // Post-0.5.15: blank-string / whitespace-only tab IDs reject instead of
+  // silently coercing to 0 (Number("") === 0 → would target tab 0).
+  it("close_tabs: rejects empty + whitespace-only string ids (was silent 0)", () => {
+    expectInvalid(() => parseChromeCloseTabsArgs({ tabIds: [""] }));
+    expectInvalid(() => parseChromeCloseTabsArgs({ tabIds: [" "] }));
+    expectInvalid(() => parseChromeCloseTabsArgs({ tabIds: [1, "", 3] }));
+  });
+
+  it("switch_tab: rejects empty + whitespace-only string ids", () => {
+    expectInvalid(() => parseChromeSwitchTabArgs({ tabId: "" }));
+    expectInvalid(() => parseChromeSwitchTabArgs({ tabId: " " }));
+  });
+
   it("ax: all fields optional", () => {
     expect(parseChromeAxArgs({})).toEqual({});
     expect(parseChromeAxArgs({ interactiveOnly: true, rootRole: "main", includeSubframes: true, tabId: 1 }))
@@ -120,6 +134,25 @@ describe("simple-tool parsers", () => {
     expect(r).toEqual({
       fullPage: true, bbox: "0,0,100,100", selector: ".x", padding: 8, maxEdge: 1024, tabId: 1
     });
+  });
+
+  // Post-0.5.15: ranged numeric fields reject out-of-range values instead
+  // of silently dropping them (maxEdge <= 0) or letting them pass through
+  // to CDP/handler logic with nonsense semantics.
+  it("screenshot: maxEdge <= 0 rejects (was silently ignored)", () => {
+    expectInvalid(() => parseChromeScreenshotArgs({ maxEdge: 0 }));
+    expectInvalid(() => parseChromeScreenshotArgs({ maxEdge: -1 }));
+  });
+
+  it("screenshot: padding < 0 rejects", () => {
+    expectInvalid(() => parseChromeScreenshotArgs({ padding: -5 }));
+    // padding === 0 is valid (no pad)
+    expect(parseChromeScreenshotArgs({ padding: 0 })).toEqual({ padding: 0 });
+  });
+
+  it("evaluate: timeoutMs <= 0 rejects (no-op timeout makes no sense)", () => {
+    expectInvalid(() => parseChromeEvaluateArgs({ code: "return 1", timeoutMs: 0 }));
+    expectInvalid(() => parseChromeEvaluateArgs({ code: "return 1", timeoutMs: -100 }));
   });
 });
 
@@ -253,5 +286,35 @@ describe("multi-action parsers — screencast", () => {
 
   it("rejects unknown action", () => {
     expectInvalid(() => parseChromeScreencastArgs({ action: "pause" }));
+  });
+
+  // Post-0.5.15: range validation.
+  it("rejects quality outside 0-100", () => {
+    expectInvalid(() => parseChromeScreencastArgs({ quality: -1 }));
+    expectInvalid(() => parseChromeScreencastArgs({ quality: 101 }));
+    expect((parseChromeScreencastArgs({ quality: 0 }) as { quality: number }).quality).toBe(0);
+    expect((parseChromeScreencastArgs({ quality: 100 }) as { quality: number }).quality).toBe(100);
+  });
+
+  it("rejects non-positive maxWidth/maxHeight/everyNthFrame", () => {
+    expectInvalid(() => parseChromeScreencastArgs({ maxWidth: 0 }));
+    expectInvalid(() => parseChromeScreencastArgs({ maxHeight: -1 }));
+    expectInvalid(() => parseChromeScreencastArgs({ everyNthFrame: 0 }));
+  });
+});
+
+describe("network body: head range validation", () => {
+  it("rejects head <= 0 (negative slice silently returned wrong bytes)", () => {
+    expectInvalid(() => parseChromeNetworkArgs({ action: "body", requestId: "r1", head: 0 }));
+    expectInvalid(() => parseChromeNetworkArgs({ action: "body", requestId: "r1", head: -1 }));
+  });
+});
+
+describe("group: --tabs blank-string rejection", () => {
+  it("rejects empty/whitespace string elements (was silent tab 0)", () => {
+    expectInvalid(() => parseChromeGroupArgs({ action: "create", name: "g", tabIds: "1,,3" }));
+    expectInvalid(() => parseChromeGroupArgs({ action: "create", name: "g", tabIds: "1, ,3" }));
+    expectInvalid(() => parseChromeGroupArgs({ action: "add", name: "g", tabIds: [""] }));
+    expectInvalid(() => parseChromeGroupArgs({ action: "remove", tabIds: ["1", "", "3"] }));
   });
 });

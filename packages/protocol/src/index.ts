@@ -1,5 +1,7 @@
 // Re-export the tool-arg parser surface (code-quality-hardening PR 12).
 export * from "./args/index";
+// Re-export shared numeric limits + defaults.
+export * from "./limits";
 
 export const NATIVE_HOST_NAME = "dev.chrome_relay.native_host";
 export const DEFAULT_HTTP_PORT = 12122;

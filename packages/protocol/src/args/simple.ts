@@ -7,8 +7,11 @@
 import { RelayError, TOOL_NAMES } from "./../index";
 import {
   asObject,
+  coerceTabId,
   optBool,
   optNumber,
+  optNonNegativeNumber,
+  optPositiveNumber,
   optString,
   parseTargetArgs,
   requireString,
@@ -16,13 +19,24 @@ import {
 } from "./shared";
 
 // ---------------------------------------------------------------------------
-// get_windows_and_tabs / chrome_self_reload — no args at all. The parsers
-// still exist so the contract is explicit (and to short-circuit any
-// "your args were ignored" debugging confusion).
+// get_windows_and_tabs / chrome_self_reload — no args at all.
+//
+// Permissive on purpose: callers may forward extra fields they don't know
+// about (e.g. a future agent shim that always passes `tabId`). We just
+// drop them. The parser exists so handlers can `parseFooArgs(args)` at
+// the top consistently with every other tool — no special "no-args" path.
 
 export interface NoArgs {}
-export function parseGetWindowsAndTabsArgs(_input: unknown): NoArgs { return {}; }
-export function parseChromeSelfReloadArgs(_input: unknown): NoArgs { return {}; }
+export function parseGetWindowsAndTabsArgs(input: unknown): NoArgs {
+  // Validate it's at least an object (rejects strings/arrays/null). Extra
+  // keys are silently ignored — see comment above.
+  if (input !== undefined && input !== null) asObject(input, TOOL_NAMES.GET_WINDOWS_AND_TABS);
+  return {};
+}
+export function parseChromeSelfReloadArgs(input: unknown): NoArgs {
+  if (input !== undefined && input !== null) asObject(input, TOOL_NAMES.SELF_RELOAD);
+  return {};
+}
 
 // ---------------------------------------------------------------------------
 // chrome_read_page
@@ -123,9 +137,9 @@ export function parseChromeEvaluateArgs(input: unknown): ChromeEvaluateArgs {
   const obj = asObject(input, TOOL_NAMES.EVALUATE);
   const out: ChromeEvaluateArgs = {
     code: requireString(obj, "code", TOOL_NAMES.EVALUATE),
-    ...parseTargetArgs(obj)
+    ...parseTargetArgs(obj, TOOL_NAMES.EVALUATE)
   };
-  const t = optNumber(obj, "timeoutMs");
+  const t = optPositiveNumber(obj, "timeoutMs", TOOL_NAMES.EVALUATE);
   if (t !== undefined) out.timeoutMs = t;
   return out;
 }
@@ -138,18 +152,16 @@ export interface ChromeSwitchTabArgs {
 }
 export function parseChromeSwitchTabArgs(input: unknown): ChromeSwitchTabArgs {
   const obj = asObject(input, TOOL_NAMES.SWITCH_TAB);
-  const tabId = Number(obj.tabId);
-  if (!Number.isFinite(tabId)) {
+  if (obj.tabId === undefined || obj.tabId === null) {
     throw new RelayError({
       code: "invalid_arguments",
       message: `${TOOL_NAMES.SWITCH_TAB} requires a numeric tabId.`,
       tool: TOOL_NAMES.SWITCH_TAB,
       phase: "parse_arguments",
-      details: { received: obj.tabId },
       retryable: false
     });
   }
-  return { tabId };
+  return { tabId: coerceTabId(obj.tabId, TOOL_NAMES.SWITCH_TAB) };
 }
 
 // ---------------------------------------------------------------------------
@@ -170,18 +182,19 @@ export function parseChromeCloseTabsArgs(input: unknown): ChromeCloseTabsArgs {
       retryable: false
     });
   }
-  const tabIds = obj.tabIds.map((v) => Number(v));
-  if (tabIds.length === 0 || tabIds.some((n) => !Number.isFinite(n))) {
+  if (obj.tabIds.length === 0) {
     throw new RelayError({
       code: "invalid_arguments",
-      message: `${TOOL_NAMES.CLOSE_TABS} requires a non-empty array of numeric tab IDs.`,
+      message: `${TOOL_NAMES.CLOSE_TABS} requires a non-empty array of tab IDs.`,
       tool: TOOL_NAMES.CLOSE_TABS,
       phase: "parse_arguments",
       details: { received: obj.tabIds },
       retryable: false
     });
   }
-  return { tabIds };
+  // coerceTabId rejects blank/whitespace strings (Number("") === 0 would
+  // otherwise silently coerce to tab 0).
+  return { tabIds: obj.tabIds.map((v) => coerceTabId(v, TOOL_NAMES.CLOSE_TABS)) };
 }
 
 // ---------------------------------------------------------------------------
@@ -235,11 +248,14 @@ export interface ChromeScreenshotArgs extends TargetArgs {
 }
 export function parseChromeScreenshotArgs(input: unknown): ChromeScreenshotArgs {
   const obj = asObject(input, TOOL_NAMES.SCREENSHOT);
-  const out: ChromeScreenshotArgs = { ...parseTargetArgs(obj) };
-  const fp = optBool(obj, "fullPage"); if (fp !== undefined) out.fullPage = fp;
-  const bbox = optString(obj, "bbox"); if (bbox) out.bbox = bbox;
-  const sel  = optString(obj, "selector"); if (sel) out.selector = sel;
-  const pad  = optNumber(obj, "padding"); if (pad !== undefined) out.padding = pad;
-  const me   = optNumber(obj, "maxEdge"); if (me !== undefined && me > 0) out.maxEdge = me;
+  const out: ChromeScreenshotArgs = { ...parseTargetArgs(obj, TOOL_NAMES.SCREENSHOT) };
+  const fp = optBool(obj, "fullPage", TOOL_NAMES.SCREENSHOT); if (fp !== undefined) out.fullPage = fp;
+  const bbox = optString(obj, "bbox", TOOL_NAMES.SCREENSHOT); if (bbox) out.bbox = bbox;
+  const sel  = optString(obj, "selector", TOOL_NAMES.SCREENSHOT); if (sel) out.selector = sel;
+  // padding can legitimately be 0 (no pad); maxEdge must be > 0 (a 0-edge
+  // image is meaningless, and the old "if > 0" silent-drop was the kind of
+  // permissive behavior strict parsers exist to prevent).
+  const pad  = optNonNegativeNumber(obj, "padding", TOOL_NAMES.SCREENSHOT); if (pad !== undefined) out.padding = pad;
+  const me   = optPositiveNumber(obj, "maxEdge", TOOL_NAMES.SCREENSHOT); if (me !== undefined) out.maxEdge = me;
   return out;
 }

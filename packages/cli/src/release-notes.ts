@@ -9,6 +9,14 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.15": [
+    "Tab-id coercion is now strict against blank strings. `--tabs '1,,3'` (or `[\"\"]`, or `[' ']`) used to silently become `[1, 0, 3]` because Number('') === 0 — and tab 0 is a real Chrome target. Now throws RelayError(invalid_arguments). Affects chrome_group create/add/remove, chrome_switch_tab, chrome_close_tabs.",
+    "Numeric range validation added across the parsers. `optPositiveNumber` (> 0) and `optNonNegativeNumber` (>= 0) helpers reject out-of-range values at the parser boundary instead of letting nonsense through to CDP / handler logic. Affects: chrome_evaluate timeoutMs, chrome_screenshot maxEdge + padding, chrome_screencast quality/maxWidth/maxHeight/everyNthFrame, chrome_network body head.",
+    "chrome_screenshot maxEdge <= 0 now throws instead of being silently ignored (was the one remaining `if (x > 0)` silent-drop in the parsers).",
+    "No-args parser comment + behavior aligned. parseGetWindowsAndTabsArgs / parseChromeSelfReloadArgs validate the input is at least an object (rejects strings/arrays) but accept any extra fields. Both handlers now call their parser at the top for consistency with every other tool.",
+    "New @chrome-relay/protocol exports: shared numeric limits in `packages/protocol/src/limits.ts`. Constants (DEFAULT_TOOL_CALL_TIMEOUT_MS, DEFAULT_EVAL_TIMEOUT_MS, DEFAULT_BODY_PREVIEW_BYTES, NETWORK_BUFFER_MAX_ENTRIES/BYTES, CONSOLE_BUFFER_MAX_ENTRIES/BYTES, etc.) now flow from one source — bridge.ts, console-buffer.ts, network-buffer.ts, and the network/evaluate handlers all import. Future doc/help drift is structurally prevented.",
+    "Tests: +9 in args-all.test.ts covering blank-string rejection, range validation across screenshot/evaluate/screencast/network. Total 416 (was 407)."
+  ],
   "0.5.14": [
     "Optional parser fields are now strict — passing a present-but-wrong-type value (e.g. `{newTab: 'yes'}` instead of `true`) throws RelayError(invalid_arguments) instead of silently being dropped. undefined/null still means 'caller omitted the field' and the handler uses its default.",
     "parseTargetArgs is strict too: `{tabId: '5'}` rejects (numeric tabId required). Navigate is the one exception — it coerces string tabId for back-compat since it's used as a 'reference window' rather than a strict target.",

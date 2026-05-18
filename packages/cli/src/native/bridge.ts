@@ -8,7 +8,12 @@ import type {
   ToolName,
   ToolResultMessage
 } from "@chrome-relay/protocol";
-import { RelayError } from "@chrome-relay/protocol";
+import {
+  DEFAULT_PING_TIMEOUT_MS,
+  DEFAULT_READY_TIMEOUT_MS,
+  DEFAULT_TOOL_CALL_TIMEOUT_MS,
+  RelayError
+} from "@chrome-relay/protocol";
 
 type PendingRequest = {
   resolve: (value: unknown) => void;
@@ -86,7 +91,7 @@ export class ExtensionBridge {
     }
   }
 
-  async waitUntilReady(timeoutMs = 15_000): Promise<void> {
+  async waitUntilReady(timeoutMs = DEFAULT_READY_TIMEOUT_MS): Promise<void> {
     if (this.ready) {
       return;
     }
@@ -106,7 +111,7 @@ export class ExtensionBridge {
     });
   }
 
-  async ping(timeoutMs = 2_000): Promise<boolean> {
+  async ping(timeoutMs = DEFAULT_PING_TIMEOUT_MS): Promise<boolean> {
     const id = randomUUID();
     const message: BridgePingMessage = { type: "bridge.ping", id };
 
@@ -126,7 +131,7 @@ export class ExtensionBridge {
     });
   }
 
-  async callTool(name: ToolName, args: ToolArguments, timeoutMs = 30_000): Promise<unknown> {
+  async callTool(name: ToolName, args: ToolArguments, timeoutMs = DEFAULT_TOOL_CALL_TIMEOUT_MS): Promise<unknown> {
     await this.waitUntilReady();
 
     const id = randomUUID();

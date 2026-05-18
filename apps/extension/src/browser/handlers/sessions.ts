@@ -2,9 +2,11 @@
 //   VIEWPORT, SELF_RELOAD, WORKSPACE, GROUP, CONSOLE, NETWORK
 
 import {
+  DEFAULT_BODY_PREVIEW_BYTES,
   parseChromeConsoleArgs,
   parseChromeGroupArgs,
   parseChromeNetworkArgs,
+  parseChromeSelfReloadArgs,
   parseChromeViewportArgs,
   parseChromeWorkspaceArgs,
   RelayError,
@@ -131,7 +133,8 @@ export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
   // chrome:// pages: we can't drive the "reload" button on
   // chrome://extensions via debugger.attach, but the extension can
   // self-reload from inside.
-  async [TOOL_NAMES.SELF_RELOAD]() {
+  async [TOOL_NAMES.SELF_RELOAD](args) {
+    parseChromeSelfReloadArgs(args);
     // Defer slightly so this tool call's response makes it back to the
     // bridge before the SW dies. 100ms is plenty in practice.
     setTimeout(() => chrome.runtime.reload(), 100);
@@ -207,7 +210,7 @@ export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
     if (parsed.action === "body") {
       const result = await getBody(tabId, parsed.requestId);
       const full = parsed.full === true;
-      const head = parsed.head ?? (full ? Infinity : 8 * 1024);
+      const head = parsed.head ?? (full ? Infinity : DEFAULT_BODY_PREVIEW_BYTES);
       const truncated = result.body.length > head;
       return {
         body: truncated ? result.body.slice(0, head) : result.body,

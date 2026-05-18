@@ -1,6 +1,6 @@
 {
   "name": "chrome-relay",
-  "version": "0.5.14",
+  "version": "0.5.15",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

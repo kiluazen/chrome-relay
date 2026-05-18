@@ -78,6 +78,93 @@ export function optNumber(obj: Record<string, unknown>, key: string, tool?: Tool
   return v;
 }
 
+// Range-checked numeric helpers. Both throw RelayError(invalid_arguments)
+// when present-but-out-of-range. undefined/null still means "omitted."
+//
+// Why two variants: `positive` (> 0) for things like dimensions, timeouts,
+// and frame counts where zero makes no sense. `nonNegative` (>= 0) for
+// things like quality % or byte-truncation offsets where zero IS valid.
+export function optPositiveNumber(obj: Record<string, unknown>, key: string, tool?: ToolName): number | undefined {
+  const v = optNumber(obj, key, tool);
+  if (v === undefined) return undefined;
+  if (v <= 0) {
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: `${tool ?? "<unknown tool>"}: \`${key}\` must be > 0 (got ${v}).`,
+      tool,
+      phase: "parse_arguments",
+      details: { field: key, expected: "> 0", received: v },
+      retryable: false
+    });
+  }
+  return v;
+}
+
+export function optNonNegativeNumber(obj: Record<string, unknown>, key: string, tool?: ToolName): number | undefined {
+  const v = optNumber(obj, key, tool);
+  if (v === undefined) return undefined;
+  if (v < 0) {
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: `${tool ?? "<unknown tool>"}: \`${key}\` must be >= 0 (got ${v}).`,
+      tool,
+      phase: "parse_arguments",
+      details: { field: key, expected: ">= 0", received: v },
+      retryable: false
+    });
+  }
+  return v;
+}
+
+// Coerce a raw cell to a tab id. Used by parsers that accept either a
+// number, a number[], or a comma-separated string. Empty / whitespace-only
+// strings reject (Number("") === 0 would otherwise silently become tab 0,
+// which means "first tab" in Chrome — wrong by a mile).
+export function coerceTabId(raw: unknown, tool: ToolName): number {
+  if (typeof raw === "number") {
+    if (!Number.isFinite(raw)) {
+      throw new RelayError({
+        code: "invalid_arguments",
+        message: `${tool}: invalid tabId ${JSON.stringify(raw)}. Expected a finite number.`,
+        tool, phase: "parse_arguments",
+        details: { received: raw },
+        retryable: false
+      });
+    }
+    return raw;
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      throw new RelayError({
+        code: "invalid_arguments",
+        message: `${tool}: invalid tabId ${JSON.stringify(raw)}. Expected a number; got a blank string.`,
+        tool, phase: "parse_arguments",
+        details: { received: raw },
+        retryable: false
+      });
+    }
+    const n = Number(trimmed);
+    if (!Number.isFinite(n)) {
+      throw new RelayError({
+        code: "invalid_arguments",
+        message: `${tool}: invalid tabId ${JSON.stringify(raw)}. Expected a numeric string.`,
+        tool, phase: "parse_arguments",
+        details: { received: raw },
+        retryable: false
+      });
+    }
+    return n;
+  }
+  throw new RelayError({
+    code: "invalid_arguments",
+    message: `${tool}: invalid tabId ${JSON.stringify(raw)}. Expected a number or numeric string.`,
+    tool, phase: "parse_arguments",
+    details: { received: raw },
+    retryable: false
+  });
+}
+
 export function optBool(obj: Record<string, unknown>, key: string, tool?: ToolName): boolean | undefined {
   const v = obj[key];
   if (v === undefined || v === null) return undefined;
