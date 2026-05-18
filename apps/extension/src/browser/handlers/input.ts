@@ -5,13 +5,13 @@ import { TOOL_NAMES } from "@chrome-relay/protocol";
 import { evalExpression, evalInTab, send } from "../cdp";
 import { pressKey } from "../keyboard";
 import { fillElement, focusSelector, locateForClick } from "../page-actions";
-import { resolveTarget, requireTabId, type ToolHandler } from "./target";
+import { resolveTarget, requireTabId, invalidArg, type ToolHandler } from "./target";
 
 export const inputHandlers: Partial<Record<string, ToolHandler>> = {
   async [TOOL_NAMES.CLICK](args) {
     const selector = typeof args.selector === "string" ? args.selector : "";
     if (!selector) {
-      throw new Error("chrome_click_element requires a selector.");
+      invalidArg(TOOL_NAMES.CLICK, "chrome_click_element requires a selector.");
     }
 
     const tab = await resolveTarget(args);
@@ -53,7 +53,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
     const selector = typeof args.selector === "string" ? args.selector : "";
     const value = typeof args.value === "string" ? args.value : "";
     if (!selector) {
-      throw new Error("chrome_fill_or_select requires a selector.");
+      invalidArg(TOOL_NAMES.FILL, "chrome_fill_or_select requires a selector.");
     }
 
     const tab = await resolveTarget(args);
@@ -63,7 +63,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
   async [TOOL_NAMES.KEYBOARD](args) {
     const keys = typeof args.keys === "string" ? args.keys : "";
     if (!keys) {
-      throw new Error("chrome_keyboard requires keys.");
+      invalidArg(TOOL_NAMES.KEYBOARD, "chrome_keyboard requires keys.");
     }
 
     const tab = await resolveTarget(args);
@@ -75,7 +75,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
   async [TOOL_NAMES.TYPE](args) {
     const text = typeof args.text === "string" ? args.text : "";
     if (!text) {
-      throw new Error("chrome_type requires text.");
+      invalidArg(TOOL_NAMES.TYPE, "chrome_type requires text.");
     }
 
     const tab = await resolveTarget(args);
@@ -95,7 +95,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
   async [TOOL_NAMES.EVALUATE](args) {
     const code = typeof args.code === "string" ? args.code : "";
     if (!code) {
-      throw new Error("chrome_evaluate requires code.");
+      invalidArg(TOOL_NAMES.EVALUATE, "chrome_evaluate requires code.");
     }
 
     const tab = await resolveTarget(args);

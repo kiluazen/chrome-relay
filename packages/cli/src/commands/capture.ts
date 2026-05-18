@@ -185,10 +185,11 @@ Notes:
       .command("stop")
       .description("Stop the screencast and emit frames (or write to disk).")
       .option("-o, --out <dir>", "write frames as JPEGs into this directory (created if missing)")
-      .option("--gif",            "after writing frames, ffmpeg them into <dir>.gif")
-      .option("--mp4",            "after writing frames, ffmpeg them into <dir>.mp4")
+      .option("--gif",            "after writing frames, ffmpeg them into <dir>.gif (requires ffmpeg on PATH)")
+      .option("--mp4",            "after writing frames, ffmpeg them into <dir>.mp4 (requires ffmpeg on PATH)")
       .option("--fps <n>",        "assumed framerate when invoking ffmpeg (default 15)", (v) => Number(v))
       .option("--no-dedupe",      "keep raw frames; default collapses consecutive identical frames via SHA-256")
+      .option("--allow-missing-ffmpeg", "with --gif/--mp4: skip ffmpeg step (and emit a warning) if ffmpeg isn't on PATH, instead of failing with external_dependency_missing")
   ).action(async (opts) => {
     const args: Record<string, unknown> = { action: "stop" };
     Object.assign(args, baseArgs(opts));
@@ -253,8 +254,26 @@ Notes:
         const { spawnSync } = await import("node:child_process");
         const which = spawnSync("which", ["ffmpeg"]);
         if (which.status !== 0) {
-          process.stderr.write("[chrome-relay] ffmpeg not on PATH — skipping --gif/--mp4.\n");
-          return;
+          // Code-quality-hardening PR 10: explicit external_dependency_missing.
+          // Old behavior printed "skipping" and returned exit 0 — agents
+          // saw success even though the GIF didn't exist. Now we fail
+          // unless --allow-missing-ffmpeg.
+          if (opts.allowMissingFfmpeg) {
+            process.stderr.write("[chrome-relay] ffmpeg not on PATH — skipping --gif/--mp4 (allow-missing-ffmpeg).\n");
+            return;
+          }
+          const { RelayError } = await import("@chrome-relay/protocol");
+          const err = new RelayError({
+            code: "external_dependency_missing",
+            message: "chrome-relay screencast stop --gif/--mp4 requires ffmpeg on PATH. Install ffmpeg (brew install ffmpeg) or pass --allow-missing-ffmpeg to skip the stitch step with a warning.",
+            tool: "chrome_screencast",
+            phase: "ffmpeg_stitch",
+            details: { dependency: "ffmpeg", outputs: { gif: !!opts.gif, mp4: !!opts.mp4 } },
+            retryable: false
+          });
+          process.stderr.write(err.message + "\n");
+          process.stderr.write(JSON.stringify({ relayError: err.toBridgeError() }, null, 2) + "\n");
+          process.exit(1);
         }
         if (opts.gif) {
           const gifOut = `${opts.out.replace(/\/$/, "")}.gif`;

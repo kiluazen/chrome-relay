@@ -34,7 +34,7 @@ import {
   parseLevels,
   parseNetworkStatus
 } from "../parsers";
-import { resolveTarget, requireTabId, type ToolHandler } from "./target";
+import { resolveTarget, requireTabId, invalidArg, type ToolHandler } from "./target";
 
 export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
   // §2.2 — viewport emulation. Single tool with three actions:
@@ -65,7 +65,12 @@ export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
     if (action === "preset") {
       const name = typeof args.name === "string" ? args.name : "";
       if (!isPresetName(name)) {
-        throw new Error(`Unknown preset "${name}". Available: ${listPresets().join(", ")}`);
+        invalidArg(
+          TOOL_NAMES.VIEWPORT,
+          `Unknown preset "${name}". Available: ${listPresets().join(", ")}`,
+          "parse_preset_name",
+          { received: name, validChoices: listPresets() }
+        );
       }
       spec = VIEWPORT_PRESETS[name];
       presetName = name;
@@ -73,7 +78,12 @@ export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
       const width  = Number(args.width);
       const height = Number(args.height);
       if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-        throw new Error("chrome_viewport set requires positive numeric width and height.");
+        invalidArg(
+          TOOL_NAMES.VIEWPORT,
+          "chrome_viewport set requires positive numeric width and height.",
+          "parse_dimensions",
+          { received: { width: args.width, height: args.height } }
+        );
       }
       spec = {
         width,
@@ -150,7 +160,7 @@ export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
     const action = typeof args.action === "string" ? args.action : "list";
     if (action === "create") {
       const name = typeof args.name === "string" ? args.name : "";
-      if (!name) throw new Error("chrome_workspace create requires a name.");
+      if (!name) invalidArg(TOOL_NAMES.WORKSPACE, "chrome_workspace create requires a name.");
       const url = typeof args.url === "string" ? args.url : undefined;
       const label = typeof args.label === "string" ? args.label : undefined;
       return createWorkspace(name, { url, label });
@@ -161,7 +171,7 @@ export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
     }
     if (action === "close") {
       const name = typeof args.name === "string" ? args.name : "";
-      if (!name) throw new Error("chrome_workspace close requires a name.");
+      if (!name) invalidArg(TOOL_NAMES.WORKSPACE, "chrome_workspace close requires a name.");
       return closeWorkspace(name);
     }
     throw new RelayError({
@@ -181,10 +191,10 @@ export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
 
     if (action === "create") {
       const name = typeof args.name === "string" ? args.name : "";
-      if (!name) throw new Error("chrome_group create requires a name.");
+      if (!name) invalidArg(TOOL_NAMES.GROUP, "chrome_group create requires a name.");
       const tabIds = parseTabIds(args.tabIds);
       if (tabIds.length === 0) {
-        throw new Error("chrome_group create requires at least one tabId (--tabs 1,2,3).");
+        invalidArg(TOOL_NAMES.GROUP, "chrome_group create requires at least one tabId (--tabs 1,2,3).");
       }
       const color = parseTabGroupColor(args.color);
       const collapsed = typeof args.collapsed === "boolean" ? args.collapsed : undefined;
@@ -197,19 +207,19 @@ export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
     }
     if (action === "close") {
       const name = typeof args.name === "string" ? args.name : "";
-      if (!name) throw new Error("chrome_group close requires a name.");
+      if (!name) invalidArg(TOOL_NAMES.GROUP, "chrome_group close requires a name.");
       return closeTabGroup(name);
     }
     if (action === "add") {
       const name = typeof args.name === "string" ? args.name : "";
-      if (!name) throw new Error("chrome_group add requires a name.");
+      if (!name) invalidArg(TOOL_NAMES.GROUP, "chrome_group add requires a name.");
       const tabIds = parseTabIds(args.tabIds);
-      if (tabIds.length === 0) throw new Error("chrome_group add requires --tabs <ids>.");
+      if (tabIds.length === 0) invalidArg(TOOL_NAMES.GROUP, "chrome_group add requires --tabs <ids>.");
       return addToTabGroup(name, tabIds);
     }
     if (action === "remove") {
       const tabIds = parseTabIds(args.tabIds);
-      if (tabIds.length === 0) throw new Error("chrome_group remove requires --tabs <ids>.");
+      if (tabIds.length === 0) invalidArg(TOOL_NAMES.GROUP, "chrome_group remove requires --tabs <ids>.");
       return removeFromTabGroup(tabIds);
     }
     throw new RelayError({
@@ -263,7 +273,7 @@ export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
 
     if (action === "body") {
       const requestId = typeof args.requestId === "string" ? args.requestId : "";
-      if (!requestId) throw new Error("chrome_network body requires --request-id.");
+      if (!requestId) invalidArg(TOOL_NAMES.NETWORK, "chrome_network body requires --request-id.", "parse_arguments");
       const result = await getBody(tabId, requestId);
       const full = args.full === true;
       const head = typeof args.head === "number" ? args.head : (full ? Infinity : 8 * 1024);

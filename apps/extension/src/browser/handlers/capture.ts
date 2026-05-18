@@ -10,7 +10,7 @@ import { evalExpression, evalInTab, send } from "../cdp";
 import { locateForClick, readPageSnapshot } from "../page-actions";
 import { getAxTree, clickAxNode } from "../a11y";
 import { startScreencast, stopScreencast } from "../screencast";
-import { resolveTarget, requireTabId, type ToolHandler } from "./target";
+import { resolveTarget, requireTabId, invalidArg, type ToolHandler } from "./target";
 
 // Downscale a base64 PNG so its longer edge ≤ maxEdge. Uses OffscreenCanvas
 // (available in MV3 service workers). Returns the original bytes unchanged
@@ -55,7 +55,12 @@ async function downscalePngToMaxEdge(
 function parseBbox(spec: string): { x: number; y: number; width: number; height: number; scale: number } {
   const parts = spec.split(",").map((p) => Number(p.trim()));
   if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n) || n < 0)) {
-    throw new Error(`Invalid --bbox "${spec}". Expected x,y,width,height (positive numbers).`);
+    invalidArg(
+      TOOL_NAMES.SCREENSHOT,
+      `Invalid --bbox "${spec}". Expected x,y,width,height (positive numbers).`,
+      "parse_bbox",
+      { received: spec }
+    );
   }
   return { x: parts[0], y: parts[1], width: parts[2], height: parts[3], scale: 1 };
 }
@@ -135,7 +140,12 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
     const tabId = requireTabId(tab);
     const node = Number(args.node ?? args.id);
     if (!Number.isFinite(node) || node <= 0) {
-      throw new Error("chrome_click_ax requires --node <backendDOMNodeId> (a positive integer from `chrome-relay ax`).");
+      invalidArg(
+        TOOL_NAMES.CLICK_AX,
+        "chrome_click_ax requires --node <backendDOMNodeId> (a positive integer from `chrome-relay ax`).",
+        "parse_arguments",
+        { received: args.node ?? args.id }
+      );
     }
     return clickAxNode(tabId, node);
   },
@@ -156,11 +166,20 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
         `(() => { const el = document.querySelector(${JSON.stringify(args.selector)}); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()`
       );
       const rect = result.value;
-      if (!rect) throw new Error(`chrome_hover: no element matches selector ${args.selector}`);
+      if (!rect) {
+        throw new RelayError({
+          code: "element_not_found",
+          message: `chrome_hover: no element matches selector ${args.selector}`,
+          tool: TOOL_NAMES.HOVER,
+          phase: "locate_element",
+          details: { selector: args.selector },
+          retryable: false
+        });
+      }
       x = rect.x + rect.w / 2;
       y = rect.y + rect.h / 2;
     } else {
-      throw new Error("chrome_hover requires either --selector or --x and --y.");
+      invalidArg(TOOL_NAMES.HOVER, "chrome_hover requires either --selector or --x and --y.");
     }
     await send(tabId, "Input.dispatchMouseEvent", {
       type: "mouseMoved",

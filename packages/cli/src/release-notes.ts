@@ -9,6 +9,13 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.10": [
+    "Direct /call target conflict enforcement. Third-party callers posting to /call with multiple loose target fields (tabId + workspaceName, etc.) now throw `target_conflict` instead of silently applying precedence. Matches the CLI rule the CLI itself enforced since 0.5.4.",
+    "All useful plain Error throws in extension handlers converted to RelayError(invalid_arguments). Affected tools: chrome_click_element, chrome_fill_or_select, chrome_keyboard, chrome_type, chrome_evaluate, chrome_switch_tab, chrome_close_tabs, chrome_viewport (preset name + width/height), chrome_workspace (create/close), chrome_group (create/close/add/remove), chrome_network (body without --request-id), chrome_hover (no selector or x,y), chrome_click_ax (no --node), and bbox parser. Agents can now branch on `errorDetails.code === 'invalid_arguments'` for all of these.",
+    "chrome_hover with a selector that doesn't match now throws RelayError(`element_not_found`) (was plain Error).",
+    "BEHAVIOR CHANGE — `chrome-relay screencast stop --gif/--mp4` is no longer best-effort when ffmpeg is missing. Old behavior printed 'skipping' and exited 0 (agent saw success but no GIF existed). New behavior throws `external_dependency_missing` with exit 1. Pass `--allow-missing-ffmpeg` to restore the legacy skip-with-warning behavior.",
+    "Tests: +17 in handler-strict.test.ts covering the conflict + 13 missing-arg paths. Total now 372."
+  ],
   "0.5.9": [
     "Internal refactor (code-quality-hardening PR 7): program.ts and tools.ts split into per-domain modules. Pure code motion, no behavior change.",
     "CLI: packages/cli/src/program.ts shrank from 1041 → 75 lines. Per-domain modules now live in packages/cli/src/commands/{install-update,navigation,input,capture,sessions}.ts.",

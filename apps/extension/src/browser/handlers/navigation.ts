@@ -5,7 +5,7 @@ import { RelayError, TOOL_NAMES } from "@chrome-relay/protocol";
 import { send } from "../cdp";
 import { addToTabGroup, resolveTabGroupTarget } from "../tab-groups";
 import { resolveWorkspaceTarget } from "../workspaces";
-import { resolveTarget, requireTabId, type ToolHandler } from "./target";
+import { resolveTarget, requireTabId, invalidArg, type ToolHandler } from "./target";
 
 export const navigationHandlers: Partial<Record<string, ToolHandler>> = {
   async [TOOL_NAMES.GET_WINDOWS_AND_TABS]() {
@@ -132,7 +132,7 @@ export const navigationHandlers: Partial<Record<string, ToolHandler>> = {
   async [TOOL_NAMES.SWITCH_TAB](args) {
     const tabId = Number(args.tabId);
     if (!Number.isFinite(tabId)) {
-      throw new Error("chrome_switch_tab requires a numeric tabId.");
+      invalidArg(TOOL_NAMES.SWITCH_TAB, "chrome_switch_tab requires a numeric tabId.", "parse_arguments", { received: args.tabId });
     }
 
     const tab = await chrome.tabs.get(tabId);
@@ -146,7 +146,7 @@ export const navigationHandlers: Partial<Record<string, ToolHandler>> = {
   async [TOOL_NAMES.CLOSE_TABS](args) {
     const tabIds = Array.isArray(args.tabIds) ? args.tabIds.map((value) => Number(value)) : [];
     if (tabIds.length === 0 || tabIds.some((value) => !Number.isFinite(value))) {
-      throw new Error("chrome_close_tabs requires a numeric tabIds array.");
+      invalidArg(TOOL_NAMES.CLOSE_TABS, "chrome_close_tabs requires a numeric tabIds array.", "parse_arguments", { received: args.tabIds });
     }
 
     await chrome.tabs.remove(tabIds);

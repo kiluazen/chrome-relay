@@ -1,7 +1,7 @@
 # Chrome Relay code quality hardening
 
-Status: draft for review, written 2026-05-17. Updated after a second pass
-against the current worktree: some strict parser work has already landed.
+Status: draft for review, written 2026-05-17. Updated after a third pass
+against the current worktree: most of the hardening plan has now landed.
 
 This document is a code-quality review and hardening proposal for the current
 Chrome Relay codebase. It focuses on the parts that matter most for agent use:
@@ -35,37 +35,61 @@ is better than the average early tool of this kind, especially the fixture-based
 E2E tests. The code also shows a strong bias toward real CDP primitives instead
 of synthetic browser automation.
 
-The main risk is not that the system is broken today. The main risk is that the
-surface area is growing inside two large router files:
+The original review found a clear pattern: the surface area was growing inside
+two large router files, `packages/cli/src/program.ts` and
+`apps/extension/src/browser/tools.ts`, while several fallback paths could still
+return success after doing something different from what the caller asked for.
+Most of that has now been addressed. `program.ts` is an assembly file, tool
+handlers are split by domain, strict parsers exist, structured errors/notices
+are on the wire, target routing has a matrix test, navigation fallbacks are
+strict by default, HAR bodies are strict by default, and update returns
+verification metadata.
 
-- `packages/cli/src/program.ts`
-- `apps/extension/src/browser/tools.ts`
+The highest-leverage remaining changes are narrower:
 
-Those files currently hold argument parsing, user-facing help, compatibility
-behavior, routing decisions, business logic, output shaping, and some filesystem
-post-processing. That makes incremental feature work deceptively easy. It also
-makes it easy to introduce exactly the failure mode we want to avoid: "the agent
-asked for X, Chrome Relay quietly did Y, and now debugging starts three layers
-downstream."
-
-The highest-leverage remaining changes are:
-
-1. Move the tool contracts into `packages/protocol` as executable schemas.
-2. Make errors structured and preserve them across extension -> native bridge ->
-   HTTP bridge -> CLI.
-3. Remove silent fallback behavior from command execution paths.
-4. Split the CLI and extension tool handlers by domain.
-5. Add a routing/contract test matrix so every command proves it forwards
-   `--tab`, `--workspace`, and `--group` consistently.
+1. Move tool argument schemas into `packages/protocol`; today protocol owns
+   error/notice/target types, but most arg validation still lives in extension
+   parsers and handler code.
+2. Enforce strict target conflicts at the extension boundary too. The CLI
+   rejects same-scope conflicts, but direct `/call` users can still send loose
+   `tabId` + `workspaceName` + `groupName` fields and get precedence behavior.
+3. Finish converting older handler errors to `RelayError` instead of plain
+   `Error` where useful.
+4. Add or confirm tests for update verification edge cases.
 
 ## Current status snapshot
 
-Some of the recommendations in this document are already partially executed.
-Reviewers should treat this as a status-aware hardening plan, not a pure list of
-new work.
+Most of the recommendations in this document have now been executed. Reviewers
+should treat this as a status-aware hardening record plus a short remaining
+worklist, not a fresh plan.
 
 Already landed:
 
+- `BridgeError`, `BridgeNotice`, `RelayError`, `TargetSelector`, and generic
+  `BridgeResponse<T>` exist in `packages/protocol`.
+- The extension serializes `errorDetails` alongside legacy `error`.
+- The native bridge and HTTP bridge preserve structured errors.
+- HTTP responses include structured `notices[]` alongside legacy `notice`.
+- CLI call handling understands structured errors/notices.
+- CLI same-scope target conflicts now fail with `target_conflict`.
+- Cross-scope target overrides emit a visible `target_overridden` notice.
+- A target forwarding matrix covers targetable CLI commands.
+- `viewport set` and `console` now route through shared `baseArgs()` behavior.
+- `chrome_navigate --new --tab <id>` fails if the reference tab cannot be
+  resolved unless `allowPartial: true` is passed.
+- `chrome_navigate --new --group <name>` fails with
+  `partial_success_disallowed` if group join fails unless `allowPartial: true`
+  is passed.
+- HAR `--with-bodies` is strict by default.
+- HAR best-effort behavior is explicit via `bestEffortBodies` /
+  `--best-effort-bodies`.
+- HAR body fetch failures include `_chrome_relay.bodyError`.
+- `chrome-relay update` returns structured install/binary/release-note
+  verification metadata and warnings.
+- `packages/cli/src/program.ts` is split into command modules under
+  `packages/cli/src/commands/`.
+- `apps/extension/src/browser/tools.ts` is split into handler modules under
+  `apps/extension/src/browser/handlers/`.
 - Strict pure parsers exist in `apps/extension/src/browser/parsers.ts`.
 - Tab-group tab IDs now reject invalid values instead of filtering them out.
 - Tab-group colors now reject invalid values.
@@ -77,23 +101,22 @@ Already landed:
 
 Partially landed:
 
-- CLI tests cover some `--workspace` and `--group` forwarding behavior.
+- Protocol owns response, notice, error, and target types, but not executable
+  per-tool argument schemas.
 - Extension handlers consume the new strict parser module.
-- Strict parsing exists in the extension, but the protocol package still does
-  not own the schema.
+- The CLI rejects target conflicts, but direct `/call` payloads are still loose
+  and resolved by extension precedence for backward compatibility.
 
 Still open:
 
-- `BridgeResponse` in `packages/protocol` still does not model `notice`.
-- Errors are still flattened to strings across the bridge.
-- Target selection is still a loose object with precedence, not a strict
-  `TargetSelector`.
-- `viewport set` and `console` still do not use the shared CLI `baseArgs()`
-  path, so global `--workspace` / `--group` can drift.
-- `chrome_navigate --new` still has silent fallback paths.
-- HAR body export still hides the body-fetch failure reason.
-- `program.ts` and `tools.ts` are still large router/implementation files.
-- `update` still has environment-dependent verification behavior.
+- Move or mirror per-tool argument schemas into `packages/protocol`.
+- Make the extension reject conflicting target fields from direct `/call`
+  callers, or explicitly document the compatibility precedence as a legacy
+  direct-call behavior.
+- Convert remaining older plain `Error` throws where structured agent branching
+  would help.
+- Add explicit update-command tests around failed install, unchanged binary, and
+  release-note parse failure if not already covered elsewhere.
 
 ## Product principle
 
@@ -139,10 +162,11 @@ Main packages:
 - `packages/cli`: CLI parser, local bridge client, native host, install/update
 - `apps/extension`: extension runtime, popup, CDP/browser tools
 
-This split is good. The weak spot is that `packages/protocol` currently defines
-tool names but does not define the full contract for tool inputs, outputs,
-errors, notices, or command capabilities. As a result, the CLI and extension both
-interpret `Record<string, unknown>` independently.
+This split is good. The remaining weak spot is that `packages/protocol`
+currently defines tool names plus response/error/notice/target types, but it
+does not define executable per-tool input schemas. As a result, the CLI and
+extension still interpret `Record<string, unknown>` independently for most tool
+arguments.
 
 ## What is good today
 
@@ -187,83 +211,61 @@ describe what shipped, what broke, and what remains. Keep that style.
 
 ### Risk 1: protocol drift
 
-`packages/protocol/src/index.ts` defines:
+Status: mostly executed.
+
+`packages/protocol/src/index.ts` now owns `BridgeError`, `BridgeNotice`,
+`BridgeResponse<T>`, `RelayError`, `toBridgeError`, and `TargetSelector`.
+The HTTP server emits both legacy `notice: string` and structured
+`notices: BridgeNotice[]`. Extension and bridge error paths preserve
+`errorDetails`.
+
+The remaining drift is per-tool argument validation. `ToolArguments` is still:
 
 ```ts
 export type ToolArguments = Record<string, unknown>;
-
-export type BridgeResponse =
-  | { ok: true; data: unknown }
-  | { ok: false; error: string };
 ```
 
-But the HTTP bridge now emits a `notice` field when the CLI is older than the
-extension:
+That means the protocol package names tools and response/error shapes, but does
+not yet define executable schemas for `chrome_network`, `chrome_console`,
+`chrome_navigate`, etc. Those rules live in extension parsers/handlers and CLI
+command code.
 
-```ts
-reply.send(notice ? { ok: true, data, notice } : { ok: true, data });
-```
-
-The implementation is reasonable, but the shared protocol type does not know
-about it. That means the source of truth has drifted away from the package that
-is supposed to be the source of truth.
-
-This matters because agents depend on output shapes. If warnings/notices are
-only conventionally attached by one layer, another layer can forget them without
-TypeScript complaining.
-
-Recommendation:
-
-- Move `notice` into `BridgeResponse`.
-- Add `BridgeNotice` as a typed object, not a string.
-- Make `LocalBridgeCallResponse` a named export.
-
-Example target shape:
+Current target shape:
 
 ```ts
 export interface BridgeNotice {
-  code: "cli_outdated";
+  code: BridgeNoticeCode;
   message: string;
-  currentVersion: string;
-  expectedVersion: string;
+  details?: Record<string, unknown>;
   action?: {
     command: string;
   };
 }
 
 export type BridgeResponse<T = unknown> =
-  | { ok: true; data: T; notices?: BridgeNotice[] }
-  | { ok: false; error: BridgeError; notices?: BridgeNotice[] };
+  | { ok: true; data: T; notice?: string; notices?: BridgeNotice[] }
+  | { ok: false; error: string; errorDetails?: BridgeError; notice?: string; notices?: BridgeNotice[] };
 ```
+
+Remaining recommendation:
+
+- Add per-tool argument schemas to `packages/protocol`.
+- Use those schemas in the CLI, HTTP bridge, and extension boundary.
+- Keep legacy string fields until a major version removes them.
 
 ### Risk 2: errors are flattened too early
 
-The current extension catches an error and returns only:
+Status: mostly executed.
 
-```ts
-error: error instanceof Error ? error.message : String(error)
-```
+The original problem was that extension errors were converted to strings and
+then rewrapped through the native bridge and HTTP bridge. That is no longer the
+normal path. Handlers can throw `RelayError`; the extension serializes
+`errorDetails`; the native bridge reconstructs `RelayError`; the HTTP bridge
+preserves `errorDetails`; the CLI prints a `{ relayError: ... }` JSON object to
+stderr for structured consumers.
 
-Then the native bridge turns that into:
+Current shape:
 
-```ts
-pending.reject(new Error(message.payload.error));
-```
-
-Then the HTTP bridge catches again and returns:
-
-```ts
-error: error instanceof Error ? error.message : String(error)
-```
-
-By the time the CLI prints the error, all structured information is gone. The
-agent sees a string. Humans can search the string. Agents need more.
-
-Recommendation:
-
-Introduce a structured error shape and preserve it end-to-end.
-
-Example:
 
 ```ts
 export interface BridgeError {
@@ -278,7 +280,9 @@ export interface BridgeError {
     | "timeout"
     | "native_host_disconnected"
     | "extension_not_connected"
-    | "external_dependency_missing";
+    | "external_dependency_missing"
+    | "partial_success_disallowed"
+    | "internal_error";
   message: string;
   tool?: ToolName;
   phase?: string;
@@ -299,32 +303,28 @@ Then the downstream agent can reason mechanically:
 The human-readable `message` still matters, but it should not be the only
 contract.
 
+Remaining recommendation:
+
+- Continue converting old plain `Error` throws to `RelayError` where the caller
+  can usefully branch on `code`, `phase`, or `details`.
+- Avoid adding new string-only errors in handlers.
+
 ### Risk 3: silent fallbacks
 
-This is the largest philosophical issue.
+Status: executed for the navigation paths called out in the original review.
 
-There are places where Chrome Relay receives a specific request, fails to honor
-one part of it, and continues anyway.
+`chrome_navigate --new --tab <id>` now rejects missing/non-numeric reference
+tabs instead of letting Chrome pick a window. `chrome_navigate --new --group
+<name>` now rejects group-join failure with `partial_success_disallowed` instead
+of returning plain success. The legacy permissive behavior is available only via
+`allowPartial: true`, and success then carries `partial: true` plus warnings.
 
-Example: `chrome_navigate --new` tries to route a new tab into a referenced tab's
-window. If `chrome.tabs.get(numeric)` fails, the code falls through and lets
-Chrome pick a window.
-
-Example: `chrome_navigate --new --group <name>` creates the new tab and then
-attempts to add it to the named tab group. If group insertion fails, the command
-still returns success for navigation.
-
-Those choices are understandable for a human-facing CLI. They are bad defaults
-for agents. An agent asked for a tab in a specific routing context. If the tab
-lands somewhere else, later screenshots, reads, and clicks may operate in the
-wrong workspace or user window.
-
-Recommendation:
+Current rule:
 
 - Fail by default when an explicit target or grouping operation cannot be
   honored.
 - If partial success is useful, expose it through an explicit flag such as
-  `--allow-partial` or `bestEffort: true`.
+  `allowPartial: true`.
 - When partial success occurs, return a result whose status is not plain
   success.
 
@@ -365,6 +365,8 @@ Or, if explicitly allowed:
 
 ### Risk 4: inconsistent routing arguments
 
+Status: executed at the CLI boundary.
+
 The CLI advertises `--tab`, `--workspace`, and `--group` as common target
 selectors. The extension has a shared resolver:
 
@@ -372,38 +374,31 @@ selectors. The extension has a shared resolver:
 resolveTarget(args)
 ```
 
-But not every CLI command forwards the shared base args consistently.
+The original drift sites were `viewport set` and `console`; both are now covered
+by shared `baseArgs()` behavior. `packages/cli/test/target-routing.test.ts`
+contains a matrix for targetable commands and explicit regressions for those two
+cases.
 
-Examples:
-
-- `viewport preset` and `viewport clear` call `baseArgs(opts)`.
-- `viewport set` manually forwards only `tabId`.
-- `console` manually forwards only `tabId`.
-
-This is not a runtime failure today unless someone uses global `--workspace` or
-`--group` with those commands. But it is exactly the kind of drift that grows as
-more commands are added.
-
-Recommendation:
+Current CLI rule:
 
 - Every command that targets a tab should use the same helper.
-- Add a unit test matrix that verifies target forwarding for each targetable
-  command.
-- Decide whether conflicting target flags should be rejected instead of resolved
-  by precedence.
+- Same-scope target conflicts are rejected with `target_conflict` and exit code
+  2.
+- Cross-scope overrides are allowed but emit `target_overridden` on stderr.
 
-The existing precedence rule is:
+Remaining caveat:
+
+- Direct `/call` users can still post loose conflicting fields. The extension
+  resolver preserves old precedence behavior for backward compatibility:
 
 ```text
 --tab > --group > --workspace > active tab
 ```
 
-That is convenient, but it is also implicit fallback. For agent use, strict
-mode is better:
+For agent use, strict mode is better:
 
-- If more than one of `tabId`, `groupName`, `workspaceName` is present, reject.
-- If compatibility requires precedence, make it opt-in or clearly reflected in
-  output.
+- Either make the extension reject conflicting direct-call fields too, or
+  document this as a legacy compatibility behavior.
 
 Example strict error:
 
@@ -419,8 +414,7 @@ Example strict error:
 
 ### Risk 5: invalid enums are silently dropped
 
-Status: mostly executed in the extension. Keep this section as design rationale
-and to drive the remaining protocol/CLI cleanup.
+Status: executed in the extension; still not protocol-owned.
 
 Earlier versions had parsers that intentionally ignored invalid input:
 
@@ -452,13 +446,11 @@ Current implementation:
 
 Remaining recommendation:
 
-- Required enums should reject invalid values with `invalid_arguments`.
-- Optional filters should reject invalid values if they are present.
-- Only omit the field if the user truly omitted it.
+- Keep the rule: required enums reject invalid values with
+  `invalid_arguments`; optional filters reject invalid values if they are
+  present; omitted values are the only defaults.
 - Move the schema/validation contract up into `packages/protocol` so the CLI,
   HTTP bridge, and extension share the same rules.
-- Convert these string errors to structured `BridgeError` values once the error
-  contract exists.
 
 Example:
 
@@ -473,22 +465,14 @@ Example:
 
 ### Risk 6: best-effort HAR body export hides the cause
 
-`buildHar(..., withBodies)` catches `getBody` failures and records only:
+Status: executed.
 
-```ts
-bodyState: "missing"
-```
-
-This is honest enough to avoid pretending the body exists, but not transparent
-enough for debugging. If body fetch failed because Chrome GC'd it, because the
-request was still in flight, because CDP returned a permission error, or because
-the request id was stale, the caller cannot distinguish those cases.
-
-Recommendation:
-
-- Keep `bodyState`, but add `bodyError` when body fetching fails.
-- If `withBodies` is requested, consider failing by default unless
-  `bestEffortBodies: true` is set.
+`buildHar(..., withBodies)` now records `bodyState` as `fetched`, `skipped`,
+`missing`, or `error`. When a body fetch throws, `_chrome_relay.bodyError`
+contains `code`, `message`, and `phase`. `--with-bodies` is strict by default:
+if any body is missing or errored, the call throws
+`partial_success_disallowed`. The old permissive behavior is explicit via
+`bestEffortBodies: true` / `--best-effort-bodies`.
 
 Example HAR metadata:
 
@@ -506,115 +490,38 @@ Example HAR metadata:
 
 ### Risk 7: `program.ts` is doing too much
 
-`packages/cli/src/program.ts` is now a large file that handles:
+Status: executed.
 
-- global command construction
-- help text
-- update/install/release notes
-- every browser command
-- target option handling
-- screenshot decoding
-- screencast frame writing
-- screencast dedupe
-- `ffmpeg` invocation
-- error printing
-
-That is too much responsibility for one file. The file is still readable, but
-new code will continue to land in the easiest place unless there is a better
-place.
-
-Recommendation:
-
-Split CLI commands into modules:
+`packages/cli/src/program.ts` is now a small assembly file. Command bodies live
+under `packages/cli/src/commands/`:
 
 ```text
 packages/cli/src/commands/
-  core.ts
-  navigation.ts
-  screenshot.ts
-  read.ts
+  capture.ts
   input.ts
-  viewport.ts
-  ax.ts
-  workspace.ts
-  group.ts
-  network.ts
-  console.ts
-  screencast.ts
-  update.ts
+  install-update.ts
+  navigation.ts
+  sessions.ts
+  shared.ts
 ```
 
-Shared helpers:
-
-```text
-packages/cli/src/commands/shared/
-  target-options.ts
-  output.ts
-  errors.ts
-```
-
-The goal is not abstraction for its own sake. The goal is to make a future diff
-obvious. If someone edits `commands/network.ts`, reviewers should not need to
-scan 900 lines of unrelated command setup.
+This is the intended shape. Future work should keep new command surfaces in the
+closest domain module rather than rebuilding a large `program.ts`.
 
 ### Risk 8: `tools.ts` is doing too much
 
-`apps/extension/src/browser/tools.ts` is also a large router. It handles:
+Status: executed.
 
-- target resolution
-- navigation
-- screenshots
-- read/click/fill/type/js
-- viewport
-- self reload
-- AX
-- workspace
-- tab groups
-- hover
-- screencast
-- console
-- network
-- helper parsers
-- PNG downscaling
-- bbox parsing
-
-Recommendation:
-
-Split extension tool handlers by domain:
+`apps/extension/src/browser/tools.ts` is now a dispatcher that merges handler
+maps. Handler bodies live under `apps/extension/src/browser/handlers/`:
 
 ```text
-apps/extension/src/browser/tools/
-  index.ts
-  target.ts
-  core.ts
-  navigation.ts
-  screenshot.ts
+apps/extension/src/browser/handlers/
+  capture.ts
   input.ts
-  viewport.ts
-  ax.ts
-  workspace.ts
-  group.ts
-  network.ts
-  console.ts
-  screencast.ts
-```
-
-The `index.ts` file should only build the handler registry:
-
-```ts
-export const handlers: ToolRegistry = {
-  ...coreHandlers,
-  ...navigationHandlers,
-  ...screenshotHandlers,
-  ...inputHandlers,
-  ...viewportHandlers,
-  ...axHandlers,
-  ...workspaceHandlers,
-  ...groupHandlers,
-  ...networkHandlers,
-  ...consoleHandlers,
-  ...screencastHandlers
-};
+  navigation.ts
+  sessions.ts
+  target.ts
 ```
 
 This also makes ownership clearer. A network change should not accidentally
@@ -622,21 +529,15 @@ touch click behavior.
 
 ### Risk 9: update behavior is agent-hostile
 
-The new `update` command is useful, but its implementation currently guesses
-package manager from the running binary path, installs via that package manager,
-then tries to find `chrome-relay` with `which`. If it cannot prove it is running
-the new binary, it falls back to local release notes.
+Status: mostly executed.
 
-This can produce ambiguous outcomes:
+`chrome-relay update` now returns structured metadata: install attempted/status,
+package manager, active binary path, whether the updated binary was verified,
+release-note source, and warnings. The remaining work is test coverage for edge
+cases such as failed install, unchanged active binary, and release-note parse
+failure.
 
-- update was attempted
-- install may or may not have updated the active binary
-- release notes may be from old code or new code
-- the agent sees JSON that may look authoritative
-
-Recommendation:
-
-Return structured update metadata:
+Current target shape:
 
 ```json
 {
@@ -735,8 +636,8 @@ throw new RelayError({
 At the CLI boundary:
 
 - default human output prints `message`
-- `--json` output prints the full error
-- agent callers get the full object through the bridge
+- structured stderr prints `{ relayError: ... }` for `RelayError`
+- agent callers get the full object through the bridge via `errorDetails`
 
 ### 3. Best effort is explicit
 
@@ -749,7 +650,7 @@ Examples:
 
 - HAR bodies can be `--best-effort-bodies`.
 - `navigate --new --group` should fail if group insertion fails, unless
-  `--allow-partial` is passed.
+  `allowPartial: true` is passed.
 - `screencast stop --gif` should fail if `ffmpeg` is missing, unless
   `--allow-missing-ffmpeg` or `--frames-only` is passed.
 - Invalid filters should fail, not be ignored.
@@ -821,7 +722,9 @@ This should be a series of small PRs. Do not do this as a giant rewrite.
 
 ### PR 1: protocol response contract
 
-Scope:
+Status: complete for response/error/notice contract.
+
+Completed:
 
 - Add `BridgeError`, `BridgeNotice`, and generic `BridgeResponse<T>` to
   `packages/protocol`.
@@ -830,49 +733,43 @@ Scope:
 - Update HTTP response shape.
 - Add unit tests for preserving structured errors and notices.
 
-Why first:
+Remaining adjacent work:
 
-This creates the plumbing needed for all later hardening work.
+- Add executable per-tool argument schemas to protocol.
 
 ### PR 2: strict target selector
 
-Scope:
+Status: mostly complete at the CLI boundary.
+
+Completed:
 
 - Add `TargetSelector` in protocol.
 - Add CLI helper to parse target flags.
-- Add extension helper to resolve targets.
 - Update every targetable command to use the helper.
 - Add a command matrix test proving `--tab`, `--workspace`, and `--group` are
   forwarded consistently.
+- Reject same-scope conflicts in the CLI.
+- Emit `target_overridden` for cross-scope overrides.
 
-Decision needed:
+Remaining:
 
-- Keep precedence for compatibility, or reject conflicting selectors?
-
-Recommendation:
-
-- Reject conflicts by default.
-- If compatibility is necessary, keep precedence only for one release and emit
-  a typed notice.
+- The extension still resolves loose direct-call fields with compatibility
+  precedence. Decide whether to reject direct-call conflicts now or keep that
+  legacy behavior documented.
 
 ### PR 3: remove silent navigation fallbacks
 
-Scope:
+Status: complete for the originally identified navigation fallbacks.
 
 - `navigate --new --tab <id>` fails if the reference tab does not exist.
 - `navigate --new --group <name>` fails if the tab cannot join the group.
-- Add optional explicit partial-success behavior only if there is a real user
-  need.
-- Add E2E tests for the failure paths.
-
-Why early:
-
-Navigation is foundational. If a tab lands in the wrong place, every later tool
-call can be wrong.
+- Optional explicit partial-success behavior exists through `allowPartial:
+  true`, with `partial: true` and `warnings[]` in the success result.
+- Negative tests exist in `apps/extension/test/navigate-strict.test.ts`.
 
 ### PR 4: strict enum/filter parsing
 
-Status: partially complete.
+Status: complete in the extension, pending protocol schema ownership.
 
 Completed:
 
@@ -886,47 +783,40 @@ Remaining:
 
 - Move or mirror these parsers into `packages/protocol` so they become the
   shared contract instead of extension-local logic.
-- Return structured `invalid_arguments` errors instead of plain strings.
-- Add CLI-level tests where Commander accepts a string that the extension later
-  rejects, so reviewers can see the boundary behavior intentionally.
 
 ### PR 5: split CLI command modules
 
-Scope:
+Status: complete.
 
 - Move commands out of `program.ts` one domain at a time.
-- Keep behavior identical.
-- Do not mix behavior changes into this PR.
-
-Review rule:
-
-- This PR should be mostly moving code.
-- Any behavior change should be deferred.
+- `program.ts` now assembles command modules under `packages/cli/src/commands/`.
 
 ### PR 6: split extension tool modules
 
-Scope:
+Status: complete.
 
 - Move tool handlers out of `tools.ts`.
-- Keep the registry shape.
-- Keep behavior identical.
-- Do not change CDP behavior in this PR.
+- `tools.ts` now dispatches to handler maps under
+  `apps/extension/src/browser/handlers/`.
 
 ### PR 7: HAR body transparency
 
-Scope:
+Status: complete.
 
 - Add `bodyError` metadata.
-- Decide whether `--with-bodies` should fail by default or remain best effort.
-- If keeping best effort, rename the flag or add `--strict-bodies`.
+- `--with-bodies` is strict by default.
+- `--best-effort-bodies` restores permissive behavior and records per-entry
+  `bodyState` / `bodyError`.
 
 ### PR 8: update command verification
 
-Scope:
+Status: mostly complete.
 
 - Return structured update metadata.
 - Make release-note source explicit.
 - Fail or warn loudly when re-exec cannot be verified.
+- Add tests for install failure, unchanged active binary, and release-note parse
+  failure if not already covered.
 
 ## Testing plan
 
@@ -943,18 +833,22 @@ packages/protocol/test/
 
 Add tests for:
 
-- parsing valid args for every tool
-- rejecting invalid enum values
-- rejecting conflicting targets
-- serializing/deserializing `BridgeError`
-- serializing/deserializing notices
+- serializing/deserializing `BridgeError` (done in
+  `packages/protocol/test/errors.test.ts`)
+- serializing/deserializing notices (done in
+  `packages/protocol/test/errors.test.ts`)
+- parsing valid args for every tool (remaining, depends on protocol schemas)
+- rejecting invalid enum values at the protocol boundary (remaining, depends on
+  protocol schemas)
+- rejecting conflicting direct-call targets at the extension/protocol boundary
+  (remaining decision)
 
 ### CLI forwarding matrix
 
 Location:
 
 ```text
-packages/cli/test/program.test.ts
+packages/cli/test/target-routing.test.ts
 ```
 
 For every targetable command, assert:
@@ -966,8 +860,8 @@ For every targetable command, assert:
 - `--group` forwards group target
 - conflicting targets reject if strict mode is adopted
 
-This is the test that would have caught the current `viewport set` and `console`
-drift.
+This matrix exists now and includes regressions for the old `viewport set` and
+`console` drift.
 
 ### Extension resolver tests
 
@@ -988,14 +882,19 @@ Add tests for:
 - missing group
 - conflicting target fields
 
+The CLI-side conflict tests are done. Extension-side direct-call conflict
+behavior is still a compatibility decision.
+
 ### E2E failure fixtures
 
-The E2E suite should add a few negative tests:
+The E2E/unit suite should keep adding negative tests:
 
-- `navigate --new --group missing` fails and does not silently create in the
-  active user window.
-- invalid console level returns `invalid_arguments`.
-- invalid network status returns `invalid_arguments`.
+- `navigate --new --group <name>` group-join failure is covered in
+  `apps/extension/test/navigate-strict.test.ts`.
+- invalid console level returns `invalid_arguments`; parser unit tests cover the
+  parser path.
+- invalid network status returns `invalid_arguments`; parser unit tests cover
+  the parser path.
 - missing `ffmpeg` with `--gif` returns a structured external-dependency error
   unless the command explicitly asks for frames-only behavior.
 
@@ -1050,15 +949,16 @@ Use this checklist before merging new Chrome Relay surfaces.
 
 Recommendation: yes.
 
-Current behavior uses precedence:
+Current direct `/call` extension behavior still uses precedence:
 
 ```text
 tab > group > workspace > active
 ```
 
-This is convenient, but it is also a hidden decision. For agents, hidden
-decisions are expensive. If the caller supplied both `--tab` and `--workspace`,
-that is probably a bug in the caller. Failing early makes the bug obvious.
+The CLI now rejects same-scope conflicts and emits override notices across
+scopes. The remaining decision is whether the extension should also reject
+conflicting loose fields from direct `/call` users, or whether that precedence
+stays as documented backward compatibility.
 
 ### Should HAR with bodies be strict by default?
 
@@ -1071,12 +971,12 @@ Possible shape:
 
 ```sh
 chrome-relay network har --with-bodies              # strict
-chrome-relay network har --with-bodies --best-effort # missing bodies allowed
+chrome-relay network har --with-bodies --best-effort-bodies # missing bodies allowed
 ```
 
 ### Should CLI stderr notices also appear in JSON?
 
-Recommendation: yes.
+Status: yes, for bridge notices.
 
 Stderr is useful for humans. Agents need machine-readable notices. Anything
 important enough to print should also be available in structured output.
@@ -1093,15 +993,22 @@ success unless it can prove which binary is now active.
 
 This hardening effort is done when:
 
-- `packages/protocol` defines response, notice, error, target, and tool arg
-  contracts.
-- CLI and extension no longer parse the same loose object independently.
-- All targetable commands share one target parser.
-- Invalid enums and filters fail loudly.
-- Navigation no longer silently falls back to arbitrary Chrome behavior.
-- Best-effort behavior is explicit in flags and result shapes.
-- `program.ts` and `tools.ts` are split into domain modules.
-- Unit and E2E tests cover the negative paths, not only happy paths.
+- `packages/protocol` defines response, notice, error, and target contracts.
+  Done.
+- `packages/protocol` defines executable tool arg contracts. Still open.
+- CLI and extension no longer parse the same loose object independently. Partly
+  open until protocol arg schemas land.
+- All targetable CLI commands share one target parser. Done.
+- Direct `/call` target conflicts are either rejected or explicitly documented
+  as legacy precedence behavior. Still open.
+- Invalid enums and filters fail loudly. Done in the extension.
+- Navigation no longer silently falls back to arbitrary Chrome behavior. Done
+  for the reviewed paths.
+- Best-effort behavior is explicit in flags and result shapes. Done for
+  navigation partials and HAR bodies.
+- `program.ts` and `tools.ts` are split into domain modules. Done.
+- Unit and E2E tests cover the negative paths, not only happy paths. Improved;
+  continue adding negative tests with each new surface.
 
 The codebase does not need to become over-engineered. The goal is simpler than
 that: when an agent calls Chrome Relay, the call should either do exactly what
