@@ -9,6 +9,12 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.19": [
+    "Coordinate click. `chrome-relay click --x N --y N --tab N` dispatches a trusted Input.dispatchMouseEvent at the given pixel coordinates — no selector required. The selector positional became optional; the protocol parser collapses click args into a discriminated union (`kind: 'selector'` | `kind: 'coords'`) and rejects partial coords (`--x` without `--y`) with `invalid_arguments`.",
+    "Intentionally NOT shipping `click-text`. Once coord-click exists, finding text + clicking is fully composable with `js` (TreeWalker → getBoundingClientRect) → `click --x/--y`. Per the CLI philosophy, that's a smart wrapper, not a primitive. The two-step recipe lives in docs/clicking-strategies.md as the documented pattern.",
+    "Updated docs: docs/clicking-strategies.md now lists the 4 click verbs (click selector/coords, click-ax, js) and the text-recipe; docs/cli-philosophy.md explains the hide-vs-expose calculus that led to this design.",
+    "Tests: +2 in program.test.ts (coord-click + partial-coords rejection), +1 in args-all.test.ts (discriminated-union parsing). Existing click tests updated to expect the parsed `kind: 'selector'` shape now that CLI-side parseToolArgs runs before send."
+  ],
   "0.5.18": [
     "Force-visible on attach — actually fixes Cloudflare-style SPAs now. 0.5.17 had two bugs: (1) missing `Page.enable` before `Page.addScriptToEvaluateOnNewDocument` (the script registration silently failed, so the shim only applied to the current doc — page reloads dropped it), (2) the JS shim used one try-block so a deprecated `Object.defineProperty(document, 'webkitVisibilityState')` could throw and skip the `document.hasFocus` patch.",
     "0.5.18 fixes both: enables Page domain first, then applies each patch in its own try/catch. New patches added: `document.hasFocus` (overridden on both instance and Document.prototype), `Emulation.setFocusEmulationEnabled` via CDP, `document.wasDiscarded`. End result: Cloudflare Web Analytics dashboard now fully renders on backgrounded tabs without focus theft (verified live).",

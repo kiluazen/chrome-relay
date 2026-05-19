@@ -8,8 +8,8 @@ There is no single "click" because there is no single way to identify an element
 |---|---|
 | A CSS selector | `chrome-relay click '<selector>'` |
 | A backendDOMNodeId from `ax` | `chrome-relay click-ax --node <id>` |
-| Visible text on the page | `chrome-relay click-text "<text>"` *(0.5.18, see status)* |
-| Pixel coordinates | `chrome-relay click --x N --y N` *(0.5.18, see status)* |
+| Pixel coordinates | `chrome-relay click --x N --y N` |
+| Visible text on the page (no selector, no rect) | `js` + `click --x/y` (see [recipe](#recipe-click-by-visible-text)) |
 | Anything weird (shadow DOM, canvas, framework internals) | `chrome-relay js "<code>"` |
 
 ## Each strategy in depth
@@ -62,31 +62,7 @@ The `id` is selector-resilient — it doesn't change when CSS classes get rehash
 
 **Failure mode:** `element_not_found` for stale ids, with a hint to re-run `ax`.
 
-### 3. Text-finder — `chrome-relay click-text "<text>"` *(0.5.18+)*
-
-```bash
-chrome-relay click-text "chrome-relay.kushalsm.com" --tab 42
-chrome-relay click-text "Install" --tab 42
-```
-
-**Under the hood:**
-1. TreeWalker over text nodes in the page (includes shadow-DOM contents).
-2. Finds the first text node whose content contains the substring.
-3. Walks UP the DOM looking for the nearest reasonably-sized clickable ancestor — an `<a>`, `<button>`, an element with `role=button|link`, or just the smallest container with a click handler.
-4. `getBoundingClientRect()` on that ancestor → CDP `Input.dispatchMouseEvent` at center.
-
-**Use when:** the agent can see the text on screen but doesn't know the selector. Common case: clicking into a list of similarly-styled cards.
-
-**Fails on:**
-- Multiple matches with no way to disambiguate. (Mitigation: `--nth N` or `--scope <ancestor-selector>` flags.)
-- Pure canvas-rendered text (Figma, Excalidraw) — there's no DOM text node.
-- Text inside `<title>` or `<meta>` tags (we restrict to body).
-
-**Failure mode:** `element_not_found` if zero matches, `ambiguous_match` if multiple and no `--nth`.
-
-**Returns:** `{clicked: true, strategy: "text-walker", element: {tag, parent}, rect: {x, y, w, h}}` so the agent can sanity-check what got clicked.
-
-### 4. Coordinate click — `chrome-relay click --x N --y N` *(0.5.18+)*
+### 3. Coordinate click — `chrome-relay click --x N --y N`
 
 ```bash
 chrome-relay click --tab 42 --x 540 --y 320
@@ -110,7 +86,7 @@ chrome-relay click '<selector>' --tab 42        # same command, selector OR coor
 
 **Failure mode:** Always returns `clicked: true` (CDP dispatched the event). Whether the event hit something useful is the page's problem. This is intentional — the verb's contract is "fire a click at coords (x, y)," nothing more.
 
-### 5. Free-form JS — `chrome-relay js '<code>'`
+### 4. Free-form JS — `chrome-relay js '<code>'`
 
 ```bash
 chrome-relay js --tab 42 "
@@ -135,7 +111,7 @@ chrome-relay js --tab 42 "
 
 ## The difficulty matrix, by site profile
 
-| Site profile | `click` (selector) | `click-ax` | `click-text` | `click --x/y` | `js` |
+| Site profile | `click` (selector) | `click-ax` | text-recipe | `click --x/y` | `js` |
 |---|---|---|---|---|---|
 | Marketing pages, docs sites | easy | easy | easy | overkill | overkill |
 | Plain forms (most signup pages) | easy | easy | easy | overkill | overkill |
@@ -146,28 +122,62 @@ chrome-relay js --tab 42 "
 | Shadow-DOM-heavy (Stencil, web components) | needs piercing | partial | **works** (TreeWalker pierces) | works | works |
 | Pages with anti-bot (`isTrusted` checks) | **best** (trusted events) | **best** | **best** | **best** | ❌ synthetic events |
 
-## Anti-patterns
+## Recipe: click by visible text
 
-### Don't write `js` to do what `click-text` does
+`chrome-relay` intentionally does NOT have a `click-text` verb — it's
+composable from `js` + `click --x/--y`, and a one-call wrapper would just
+be a smart wrapper hiding which strategy ran (see [philosophy](./cli-philosophy.md)).
+
+The two-call pattern:
 
 ```bash
-# ❌ wrong — you're hand-rolling click-text inside js, with worse failure modes
+# 1. Find the text in the page DOM (TreeWalker covers shadow roots too)
+#    and return the center of its parent element's bounding rect.
+COORDS=$(chrome-relay js --tab 42 "
+  const target = 'chrome-relay.kushalsm.com';
+  const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = tw.nextNode())) {
+    if ((n.textContent || '').includes(target)) {
+      const r = n.parentElement.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2, found: true };
+    }
+  }
+  return { found: false };
+")
+
+# 2. Parse out x/y, click via coords. Same trusted Input.dispatchMouseEvent
+#    a selector-click would use — anti-bot heuristics don't differentiate.
+X=$(echo "$COORDS" | jq -r '.result.x // empty')
+Y=$(echo "$COORDS" | jq -r '.result.y // empty')
+if [ -n "$X" ] && [ -n "$Y" ]; then
+  chrome-relay click --tab 42 --x "$X" --y "$Y"
+fi
+```
+
+For multiple matches, the `js` call can be parameterized to pick the nth occurrence, or to restrict to a specific ancestor (e.g. only within `.dashboard-content`). Strategy stays in the agent's hands; chrome-relay is the dumb pipe.
+
+## Anti-patterns
+
+### Don't reach for `js` + `.click()` for clickable elements
+
+```bash
+# ❌ wrong — synthetic event (isTrusted: false), fails on anti-bot pages
 chrome-relay js --tab 42 "
   const el = [...document.querySelectorAll('*')].find(e => e.textContent.includes('Save'));
   el?.click();
 "
 
-# ✅ right — explicit strategy, structured error if it misses, trusted event
-chrome-relay click-text "Save" --tab 42
+# ✅ right — trusted event via the recipe above (js to find coords, then click --x/--y)
 ```
 
-### Don't reach for `--x/--y` without taking a fresh screenshot
+### Don't reach for `--x/--y` without taking a fresh screenshot or rect
 
 Coords drift the moment the page scrolls or resizes. If you can't take a fresh screenshot right before clicking, prefer a DOM-based strategy.
 
 ### Don't expect `js`'s `.click()` to behave like a real click
 
-JS `.click()` fires a synthetic MouseEvent. It works on most sites but fails silently on anti-bot pages and some hand-rolled event delegation. The trusted-event verbs (`click`, `click-ax`, `click-text`, `click --x/y`) all use `Input.dispatchMouseEvent` and pass `isTrusted: true`.
+JS `.click()` fires a synthetic MouseEvent. It works on most sites but fails silently on anti-bot pages and some hand-rolled event delegation. The trusted-event verbs (`click` in either form, `click-ax`) all use `Input.dispatchMouseEvent` and pass `isTrusted: true`.
 
 ### Don't switch strategy in a loop hoping one works
 
@@ -184,7 +194,7 @@ If you don't know which strategy fits, take a screenshot, read the page with `ch
 
 ## Why we have so many verbs
 
-Per [philosophy](./cli-philosophy.md) §1: we expose precise primitives because each strategy has a different failure mode. An agent that ran `click-text "Submit"` knows on failure whether to retry with `--nth`, take a fresh screenshot for coords, or fall back to `js`. An agent that ran a hypothetical "smart click" with auto-fallback would just see "click failed" and not know which knob to turn.
+Per [philosophy](./cli-philosophy.md) §1: we expose precise primitives because each strategy has a different failure mode. An agent that ran `click --x/--y` after a `js` TreeWalker knows the click target came from text search and can sanity-check by reading the rect back. An agent that ran a hypothetical "smart click" with auto-fallback would just see "click failed" and not know which knob to turn.
 
 The cost is more CLI surface. The benefit is that when something goes wrong, the agent's transcript already contains the diagnosis.
 
@@ -193,8 +203,8 @@ The cost is more CLI surface. The benefit is that when something goes wrong, the
 | Verb | Available in |
 |---|---|
 | `click <selector>` | 0.2.x+ |
+| `click --x N --y N` | **0.5.19+** |
 | `click-ax --node <id>` | 0.3.x+ |
 | `js <code>` | 0.2.x+ |
-| `click-text "<text>"` | **0.5.18+ (planned)** |
-| `click --x N --y N` | **0.5.18+ (planned)** |
 | `hover` (selector, x/y, or both) | 0.5.0+ |
+| ~~`click-text`~~ | intentionally not shipped — see [recipe](#recipe-click-by-visible-text) |

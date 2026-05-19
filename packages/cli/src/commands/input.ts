@@ -6,9 +6,33 @@ export function registerInput(ctx: CommandContext): void {
   const { program, withBase, run } = ctx;
 
   tabOpt(
-    program.command("click <selector>").description("Click an element by CSS selector.")
-  ).action(async (selector: string, opts) => {
-    await run("chrome_click_element", withBase(opts, { selector }));
+    program
+      .command("click [selector]")
+      .description("Click an element. Pass a CSS selector OR --x and --y for a coordinate click.")
+      .option("--x <px>", "explicit x coordinate (CSS pixels); requires --y", (v) => Number(v))
+      .option("--y <px>", "explicit y coordinate (CSS pixels); requires --x", (v) => Number(v))
+      .addHelpText(
+        "after",
+        `
+
+Examples:
+  chrome-relay click 'button[aria-label="Save"]'
+  chrome-relay click --tab 123 --x 1327 --y 771
+
+Pick selector mode when the element has a stable CSS query. Pick
+coordinate mode when the page wraps content in unmarked divs (Cloudflare
+dashboard, Vercel dashboard, etc.) and you got the rect from a prior
+\`chrome-relay js\` call or a screenshot. See docs/clicking-strategies.md.
+`
+      )
+  ).action(async (selector: string | undefined, opts) => {
+    const extras: Record<string, unknown> = {};
+    if (selector) extras.selector = selector;
+    // Forward partial input — protocol parser rejects x-without-y so the
+    // agent sees the typo instead of a silent fallback to selector mode.
+    if (typeof opts.x === "number") extras.x = opts.x;
+    if (typeof opts.y === "number") extras.y = opts.y;
+    await run("chrome_click_element", withBase(opts, extras));
   });
 
   tabOpt(

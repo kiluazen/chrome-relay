@@ -21,36 +21,47 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
     const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
 
-    // Resolve the element's center in viewport CSS pixels and scroll it into view.
-    const rect = await evalInTab(tabId, locateForClick, [parsed.selector]);
+    // Resolve target coords. Selector mode looks the element up in-page
+    // and scrolls it into view; coords mode trusts the caller's numbers
+    // and dispatches at those pixels directly.
+    let x: number, y: number;
+    if (parsed.kind === "coords") {
+      x = parsed.x;
+      y = parsed.y;
+    } else {
+      const rect = await evalInTab(tabId, locateForClick, [parsed.selector]);
+      x = rect.x;
+      y = rect.y;
+    }
 
     // Hover first — some pages (Material ripple, anti-bot heuristics) only register
     // clicks that follow a mouse move. Then a trusted press/release pair via CDP.
     await send(tabId, "Input.dispatchMouseEvent", {
       type: "mouseMoved",
-      x: rect.x,
-      y: rect.y,
+      x, y,
       button: "none",
       buttons: 0
     });
     await send(tabId, "Input.dispatchMouseEvent", {
       type: "mousePressed",
-      x: rect.x,
-      y: rect.y,
+      x, y,
       button: "left",
       buttons: 1,
       clickCount: 1
     });
     await send(tabId, "Input.dispatchMouseEvent", {
       type: "mouseReleased",
-      x: rect.x,
-      y: rect.y,
+      x, y,
       button: "left",
       buttons: 0,
       clickCount: 1
     });
 
-    return { clicked: true, selector: parsed.selector, x: rect.x, y: rect.y };
+    return {
+      clicked: true,
+      x, y,
+      ...(parsed.kind === "selector" ? { selector: parsed.selector } : {})
+    };
   },
 
   async [TOOL_NAMES.FILL](args) {

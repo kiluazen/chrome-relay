@@ -54,16 +54,49 @@ export function parseChromeReadPageArgs(input: unknown): ChromeReadPageArgs {
 
 // ---------------------------------------------------------------------------
 // chrome_click_element
+//
+// Two shapes — selector OR coords. Mirrors hover. Discriminated so the
+// handler can branch without re-doing the typeof dance. Coord path is the
+// last-resort verb for unmarked SPA cards (CF dashboard) and canvas UIs —
+// the agent supplies (x, y) from a prior `getBoundingClientRect()` read
+// via `js`, or from a known screenshot pixel.
 
-export interface ChromeClickArgs extends TargetArgs {
-  selector: string;
-}
+export type ChromeClickArgs =
+  | (TargetArgs & { kind: "selector"; selector: string })
+  | (TargetArgs & { kind: "coords"; x: number; y: number });
+
 export function parseChromeClickArgs(input: unknown): ChromeClickArgs {
   const obj = asObject(input, TOOL_NAMES.CLICK);
-  return {
-    selector: requireString(obj, "selector", TOOL_NAMES.CLICK),
-    ...parseTargetArgs(obj)
-  };
+  const target = parseTargetArgs(obj, TOOL_NAMES.CLICK);
+  const x = optNumber(obj, "x", TOOL_NAMES.CLICK);
+  const y = optNumber(obj, "y", TOOL_NAMES.CLICK);
+  // Strict: x without y (or vice versa) — same partial-coords rejection
+  // as hover. Catches `--x 10` typos that would otherwise fall through.
+  if ((x !== undefined) !== (y !== undefined)) {
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: "chrome_click_element: pass BOTH x and y, or neither (selector mode).",
+      tool: TOOL_NAMES.CLICK,
+      phase: "parse_arguments",
+      details: { received: { x: obj.x, y: obj.y } },
+      retryable: false
+    });
+  }
+  if (x !== undefined && y !== undefined) {
+    return { ...target, kind: "coords", x, y };
+  }
+  const selector = optString(obj, "selector", TOOL_NAMES.CLICK);
+  if (selector) {
+    return { ...target, kind: "selector", selector };
+  }
+  throw new RelayError({
+    code: "invalid_arguments",
+    message: "chrome_click_element requires either a selector or x AND y.",
+    tool: TOOL_NAMES.CLICK,
+    phase: "parse_arguments",
+    details: { received: { selector: obj.selector, x: obj.x, y: obj.y } },
+    retryable: false
+  });
 }
 
 // ---------------------------------------------------------------------------

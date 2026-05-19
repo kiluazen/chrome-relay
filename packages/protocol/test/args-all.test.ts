@@ -61,10 +61,20 @@ describe("simple-tool parsers", () => {
       .toEqual({ interactiveOnly: true, tabId: 5 });
   });
 
-  it("click: requires selector", () => {
+  it("click: requires selector OR x+y, returns discriminated union", () => {
     expectInvalid(() => parseChromeClickArgs({}));
+    // selector form
     expect(parseChromeClickArgs({ selector: ".foo", tabId: 1 }))
-      .toEqual({ selector: ".foo", tabId: 1 });
+      .toEqual({ kind: "selector", selector: ".foo", tabId: 1 });
+    // coords form
+    expect(parseChromeClickArgs({ x: 100, y: 200 }))
+      .toEqual({ kind: "coords", x: 100, y: 200 });
+    // partial coords reject (mirrors hover's rule)
+    expectInvalid(() => parseChromeClickArgs({ x: 10 }));
+    expectInvalid(() => parseChromeClickArgs({ y: 20 }));
+    // coords take precedence when both forms are passed (rare; defensible)
+    expect(parseChromeClickArgs({ selector: ".foo", x: 5, y: 5 }))
+      .toEqual({ kind: "coords", x: 5, y: 5 });
   });
 
   it("fill: requires selector + string value (empty allowed)", () => {

@@ -1,6 +1,6 @@
 {
   "name": "@chrome-relay/protocol",
-  "version": "0.5.18",
+  "version": "0.5.19",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

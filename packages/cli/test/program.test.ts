@@ -372,13 +372,33 @@ describe("CLI argument parsing", () => {
       await runArgs("click", "button.submit");
       expect(lastBody()).toEqual({
         name: "chrome_click_element",
-        args: { selector: "button.submit" }
+        // 0.5.19: protocol parser runs CLI-side and tags the discriminated
+        // union; selector mode comes through as { kind: "selector", selector }.
+        args: { kind: "selector", selector: "button.submit" }
       });
     });
 
     it("forwards --tab", async () => {
       await runArgs("click", "--tab", "9", "#go");
-      expect(lastBody().args).toEqual({ selector: "#go", tabId: 9 });
+      expect(lastBody().args).toEqual({ kind: "selector", selector: "#go", tabId: 9 });
+    });
+
+    // 0.5.19 — coordinate click. No selector positional; --x and --y both required.
+    it("posts coords-mode click when --x and --y are passed", async () => {
+      await runArgs("click", "--tab", "42", "--x", "540", "--y", "320");
+      expect(lastBody().args).toEqual({ kind: "coords", x: 540, y: 320, tabId: 42 });
+    });
+
+    it("rejects --x without --y (and vice versa)", async () => {
+      const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+      const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      await runArgs("click", "--x", "10");
+      // Either commander rejected at parse, OR the CLI-side protocol parse
+      // threw invalid_arguments. In both cases exit(1) or exit(2) is the
+      // signal. We just assert non-success — message is informational.
+      expect(exitSpy).toHaveBeenCalled();
+      stderrSpy.mockRestore();
+      exitSpy.mockRestore();
     });
   });
 
