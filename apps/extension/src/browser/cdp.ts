@@ -90,34 +90,59 @@ export async function ensureAttached(tabId: number): Promise<void> {
   await promise;
 }
 
-// Tell Chrome + the page that the tab is visible. Best-effort: failures
-// don't block attach (some pages — chrome://, the Web Store — can't be
-// touched at this level, and that's fine; the original tool call will
-// fail with a clearer error if needed).
+// Tell Chrome + the page that the tab is visible.
+//
+// Sequence matters: Page.enable MUST come before addScriptToEvaluateOnNewDocument
+// (Chrome silently drops the registration otherwise). We collect errors and
+// surface them via console.warn so we can SEE silent failures in the SW log
+// instead of just swallowing them — the previous version had all three calls
+// best-effort-silent, and one of them was failing for weeks without a hint.
 async function forceVisibility(tabId: number): Promise<void> {
+  const errors: string[] = [];
+  // Enable Page domain — required for addScriptToEvaluateOnNewDocument to
+  // actually persist registrations.
   try {
-    // Layer 1: Chrome stops throttling rAF/timers on this tab.
-    await chrome.debugger.sendCommand({ tabId }, "Page.setWebLifecycleState", { state: "active" });
-  } catch {
-    /* not all targets support this; ignore */
+    await chrome.debugger.sendCommand({ tabId }, "Page.enable", {});
+  } catch (e) {
+    errors.push(`Page.enable: ${e instanceof Error ? e.message : String(e)}`);
   }
+  // Tell Chrome the page lifecycle is active so rAF/setTimeout aren't throttled.
   try {
-    // Layer 2: install a script that runs on every navigation in this tab
-    // and overrides the visibility API surface so the page's own checks
-    // see "visible." Page.addScriptToEvaluateOnNewDocument fires before
-    // any page script. Effective for future navigations.
+    await chrome.debugger.sendCommand({ tabId }, "Page.setWebLifecycleState", { state: "active" });
+  } catch (e) {
+    errors.push(`Page.setWebLifecycleState: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  // Make document.hasFocus() return true. Many SPAs gate their initial
+  // data fetch on focus, not visibility — Cloudflare's dashboard is the
+  // motivating example: visibility-shim alone wasn't enough; focus
+  // emulation is what unlocks its render path.
+  try {
+    await chrome.debugger.sendCommand({ tabId }, "Emulation.setFocusEmulationEnabled", { enabled: true });
+  } catch (e) {
+    errors.push(`Emulation.setFocusEmulationEnabled: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  // Register the visibility shim to run before any page script on EVERY
+  // future navigation in this tab.
+  try {
     await chrome.debugger.sendCommand({ tabId }, "Page.addScriptToEvaluateOnNewDocument", {
       source: VISIBILITY_OVERRIDE_SCRIPT
     });
-  } catch { /* ignore */ }
+  } catch (e) {
+    errors.push(`Page.addScriptToEvaluateOnNewDocument: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  // Apply the shim to the CURRENTLY-loaded document. If the page is in the
+  // middle of its initial JS run and reads visibilityState early, this may
+  // arrive too late — but it's strictly better than not patching at all.
   try {
-    // Layer 3: apply the same shim to the CURRENTLY-loaded document via a
-    // one-shot Runtime.evaluate. The new-document script only catches
-    // future loads; this one catches the page we just attached to.
     await chrome.debugger.sendCommand({ tabId }, "Runtime.evaluate", {
       expression: VISIBILITY_OVERRIDE_SCRIPT
     });
-  } catch { /* ignore */ }
+  } catch (e) {
+    errors.push(`Runtime.evaluate: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  if (errors.length) {
+    console.warn(`[chrome-relay] forceVisibility partial failure on tab ${tabId}:`, errors);
+  }
 }
 
 // Self-contained, idempotent (re-running is a no-op) — guards on
@@ -126,12 +151,18 @@ const VISIBILITY_OVERRIDE_SCRIPT = `
 (() => {
   if (window.__chrome_relay_visibility_patched__) return;
   window.__chrome_relay_visibility_patched__ = true;
-  try {
-    Object.defineProperty(document, "visibilityState", { get: () => "visible", configurable: true });
-    Object.defineProperty(document, "hidden", { get: () => false, configurable: true });
-    Object.defineProperty(document, "webkitVisibilityState", { get: () => "visible", configurable: true });
-    Object.defineProperty(document, "webkitHidden", { get: () => false, configurable: true });
-  } catch (e) { /* some pages froze descriptors before us; tolerate */ }
+  // Each override gets its own try/catch — if one fails (deprecated
+  // descriptor, frozen prototype), the rest still apply.
+  try { Object.defineProperty(document, "visibilityState", { get: () => "visible", configurable: true }); } catch (e) {}
+  try { Object.defineProperty(document, "hidden", { get: () => false, configurable: true }); } catch (e) {}
+  try { Object.defineProperty(document, "webkitVisibilityState", { get: () => "visible", configurable: true }); } catch (e) {}
+  try { Object.defineProperty(document, "webkitHidden", { get: () => false, configurable: true }); } catch (e) {}
+  // hasFocus — patch BOTH the instance and the prototype. Cloudflare-style
+  // "wait for focus before fetching" gates may read either path.
+  try { document.hasFocus = function () { return true; }; } catch (e) {}
+  try { Object.defineProperty(Document.prototype, "hasFocus", { value: function () { return true; }, configurable: true, writable: true }); } catch (e) {}
+  // Make window.focus events / activeElement queries look real.
+  try { Object.defineProperty(document, "wasDiscarded", { get: () => false, configurable: true }); } catch (e) {}
   // Suppress visibilitychange events so pages that listen for them
   // don't re-fire stale "you've come back" logic on every attach.
   document.addEventListener("visibilitychange", (e) => {

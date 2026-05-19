@@ -9,6 +9,12 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.18": [
+    "Force-visible on attach — actually fixes Cloudflare-style SPAs now. 0.5.17 had two bugs: (1) missing `Page.enable` before `Page.addScriptToEvaluateOnNewDocument` (the script registration silently failed, so the shim only applied to the current doc — page reloads dropped it), (2) the JS shim used one try-block so a deprecated `Object.defineProperty(document, 'webkitVisibilityState')` could throw and skip the `document.hasFocus` patch.",
+    "0.5.18 fixes both: enables Page domain first, then applies each patch in its own try/catch. New patches added: `document.hasFocus` (overridden on both instance and Document.prototype), `Emulation.setFocusEmulationEnabled` via CDP, `document.wasDiscarded`. End result: Cloudflare Web Analytics dashboard now fully renders on backgrounded tabs without focus theft (verified live).",
+    "Reverted the `navigate --new` about:blank trampoline from 0.5.17. It was opening about:blank as a stepping stone to attach before page JS ran; user-visible as a ~200ms flash. Removed — the addScriptToEvaluateOnNewDocument registration in 0.5.18 is robust enough that subsequent reloads pick up the shim cleanly.",
+    "Honest caveat: shim covers visibility + focus gates. If a page detects automation via other means (chrome.runtime.connect probe, navigator.webdriver, debugger evaluation traces), chrome-relay won't help — those need stealth-mode workarounds separate from visibility."
+  ],
   "0.5.17": [
     "Force-visible on attach (default-on). Modern SPAs (Cloudflare dashboard, Linear, Notion) gate their JS on `document.visibilityState` and stall on backgrounded tabs — chrome-relay's whole pitch is operate-without-stealing-focus, and that pitch silently broke whenever the page was visibility-gated. Fix runs three CDP calls on every attach: `Page.setWebLifecycleState({state:'active'})` to stop Chrome's rAF/timer throttling, plus a JS shim (installed via `Page.addScriptToEvaluateOnNewDocument` AND `Runtime.evaluate`) that overrides `document.visibilityState` / `document.hidden` so the page's own checks see 'visible.'",
     "Scoped to debugger-attached tabs only — other tabs the user has open stay normally throttled. Override clears when chrome-relay detaches. User's viewport never changes.",
