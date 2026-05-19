@@ -13,6 +13,8 @@
 // to recover." Easier-to-reason-about than soft-rebinding behind the
 // agent's back.
 
+import { RelayError, TOOL_NAMES } from "@chrome-relay/protocol";
+
 const STORAGE_KEY = "chrome_relay_workspaces_v1";
 
 export interface WorkspaceRecord {
@@ -37,17 +39,31 @@ async function saveTable(table: WorkspaceTable): Promise<void> {
 
 export async function createWorkspace(name: string, opts: { url?: string; label?: string } = {}): Promise<WorkspaceRecord> {
   if (!name || !/^[a-z0-9][a-z0-9_.-]{0,63}$/i.test(name)) {
-    throw new Error(`Workspace name must match [a-z0-9][a-z0-9_.-]{0,63}. Got: "${name}"`);
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: `Workspace name must match [a-z0-9][a-z0-9_.-]{0,63}. Got: "${name}"`,
+      tool: TOOL_NAMES.WORKSPACE,
+      phase: "validate_workspace_name",
+      details: { name },
+      retryable: false
+    });
   }
   const table = await loadTable();
   if (table[name]) {
     // If the existing window is still alive, refuse — caller should `workspace close` first.
     try {
       await chrome.windows.get(table[name].windowId);
-      throw new Error(`Workspace "${name}" already exists (window ${table[name].windowId}). Run: chrome-relay workspace close ${name} first.`);
+      throw new RelayError({
+        code: "invalid_arguments",
+        message: `Workspace "${name}" already exists (window ${table[name].windowId}). Run: chrome-relay workspace close ${name} first.`,
+        tool: TOOL_NAMES.WORKSPACE,
+        phase: "create_workspace",
+        details: { name, windowId: table[name].windowId, reason: "name_in_use" },
+        retryable: false
+      });
     } catch (e) {
       // Window is gone — silently overwrite the orphan record below.
-      if (e instanceof Error && /already exists/.test(e.message)) throw e;
+      if (e instanceof RelayError) throw e;
     }
   }
   const window = await chrome.windows.create({
@@ -56,7 +72,14 @@ export async function createWorkspace(name: string, opts: { url?: string; label?
     type: "normal"
   });
   if (typeof window.id !== "number") {
-    throw new Error("chrome.windows.create did not return a window id.");
+    throw new RelayError({
+      code: "chrome_api_error",
+      message: "chrome.windows.create did not return a window id.",
+      tool: TOOL_NAMES.WORKSPACE,
+      phase: "chrome.windows.create",
+      details: { returnedWindow: window },
+      retryable: false
+    });
   }
   const record: WorkspaceRecord = {
     name,
@@ -87,7 +110,14 @@ export async function closeWorkspace(name: string): Promise<{ closed: boolean; w
   const table = await loadTable();
   const rec = table[name];
   if (!rec) {
-    throw new Error(`Workspace "${name}" not found.`);
+    throw new RelayError({
+      code: "target_not_found",
+      message: `Workspace "${name}" not found.`,
+      tool: TOOL_NAMES.WORKSPACE,
+      phase: "close_workspace",
+      details: { name },
+      retryable: false
+    });
   }
   let windowExisted = false;
   try {
@@ -108,23 +138,41 @@ export async function resolveWorkspaceTarget(name: string): Promise<chrome.tabs.
   const table = await loadTable();
   const rec = table[name];
   if (!rec) {
-    throw new Error(
-      `Workspace "${name}" not found. Run: chrome-relay workspace create ${name}`
-    );
+    throw new RelayError({
+      code: "target_not_found",
+      message: `Workspace "${name}" not found. Run: chrome-relay workspace create ${name}`,
+      tool: TOOL_NAMES.WORKSPACE,
+      phase: "resolve_workspace",
+      details: { name },
+      retryable: false
+    });
   }
   let windowId: number;
   try {
     const win = await chrome.windows.get(rec.windowId);
     windowId = win.id as number;
-  } catch {
-    throw new Error(
-      `Workspace "${name}"'s window (id ${rec.windowId}) is gone. ` +
-        `Run: chrome-relay workspace close ${name} && chrome-relay workspace create ${name}`
-    );
+  } catch (e) {
+    throw new RelayError({
+      code: "target_not_found",
+      message:
+        `Workspace "${name}"'s window (id ${rec.windowId}) is gone. ` +
+        `Run: chrome-relay workspace close ${name} && chrome-relay workspace create ${name}`,
+      tool: TOOL_NAMES.WORKSPACE,
+      phase: "chrome.windows.get",
+      details: { name, windowId: rec.windowId, underlying: e instanceof Error ? e.message : String(e) },
+      retryable: false
+    });
   }
   const tabs = await chrome.tabs.query({ active: true, windowId });
   if (tabs.length === 0 || !tabs[0]) {
-    throw new Error(`Workspace "${name}"'s window has no active tab.`);
+    throw new RelayError({
+      code: "target_not_found",
+      message: `Workspace "${name}"'s window has no active tab.`,
+      tool: TOOL_NAMES.WORKSPACE,
+      phase: "chrome.tabs.query",
+      details: { name, windowId, active: true },
+      retryable: false
+    });
   }
   return tabs[0];
 }

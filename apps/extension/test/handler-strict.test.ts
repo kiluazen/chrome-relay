@@ -103,6 +103,29 @@ describe("resolveTarget — strict against conflicting loose target fields", () 
   });
 });
 
+describe("resolveTarget — structured target misses", () => {
+  it("returns target_not_found when the active tab cannot be resolved", async () => {
+    (globalThis as any).chrome.tabs.query.mockResolvedValueOnce([]);
+    const runTool = await load();
+    const err = await expectRelayError(
+      () => runTool("chrome_read_page", {}),
+      "target_not_found"
+    );
+    expect(err.phase).toBe("resolve_active_tab");
+  });
+
+  it("returns target_not_found when an explicit tab id is stale", async () => {
+    (globalThis as any).chrome.tabs.get.mockRejectedValueOnce(new Error("No tab with id: 123"));
+    const runTool = await load();
+    const err = await expectRelayError(
+      () => runTool("chrome_read_page", { tabId: 123 }),
+      "target_not_found"
+    );
+    expect(err.phase).toBe("resolve_tab");
+    expect(err.details?.tabId).toBe(123);
+  });
+});
+
 describe("Missing-arg throws now structured invalid_arguments", () => {
   it("chrome_click_element without selector → invalid_arguments", async () => {
     const runTool = await load();

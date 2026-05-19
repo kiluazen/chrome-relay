@@ -22,6 +22,7 @@
 // the CLI's screencast stop, after frames are written to disk — keeps the
 // raw stream intact for callers that pass --no-dedupe.
 
+import { RelayError, TOOL_NAMES } from "@chrome-relay/protocol";
 import { ensureAttached, send } from "./cdp";
 
 export interface ScreencastFrame {
@@ -59,9 +60,14 @@ interface RawScreencastFrame {
 
 export async function startScreencast(tabId: number, opts: StartOptions = {}): Promise<{ started: boolean }> {
   if (sessions.has(tabId)) {
-    throw new Error(
-      `Screencast already running on tab ${tabId}. Call screencast stop --tab ${tabId} first.`
-    );
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: `Screencast already running on tab ${tabId}. Call screencast stop --tab ${tabId} first.`,
+      tool: TOOL_NAMES.SCREENCAST,
+      phase: "start_screencast",
+      details: { tabId },
+      retryable: false
+    });
   }
   await ensureAttached(tabId);
   await send(tabId, "Page.enable", {});
@@ -107,7 +113,14 @@ export async function stopScreencast(tabId: number): Promise<{
 }> {
   const session = sessions.get(tabId);
   if (!session) {
-    throw new Error(`No screencast running on tab ${tabId}.`);
+    throw new RelayError({
+      code: "target_not_found",
+      message: `No screencast running on tab ${tabId}.`,
+      tool: TOOL_NAMES.SCREENCAST,
+      phase: "stop_screencast",
+      details: { tabId },
+      retryable: false
+    });
   }
   try {
     await send(tabId, "Page.stopScreencast", {});

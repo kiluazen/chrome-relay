@@ -9,7 +9,12 @@
 // changes.
 
 import type { Command } from "commander";
-import { RelayError } from "@chrome-relay/protocol";
+import {
+  RelayError,
+  TOOL_NAMES,
+  parseToolArgs,
+  type ToolName
+} from "@chrome-relay/protocol";
 import { callTool } from "../client/call.js";
 
 // Shared context passed to every command-group registration function.
@@ -116,7 +121,8 @@ function emitTargetOverride(kind: string, from: string, to: string): void {
 // agents can parse `{relayError: {...}}` mechanically without a separate flag.
 async function runToolImpl(name: string, args: Record<string, unknown>): Promise<void> {
   try {
-    const result = await callTool(name, args);
+    const parsedArgs = isToolName(name) ? parseToolArgs(name, args) : args;
+    const result = await callTool(name, parsedArgs as Record<string, unknown>);
     if (typeof result === "string") {
       process.stdout.write(result + "\n");
     } else {
@@ -136,3 +142,7 @@ async function runToolImpl(name: string, args: Record<string, unknown>): Promise
 }
 
 export const runTool = runToolImpl;
+
+function isToolName(name: string): name is ToolName {
+  return (Object.values(TOOL_NAMES) as string[]).includes(name);
+}

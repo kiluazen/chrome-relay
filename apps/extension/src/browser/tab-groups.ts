@@ -8,6 +8,8 @@
 // across SW restarts but not across browser restarts, so dead entries
 // auto-prune via chrome.tabGroups.onRemoved.
 
+import { RelayError, TOOL_NAMES } from "@chrome-relay/protocol";
+
 const STORAGE_KEY = "chrome_relay_tab_groups_v1";
 
 // Chrome's @types package doesn't currently export the ColorEnum union, so
@@ -44,7 +46,14 @@ async function saveTable(table: TabGroupTable): Promise<void> {
 
 function validName(name: string): void {
   if (!name || !/^[a-z0-9][a-z0-9_.-]{0,63}$/i.test(name)) {
-    throw new Error(`Tab-group name must match [a-z0-9][a-z0-9_.-]{0,63}. Got: "${name}"`);
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: `Tab-group name must match [a-z0-9][a-z0-9_.-]{0,63}. Got: "${name}"`,
+      tool: TOOL_NAMES.GROUP,
+      phase: "validate_group_name",
+      details: { name },
+      retryable: false
+    });
   }
 }
 
@@ -58,18 +67,31 @@ export interface CreateTabGroupOpts {
 export async function createTabGroup(name: string, opts: CreateTabGroupOpts): Promise<TabGroupRecord> {
   validName(name);
   if (!Array.isArray(opts.tabIds) || opts.tabIds.length === 0) {
-    throw new Error("createTabGroup requires at least one tabId.");
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: "createTabGroup requires at least one tabId.",
+      tool: TOOL_NAMES.GROUP,
+      phase: "create_tab_group",
+      details: { tabIds: opts.tabIds },
+      retryable: false
+    });
   }
   const table = await loadTable();
   if (table[name]) {
     try {
       await chrome.tabGroups.get(table[name].groupId);
-      throw new Error(
-        `Tab-group "${name}" already exists (id ${table[name].groupId}). ` +
-          `Run: chrome-relay group close ${name} first, or use 'group add' to extend it.`
-      );
+      throw new RelayError({
+        code: "invalid_arguments",
+        message:
+          `Tab-group "${name}" already exists (id ${table[name].groupId}). ` +
+          `Run: chrome-relay group close ${name} first, or use 'group add' to extend it.`,
+        tool: TOOL_NAMES.GROUP,
+        phase: "create_tab_group",
+        details: { name, groupId: table[name].groupId, reason: "name_in_use" },
+        retryable: false
+      });
     } catch (e) {
-      if (e instanceof Error && /already exists/.test(e.message)) throw e;
+      if (e instanceof RelayError) throw e;
       // group is gone → silently overwrite below
     }
   }
@@ -123,7 +145,14 @@ export async function closeTabGroup(name: string): Promise<{ closed: boolean; gr
   const table = await loadTable();
   const rec = table[name];
   if (!rec) {
-    throw new Error(`Tab-group "${name}" not found.`);
+    throw new RelayError({
+      code: "target_not_found",
+      message: `Tab-group "${name}" not found.`,
+      tool: TOOL_NAMES.GROUP,
+      phase: "close_tab_group",
+      details: { name },
+      retryable: false
+    });
   }
   let groupExisted = false;
   let ungrouped = 0;
@@ -147,10 +176,24 @@ export async function addToTabGroup(name: string, tabIds: number[]): Promise<{ g
   const table = await loadTable();
   const rec = table[name];
   if (!rec) {
-    throw new Error(`Tab-group "${name}" not found. Run: chrome-relay group create ${name} --tabs <ids> first.`);
+    throw new RelayError({
+      code: "target_not_found",
+      message: `Tab-group "${name}" not found. Run: chrome-relay group create ${name} --tabs <ids> first.`,
+      tool: TOOL_NAMES.GROUP,
+      phase: "add_to_tab_group",
+      details: { name },
+      retryable: false
+    });
   }
   if (tabIds.length === 0) {
-    throw new Error("addToTabGroup requires at least one tabId.");
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: "addToTabGroup requires at least one tabId.",
+      tool: TOOL_NAMES.GROUP,
+      phase: "add_to_tab_group",
+      details: { name, tabIds },
+      retryable: false
+    });
   }
   await chrome.tabs.group({ tabIds, groupId: rec.groupId });
   return { groupId: rec.groupId, added: tabIds.length };
@@ -158,7 +201,14 @@ export async function addToTabGroup(name: string, tabIds: number[]): Promise<{ g
 
 export async function removeFromTabGroup(tabIds: number[]): Promise<{ removed: number }> {
   if (tabIds.length === 0) {
-    throw new Error("removeFromTabGroup requires at least one tabId.");
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: "removeFromTabGroup requires at least one tabId.",
+      tool: TOOL_NAMES.GROUP,
+      phase: "remove_from_tab_group",
+      details: { tabIds },
+      retryable: false
+    });
   }
   await chrome.tabs.ungroup(tabIds);
   return { removed: tabIds.length };
@@ -171,19 +221,39 @@ export async function resolveTabGroupTarget(name: string): Promise<chrome.tabs.T
   const table = await loadTable();
   const rec = table[name];
   if (!rec) {
-    throw new Error(`Tab-group "${name}" not found. Run: chrome-relay group create ${name} --tabs <ids>`);
+    throw new RelayError({
+      code: "target_not_found",
+      message: `Tab-group "${name}" not found. Run: chrome-relay group create ${name} --tabs <ids>`,
+      tool: TOOL_NAMES.GROUP,
+      phase: "resolve_tab_group",
+      details: { name },
+      retryable: false
+    });
   }
   try {
     await chrome.tabGroups.get(rec.groupId);
-  } catch {
-    throw new Error(
-      `Tab-group "${name}" (id ${rec.groupId}) is gone (window closed, or you ungrouped its last tab). ` +
-        `Run: chrome-relay group close ${name} && chrome-relay group create ${name} --tabs <ids>`
-    );
+  } catch (e) {
+    throw new RelayError({
+      code: "target_not_found",
+      message:
+        `Tab-group "${name}" (id ${rec.groupId}) is gone (window closed, or you ungrouped its last tab). ` +
+        `Run: chrome-relay group close ${name} && chrome-relay group create ${name} --tabs <ids>`,
+      tool: TOOL_NAMES.GROUP,
+      phase: "chrome.tabGroups.get",
+      details: { name, groupId: rec.groupId, underlying: e instanceof Error ? e.message : String(e) },
+      retryable: false
+    });
   }
   const tabs = await chrome.tabs.query({ groupId: rec.groupId });
   if (tabs.length === 0) {
-    throw new Error(`Tab-group "${name}" has no tabs.`);
+    throw new RelayError({
+      code: "target_not_found",
+      message: `Tab-group "${name}" has no tabs.`,
+      tool: TOOL_NAMES.GROUP,
+      phase: "chrome.tabs.query",
+      details: { name, groupId: rec.groupId },
+      retryable: false
+    });
   }
   const active = tabs.find((t) => t.active);
   return active ?? tabs[0];

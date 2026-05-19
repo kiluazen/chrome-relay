@@ -8,10 +8,10 @@
     "build:cli": "pnpm --filter chrome-relay build",
     "build:extension": "pnpm --filter chrome-relay-extension build",
     "dev:extension": "pnpm --filter chrome-relay-extension dev",
-    "lint": "pnpm -r lint",
+    "lint": "pnpm --filter @chrome-relay/protocol build && pnpm -r lint",
     "store:zip": "pnpm --filter chrome-relay-extension zip",
-    "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r --workspace-concurrency=1 test",
+    "typecheck": "pnpm --filter @chrome-relay/protocol build && pnpm -r typecheck",
+    "test": "pnpm --filter @chrome-relay/protocol build && pnpm -r --workspace-concurrency=1 test",
     "test:e2e": "pnpm --filter chrome-relay-extension test:e2e",
     "test:all": "pnpm test && pnpm test:e2e"
   },

@@ -73,8 +73,16 @@ function makeChromeStub(): ChromeStub {
 
 (globalThis as unknown as { chrome: ChromeStub }).chrome = makeChromeStub();
 
-beforeEach(() => {
+beforeEach(async () => {
   (globalThis as unknown as { chrome: ChromeStub }).chrome = makeChromeStub();
+  // Disable force-visibility-on-attach for the cdp.ts unit tests so their
+  // pre-queued mockResolvedValueOnce responses target the user's command,
+  // not the 3 visibility-shim CDP calls. Tests that exercise the shim
+  // explicitly re-enable it.
+  try {
+    const cdp = await import("../src/browser/cdp");
+    cdp._setForceVisibilityEnabledForTests(false);
+  } catch { /* module may not load in some environments; ignore */ }
 });
 
 export function getChromeStub(): ChromeStub {

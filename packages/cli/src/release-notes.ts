@@ -9,6 +9,12 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.17": [
+    "Force-visible on attach (default-on). Modern SPAs (Cloudflare dashboard, Linear, Notion) gate their JS on `document.visibilityState` and stall on backgrounded tabs — chrome-relay's whole pitch is operate-without-stealing-focus, and that pitch silently broke whenever the page was visibility-gated. Fix runs three CDP calls on every attach: `Page.setWebLifecycleState({state:'active'})` to stop Chrome's rAF/timer throttling, plus a JS shim (installed via `Page.addScriptToEvaluateOnNewDocument` AND `Runtime.evaluate`) that overrides `document.visibilityState` / `document.hidden` so the page's own checks see 'visible.'",
+    "Scoped to debugger-attached tabs only — other tabs the user has open stay normally throttled. Override clears when chrome-relay detaches. User's viewport never changes.",
+    "Behavioral guidance: never call `chrome-relay switch` to make a backgrounded SPA render — it stalls because of visibility gating, not chrome-relay. The new attach behavior fixes it invisibly.",
+    "Tests: +4 in apps/extension/test/force-visibility.test.ts. Total 426 (was 422)."
+  ],
   "0.5.16": [
     "chrome_hover now rejects partial-coordinate intent (`--x 10` without `--y`, or vice versa) instead of silently falling through to selector-mode and losing the half-passed coordinate. CLI forwards even partial input so the protocol parser sees it.",
     "Network body errors are now structured RelayError instead of plain Error. `getBody` for a request that's not in the buffer → `target_not_found`; CDP failure (Chrome GC'd the body, permission denied, etc.) → `cdp_error` with the original message under `details.underlying`. Agents can branch on the code instead of pattern-matching the message.",

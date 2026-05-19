@@ -11,7 +11,13 @@ export type ToolHandler = (args: ToolArguments) => Promise<unknown>;
 export async function getActiveTab(): Promise<chrome.tabs.Tab> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) {
-    throw new Error("No active tab found.");
+    throw new RelayError({
+      code: "target_not_found",
+      message: "No active tab found.",
+      phase: "resolve_active_tab",
+      details: { active: true, currentWindow: true },
+      retryable: false
+    });
   }
   return tab;
 }
@@ -41,13 +47,43 @@ export async function resolveTarget(args: {
     });
   }
   if (typeof args.tabId === "number") {
-    return chrome.tabs.get(args.tabId);
+    try {
+      return await chrome.tabs.get(args.tabId);
+    } catch (e) {
+      throw new RelayError({
+        code: "target_not_found",
+        message: `Target tab ${args.tabId} not found.`,
+        phase: "resolve_tab",
+        details: { tabId: args.tabId, underlying: e instanceof Error ? e.message : String(e) },
+        retryable: false
+      });
+    }
   }
   if (typeof args.groupName === "string" && args.groupName) {
-    return resolveTabGroupTarget(args.groupName);
+    try {
+      return await resolveTabGroupTarget(args.groupName);
+    } catch (e) {
+      throw new RelayError({
+        code: "target_not_found",
+        message: `Target tab-group "${args.groupName}" not found.`,
+        phase: "resolve_group",
+        details: { groupName: args.groupName, underlying: e instanceof Error ? e.message : String(e) },
+        retryable: false
+      });
+    }
   }
   if (typeof args.workspaceName === "string" && args.workspaceName) {
-    return resolveWorkspaceTarget(args.workspaceName);
+    try {
+      return await resolveWorkspaceTarget(args.workspaceName);
+    } catch (e) {
+      throw new RelayError({
+        code: "target_not_found",
+        message: `Target workspace "${args.workspaceName}" not found.`,
+        phase: "resolve_workspace",
+        details: { workspaceName: args.workspaceName, underlying: e instanceof Error ? e.message : String(e) },
+        retryable: false
+      });
+    }
   }
   return getActiveTab();
 }
@@ -55,14 +91,30 @@ export async function resolveTarget(args: {
 // Compatibility shim — existing call sites still pass a bare number.
 export async function getTargetTab(tabId?: number): Promise<chrome.tabs.Tab> {
   if (typeof tabId === "number") {
-    return chrome.tabs.get(tabId);
+    try {
+      return await chrome.tabs.get(tabId);
+    } catch (e) {
+      throw new RelayError({
+        code: "target_not_found",
+        message: `Target tab ${tabId} not found.`,
+        phase: "resolve_tab",
+        details: { tabId, underlying: e instanceof Error ? e.message : String(e) },
+        retryable: false
+      });
+    }
   }
   return getActiveTab();
 }
 
 export function requireTabId(tab: chrome.tabs.Tab): number {
   if (typeof tab.id !== "number") {
-    throw new Error("Target tab has no tab ID.");
+    throw new RelayError({
+      code: "target_not_found",
+      message: "Target tab has no tab ID.",
+      phase: "require_tab_id",
+      details: { tab },
+      retryable: false
+    });
   }
   return tab.id;
 }

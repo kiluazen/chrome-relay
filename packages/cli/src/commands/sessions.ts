@@ -189,9 +189,9 @@ Notes:
     .option("--color <color>", "grey | blue | red | yellow | green | pink | purple | cyan | orange")
     .option("--collapsed", "create the group in its collapsed state")
     .action(async (name: string, opts) => {
-      // Forward the raw comma-separated string. parseChromeGroupArgs
-      // in @chrome-relay/protocol does strict per-element parsing —
-      // doing it CLI-side would silently swallow bad IDs.
+      // Build the raw comma-separated string here; shared runTool()
+      // validates + normalizes it through parseChromeGroupArgs before
+      // posting to the bridge, so bad IDs fail locally.
       const args: Record<string, unknown> = { action: "create", name, tabIds: String(opts.tabs) };
       if (opts.color)     args.color = opts.color;
       if (opts.collapsed) args.collapsed = true;
@@ -217,7 +217,7 @@ Notes:
     .description("Add existing tabs to an existing tab-group.")
     .requiredOption("--tabs <ids>", "comma-separated tab IDs to add")
     .action(async (name: string, opts) => {
-      // Raw string forwarded; protocol parser handles per-element strict parsing.
+      // Raw string built here; shared runTool() validates + normalizes it.
       await run("chrome_group", { action: "add", name, tabIds: String(opts.tabs) });
     });
 
@@ -226,7 +226,7 @@ Notes:
     .description("Ungroup specific tabs (they remain open, just outside any tab-group).")
     .requiredOption("--tabs <ids>", "comma-separated tab IDs to ungroup")
     .action(async (opts) => {
-      // Raw string forwarded; protocol parser handles per-element strict parsing.
+      // Raw string built here; shared runTool() validates + normalizes it.
       await run("chrome_group", { action: "remove", tabIds: String(opts.tabs) });
     });
 

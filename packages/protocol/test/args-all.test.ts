@@ -23,7 +23,8 @@ import {
   parseChromeNetworkArgs,
   parseChromeWorkspaceArgs,
   parseChromeGroupArgs,
-  parseChromeScreencastArgs
+  parseChromeScreencastArgs,
+  parseToolArgs
 } from "../src/index";
 
 function expectInvalid(fn: () => unknown): RelayError {
@@ -33,6 +34,20 @@ function expectInvalid(fn: () => unknown): RelayError {
   expect((caught as RelayError).code).toBe("invalid_arguments");
   return caught as RelayError;
 }
+
+describe("parseToolArgs dispatcher", () => {
+  it("routes known tool names through the matching parser", () => {
+    expect(parseToolArgs("chrome_navigate", { url: "https://example.com", newTab: true }))
+      .toEqual({ url: "https://example.com", newTab: true });
+    expect(parseToolArgs("chrome_network", { action: "body", requestId: "req-1", head: 128 }))
+      .toEqual({ action: "body", requestId: "req-1", head: 128 });
+  });
+
+  it("throws the same structured invalid_arguments errors as the direct parser", () => {
+    const err = expectInvalid(() => parseToolArgs("chrome_network", { action: "body", head: -1 }));
+    expect(err.tool).toBe("chrome_network");
+  });
+});
 
 describe("simple-tool parsers", () => {
   it("get_windows_and_tabs / self_reload accept anything (no args)", () => {

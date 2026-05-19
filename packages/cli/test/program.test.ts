@@ -113,19 +113,19 @@ describe("CLI argument parsing", () => {
   describe("network (§2.7a)", () => {
     it("default (read) posts chrome_network with just tabId", async () => {
       await runArgs("network", "--tab", "42");
-      expect(lastBody()).toEqual({ name: "chrome_network", args: { tabId: 42 } });
+      expect(lastBody()).toEqual({ name: "chrome_network", args: { tabId: 42, action: "read" } });
     });
     it("filter + status + method + limit are forwarded (Issue #6: parent-level flags)", async () => {
       // These flags now live on the parent `network` command, so `chrome-relay network --filter X`
       // works without spelling out `read`.
       await runArgs("network", "--tab", "42", "--filter", "api.", "--status", "ok", "--method", "POST", "--limit", "10");
       expect(lastBody().args).toEqual({
-        tabId: 42, filter: "api.", status: "ok", method: "POST", limit: 10
+        tabId: 42, action: "read", filter: "api.", status: "ok", method: "POST", limit: 10
       });
     });
     it("network read alias still works with the same flags", async () => {
       await runArgs("network", "read", "--tab", "42", "--filter", "api.");
-      expect(lastBody().args).toEqual({ tabId: 42, filter: "api." });
+      expect(lastBody().args).toEqual({ tabId: 42, action: "read", filter: "api." });
     });
     it("body subcommand sets action=body + requestId (default 8KB truncation server-side)", async () => {
       await runArgs("network", "body", "req-123", "--tab", "42");
@@ -141,6 +141,14 @@ describe("CLI argument parsing", () => {
     it("body --head <bytes> caps explicitly (Issue #5)", async () => {
       await runArgs("network", "body", "req-1", "--tab", "42", "--head", "1024");
       expect(lastBody().args).toEqual({ tabId: 42, action: "body", requestId: "req-1", head: 1024 });
+    });
+    it("validates known tool args locally before posting to the bridge", async () => {
+      await runArgs("network", "body", "req-1", "--tab", "42", "--head", "-1");
+      expect(fetchSpy).not.toHaveBeenCalled();
+      const stderrText = stderrSpy.mock.calls.map((c) => c[0]).join("");
+      expect(stderrText).toMatch(/chrome_network/);
+      expect(stderrText).toMatch(/relayError/);
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
     it("har subcommand sets action=har", async () => {
       await runArgs("network", "har", "--tab", "42");
@@ -250,7 +258,7 @@ describe("CLI argument parsing", () => {
       await runArgs("group", "create", "research", "--tabs", "123,456,789", "--color", "cyan");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "create", name: "research", tabIds: "123,456,789", color: "cyan" }
+        args: { action: "create", name: "research", tabIds: [123, 456, 789], color: "cyan" }
       });
     });
 
@@ -258,7 +266,7 @@ describe("CLI argument parsing", () => {
       await runArgs("group", "create", "later", "--tabs", "1", "--collapsed");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "create", name: "later", tabIds: "1", collapsed: true }
+        args: { action: "create", name: "later", tabIds: [1], collapsed: true }
       });
     });
 
@@ -276,7 +284,7 @@ describe("CLI argument parsing", () => {
       await runArgs("group", "add", "research", "--tabs", "1011");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "add", name: "research", tabIds: "1011" }
+        args: { action: "add", name: "research", tabIds: [1011] }
       });
     });
 
@@ -284,7 +292,7 @@ describe("CLI argument parsing", () => {
       await runArgs("group", "remove", "--tabs", "456,789");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "remove", tabIds: "456,789" }
+        args: { action: "remove", tabIds: [456, 789] }
       });
     });
 

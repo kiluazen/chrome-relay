@@ -12,6 +12,7 @@
 // The CLI surface (chrome_ax / chrome_click_ax tools) wraps these with arg
 // parsing in tools.ts.
 
+import { RelayError, TOOL_NAMES } from "@chrome-relay/protocol";
 import { send } from "./cdp";
 
 // The 17 roles that count as "actionable" — confirmed in the design doc.
@@ -239,13 +240,24 @@ export async function clickAxNode(tabId: number, backendDOMNodeId: number): Prom
     );
     boxModel = resp.model;
   } catch (e) {
-    throw new Error(
-      `AX node ${backendDOMNodeId} no longer exists or has no box. Re-run \`chrome-relay ax\` and try again. ` +
-        `(${e instanceof Error ? e.message : String(e)})`
-    );
+    throw new RelayError({
+      code: "element_not_found",
+      message: `AX node ${backendDOMNodeId} no longer exists or has no box. Re-run \`chrome-relay ax\` and try again.`,
+      tool: TOOL_NAMES.CLICK_AX,
+      phase: "DOM.getBoxModel",
+      details: { backendDOMNodeId, underlying: e instanceof Error ? e.message : String(e) },
+      retryable: false
+    });
   }
   if (!boxModel) {
-    throw new Error(`AX node ${backendDOMNodeId} returned no box model.`);
+    throw new RelayError({
+      code: "element_not_found",
+      message: `AX node ${backendDOMNodeId} returned no box model.`,
+      tool: TOOL_NAMES.CLICK_AX,
+      phase: "DOM.getBoxModel",
+      details: { backendDOMNodeId },
+      retryable: false
+    });
   }
 
   // Scroll into view first — same reason chrome_click_element scrolls.
