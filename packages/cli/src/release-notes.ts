@@ -13,6 +13,7 @@ export const RELEASE_NOTES: Record<string, string[]> = {
     "BREAKING — `chrome-relay navigate` no longer steals focus by default. Background is now the implicit behavior; agents pass `--active` when they actually want the user looking at the new tab. The whole product pitch is 'operate without stealing focus' — the default needed to match.",
     "`--inactive` flag removed entirely. It was the opt-in for the previous (wrong) default; now it'd be a no-op, and no-op flags are dead code. Agents that were passing `--inactive` should drop it (the behavior is now the default). Commander will reject the unknown flag — that's the right signal to update.",
     "Workspace `chrome.windows.create({focused: false})` was already correct from earlier work, so workspaces are unaffected.",
+    "Click now dispatches as a pointer event. Added `pointerType: \"mouse\"` to all three `Input.dispatchMouseEvent` calls in the CLICK handler. Without it, CDP only fires mouse events — modern UI libs (Radix, React-Aria, Headless UI) listen on `pointerdown` and silently ignore mouse-only clicks, so dropdowns / menu triggers / select widgets stayed closed even though the click registered. Discovered while dogfooding `chrome-relay click --x N --y N` against npm's token-creation form; verified by completing the full token-creation flow end-to-end (radio click, combobox open, submit) via chrome-relay tools.",
     "Tests: navigate test updated to assert no `active` field in default request, plus a new test verifying `--active` opts in to focus."
   ],
   "0.5.19": [

@@ -34,27 +34,39 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
       y = rect.y;
     }
 
-    // Hover first — some pages (Material ripple, anti-bot heuristics) only register
-    // clicks that follow a mouse move. Then a trusted press/release pair via CDP.
+    // Hover first — some pages (Material ripple, anti-bot heuristics) only
+    // register clicks that follow a mouse move. Then a trusted press/release
+    // pair via CDP.
+    //
+    // pointerType: "mouse" is critical for modern UI libraries (Radix,
+    // React-Aria, Headless UI) that listen for `pointerdown` instead of
+    // `mousedown`. Without it, the CDP dispatch generates only mouse
+    // events — the page receives them as trusted, but its pointer-event
+    // listeners never fire, so dropdowns / menu triggers / select widgets
+    // stay closed. Failure mode is silent: the click "succeeds" but
+    // nothing visibly happens.
     await send(tabId, "Input.dispatchMouseEvent", {
       type: "mouseMoved",
       x, y,
       button: "none",
-      buttons: 0
+      buttons: 0,
+      pointerType: "mouse"
     });
     await send(tabId, "Input.dispatchMouseEvent", {
       type: "mousePressed",
       x, y,
       button: "left",
       buttons: 1,
-      clickCount: 1
+      clickCount: 1,
+      pointerType: "mouse"
     });
     await send(tabId, "Input.dispatchMouseEvent", {
       type: "mouseReleased",
       x, y,
       button: "left",
       buttons: 0,
-      clickCount: 1
+      clickCount: 1,
+      pointerType: "mouse"
     });
 
     return {
