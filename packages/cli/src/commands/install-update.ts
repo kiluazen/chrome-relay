@@ -102,6 +102,21 @@ export function registerInstallUpdate(program: Command): void {
           out.binary.path = newBin;
           if (newVersion && newVersion !== fromVersion) {
             out.updatedTo = newVersion;
+
+            // Re-run install from the freshly-installed binary so the
+            // native-messaging manifest points at the new dist AND any
+            // stale native-host process gets SIGTERM'd. Without this,
+            // `chrome-relay update` left Chrome talking to the previous
+            // version — which then kept firing the cli-outdated nudge
+            // telling the user to run the very command they just ran.
+            const install = spawnSync(newBin, ["install"], { stdio: "inherit" });
+            if (install.status !== 0) {
+              out.warnings.push({
+                code: "install_refresh_failed",
+                message: `Update installed the new package but \`${newBin} install\` exited ${install.status}. Run it manually to refresh the native host manifest.`
+              });
+            }
+
             const rn = spawnSync(newBin, ["release-notes", "--since", fromVersion]);
             try {
               const parsed = JSON.parse(rn.stdout?.toString() ?? "");

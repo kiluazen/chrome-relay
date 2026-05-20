@@ -9,6 +9,11 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.21": [
+    "Fix: `chrome-relay update` and `chrome-relay install` now SIGTERM any running native-host.js process before exiting, and `update` re-runs `install` from the freshly-installed binary. Chrome respawns the host from the new manifest on its next native-messaging request.",
+    "Why this matters: Chrome's native messaging keeps the host process alive for the session. Pre-0.5.21, `chrome-relay update` refreshed the on-disk package but Chrome kept routing through the OLD host. The HTTP bridge served by that old host then reported its own embedded `CHROME_RELAY_VERSION`, which falsely tripped the cli-outdated nudge against the newer extension. Users running the very command the nudge told them to run found the nudge still firing afterwards — the worst kind of UX bug.",
+    "Best-effort and silent on failure: kill is only attempted on darwin/linux, only matches `native-host.js` paths that also contain `chrome-relay`, and ignores individual kill errors (already gone, no permission). Won't kill the running CLI itself."
+  ],
   "0.5.20": [
     "BREAKING — `chrome-relay navigate` no longer steals focus by default. Background is now the implicit behavior; agents pass `--active` when they actually want the user looking at the new tab. The whole product pitch is 'operate without stealing focus' — the default needed to match.",
     "`--inactive` flag removed entirely. It was the opt-in for the previous (wrong) default; now it'd be a no-op, and no-op flags are dead code. Agents that were passing `--inactive` should drop it (the behavior is now the default). Commander will reject the unknown flag — that's the right signal to update.",

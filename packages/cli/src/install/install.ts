@@ -1,5 +1,6 @@
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
@@ -76,17 +77,59 @@ async function writeManifest(wrapperPath: string): Promise<string> {
   return manifestPath;
 }
 
+// Find and SIGTERM any running native-host.js processes. Chrome's native
+// messaging keeps the host alive for the session, so without this `update`
+// would refresh the on-disk binary while Chrome kept talking to the old one
+// — that's exactly how the cli-outdated nudge ended up firing on a CLI that
+// was already at-or-newer than the extension. Best-effort: silently no-op
+// on unsupported platforms and on individual kill failures (already gone,
+// no permission). Returns the count of processes we actually terminated.
+function killStaleNativeHosts(): { killed: number } {
+  if (process.platform !== "darwin" && process.platform !== "linux") {
+    return { killed: 0 };
+  }
+
+  const ps = spawnSync("ps", ["-A", "-o", "pid=,command="], { encoding: "utf8" });
+  if (ps.status !== 0 || !ps.stdout) return { killed: 0 };
+
+  let killed = 0;
+  for (const raw of ps.stdout.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (!line.includes("chrome-relay") || !line.includes("native-host.js")) continue;
+    const m = line.match(/^(\d+)\s/);
+    if (!m) continue;
+    const pid = Number.parseInt(m[1], 10);
+    if (pid === process.pid) continue; // never SIGTERM ourselves
+    try {
+      process.kill(pid, "SIGTERM");
+      killed++;
+    } catch {
+      // already gone, no permission — ignore
+    }
+  }
+  return { killed };
+}
+
 export async function runInstall(): Promise<void> {
   const distDir = getDistDir();
   const hostPath = path.join(distDir, "native-host.js");
   const wrapperPath = await writeWrapperScript(hostPath);
   const manifestPath = await writeManifest(wrapperPath);
 
+  // Reaping happens after the manifest is in place, so Chrome's next
+  // native-messaging request respawns the host pointing at the freshly
+  // written wrapper.
+  const { killed } = killStaleNativeHosts();
+
   console.log(`Installed Chrome Relay native host.`);
   console.log(`Wrapper: ${wrapperPath}`);
   console.log(`Manifest: ${manifestPath}`);
   console.log(`Local bridge port: ${DEFAULT_HTTP_PORT}`);
   console.log(`Allowed extension IDs: ${formatKnownExtensionIds()}`);
+  if (killed > 0) {
+    console.log(`Reaped ${killed} stale native-host process${killed === 1 ? "" : "es"}; Chrome will respawn from the new manifest.`);
+  }
 }
 
 export async function runDoctor(): Promise<boolean> {
