@@ -148,30 +148,68 @@
         line-height: 1.45;
       }
 
-      .actions {
+      /* Inline email + Add-to-Chrome. Button is disabled until the email
+         field passes its native + pattern validation (a valid TLD). On
+         submit we sendBeacon the email and navigate to the Web Store —
+         no "Sending…" text-swap, no "Sent ✓" state hang, because the
+         user is leaving the page anyway. */
+      .hero-form {
         display: flex;
         flex-wrap: wrap;
-        align-items: center;
+        align-items: stretch;
         gap: 10px;
+        max-width: 560px;
       }
 
-      .button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+      .hero-form input {
+        flex: 1 1 240px;
+        min-width: 0;
+        min-height: 54px;
+        padding: 0 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--ink);
+        font: inherit;
+        font-size: 16px;
+        transition: border-color 120ms ease;
+      }
+
+      .hero-form input::placeholder { color: var(--muted); }
+
+      .hero-form input:focus {
+        outline: none;
+        border-color: var(--green);
+        box-shadow: 0 0 0 3px rgba(31, 122, 77, 0.18);
+      }
+
+      .hero-form input:valid {
+        border-color: var(--green);
+      }
+
+      .hero-form button {
+        flex: 0 0 auto;
         min-height: 54px;
         padding: 0 22px;
         border: 1px solid var(--ink);
         border-radius: 8px;
         background: var(--ink);
         color: #fffdf6;
+        font: inherit;
         font-size: 17px;
-        font-weight: 760;
-        text-decoration: none;
+        font-weight: 700;
+        cursor: pointer;
+        transition: opacity 120ms ease, transform 120ms ease;
       }
 
-      .button.secondary { background: transparent; color: var(--ink); }
-      .button:hover { transform: translateY(-1px); }
+      .hero-form button:hover:not(:disabled) { transform: translateY(-1px); }
+      .hero-form button:active:not(:disabled) { transform: translateY(0); }
+
+      .hero-form button:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+        transform: none;
+      }
 
       .skill-wrap {
         border-top: 1px solid var(--line);
@@ -244,73 +282,6 @@
 
       .copy-button:hover { background: rgba(255, 253, 246, 0.1); }
 
-      .contact-wrap {
-        border-top: 1px solid var(--line);
-      }
-
-      .contact-form {
-        width: min(760px, calc(100% - 56px));
-        margin: 0 auto;
-        padding: 54px 0 58px;
-        text-align: center;
-      }
-
-      .contact-label {
-        display: block;
-        margin: 0 0 10px;
-        color: var(--muted);
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
-
-      .contact-row {
-        display: flex;
-        justify-content: center;
-        align-items: stretch;
-        gap: 8px;
-      }
-
-      .contact-row input {
-        flex: 1 1 auto;
-        min-width: 0;
-        min-height: 44px;
-        padding: 0 14px;
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        background: var(--panel);
-        color: var(--ink);
-        font: inherit;
-        font-size: 15px;
-      }
-
-      .contact-row input:focus { outline: 2px solid rgba(31, 122, 77, 0.35); outline-offset: 2px; }
-
-      .contact-row button {
-        flex: 0 0 auto;
-        min-height: 44px;
-        min-width: 96px;
-        padding: 0 18px;
-        border: 1px solid var(--ink);
-        border-radius: 8px;
-        background: var(--ink);
-        color: var(--panel);
-        font: inherit;
-        font-weight: 700;
-        cursor: pointer;
-      }
-
-      .contact-row button:disabled { opacity: 0.6; cursor: default; }
-
-      .contact-note {
-        margin: 10px 0 0;
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      .contact-note:empty { display: none; }
-
       .footer-wrap { border-top: 1px solid var(--line); }
 
       .footer {
@@ -357,8 +328,7 @@
         .nav, .hero-inner, .footer {
           width: min(1120px, calc(100% - 40px));
         }
-        .skill-section,
-        .contact-form {
+        .skill-section {
           width: min(680px, calc(100% - 40px));
         }
         .hero-inner {
@@ -380,8 +350,7 @@
         .nav, .hero-inner, .footer {
           width: min(1120px, calc(100% - 28px));
         }
-        .skill-section,
-        .contact-form {
+        .skill-section {
           width: min(520px, calc(100% - 28px));
         }
         .nav {
@@ -405,9 +374,14 @@
           margin: 0 auto 22px;
           font-size: clamp(16px, 4.2vw, 18px);
         }
-        .actions { justify-content: center; }
-        .button {
-          width: min(100%, 360px);
+        .hero-form {
+          margin-inline: auto;
+          max-width: 360px;
+          flex-direction: column;
+        }
+        .hero-form input,
+        .hero-form button {
+          width: 100%;
           min-height: 58px;
         }
         .demo { border-radius: 8px; }
@@ -436,28 +410,8 @@
           padding: 9px 10px;
           width: 100%;
         }
-        .contact-form {
-          padding: 40px 0 42px;
-        }
-        .contact-row {
-          max-width: 420px;
-          margin: 0 auto;
-        }
-        .contact-row input,
-        .contact-row button {
-          min-height: 52px;
-        }
         .footer { flex-direction: column; padding: 22px 0 28px; }
         .footer-links { justify-content: center; }
-      }
-
-      @media (max-width: 760px) {
-        .contact-row {
-          flex-direction: column;
-        }
-        .contact-row button {
-          width: 100%;
-        }
       }
 
     </style>
@@ -479,9 +433,19 @@
             Let local agents use the Chrome session that already has cookies, SSO, extensions, and localhost.
             Nothing leaves the machine.
           </p>
-          <div class="actions">
-            <a class="button" href="https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb" rel="noopener">Add to Chrome</a>
-          </div>
+          <form class="hero-form" id="hero-form" novalidate>
+            <input
+              id="hero-email"
+              name="email"
+              type="email"
+              required
+              pattern="^[^\s@]+@[^\s@]+\.[^\s@]{2,}$"
+              autocomplete="email"
+              placeholder="you@email.com"
+              aria-label="Your email"
+            />
+            <button id="add-btn" type="submit" disabled>Add to Chrome</button>
+          </form>
         </div>
         <div class="demo" id="demo">
           <video autoplay loop muted playsinline preload="metadata" poster="/ext-index.png">
@@ -506,17 +470,6 @@
       </div>
     </section>
 
-    <section class="contact-wrap">
-      <form class="contact-form" id="contact-form">
-        <label class="contact-label" for="contact-email">Contact me</label>
-        <div class="contact-row">
-          <input id="contact-email" name="email" type="email" required placeholder="you@company.com" autocomplete="email" />
-          <button type="submit">Send</button>
-        </div>
-        <p class="contact-note" id="contact-note" aria-live="polite"></p>
-      </form>
-    </section>
-
     <div class="footer-wrap">
       <footer class="footer">
         <a href="https://kushalsm.com">kushalsm.com</a>
@@ -537,33 +490,39 @@
         });
       });
 
-      const CONTACT_URL = "https://script.google.com/macros/s/AKfycbx09f-4aNddxzmVVUStNJwjzVip5u3PqVYN7GSgO83FDz5DqYLEFqy4ysARdZ6oeDo8rA/exec";
-      const PRODUCT = "chrome-relay";
-      const cForm = document.getElementById("contact-form");
-      const cNote = document.getElementById("contact-note");
-      cNote.textContent = "";
-      cForm.addEventListener("submit", async (e) => {
+      // Hero email-gate. Button is disabled until the input is a valid
+      // email (HTML5 type=email + a pattern that requires a real TLD).
+      // On submit we fire-and-forget the email to the Apps Script via
+      // sendBeacon (persists across navigation) and immediately redirect
+      // to the Chrome Web Store. No "Sending…" text-swap, no "Sent ✓"
+      // state — the user is leaving the page.
+      const ENDPOINT   = "https://script.google.com/macros/s/AKfycbx09f-4aNddxzmVVUStNJwjzVip5u3PqVYN7GSgO83FDz5DqYLEFqy4ysARdZ6oeDo8rA/exec";
+      const WEB_STORE  = "https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb";
+      const PRODUCT    = "chrome-relay";
+
+      const heroForm  = document.getElementById("hero-form");
+      const heroEmail = document.getElementById("hero-email");
+      const addBtn    = document.getElementById("add-btn");
+
+      const syncBtnState = () => { addBtn.disabled = !heroEmail.checkValidity(); };
+      heroEmail.addEventListener("input", syncBtnState);
+      syncBtnState();
+
+      heroForm.addEventListener("submit", (e) => {
         e.preventDefault();
-        const email = document.getElementById("contact-email").value.trim();
-        if (!email || !email.includes("@")) return;
-        const btn = cForm.querySelector("button");
-        const original = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = "Sending…";
-        try {
-          await fetch(CONTACT_URL, {
-            method: "POST",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ product: PRODUCT, email, source: location.href }),
-          });
-          cForm.reset();
-          cNote.textContent = "Got it — I'll be in touch.";
-          btn.textContent = "Sent ✓";
-        } catch (err) {
-          btn.disabled = false;
-          btn.textContent = original;
-          cNote.textContent = "Send failed. Try again or email kushalsokke@gmail.com.";
+        if (!heroEmail.checkValidity()) return;
+        const payload = JSON.stringify({
+          product: PRODUCT,
+          email:   heroEmail.value.trim(),
+          source:  location.href,
+        });
+        const blob = new Blob([payload], { type: "text/plain;charset=utf-8" });
+        const sent = navigator.sendBeacon && navigator.sendBeacon(ENDPOINT, blob);
+        if (!sent) {
+          // sendBeacon unavailable or refused — fall back to keepalive fetch.
+          fetch(ENDPOINT, { method: "POST", body: payload, keepalive: true, headers: { "Content-Type": "text/plain;charset=utf-8" } }).catch(() => {});
         }
+        window.location.href = WEB_STORE;
       });
     </script>
     <!-- Cloudflare Web Analytics. Cookieless, no PII. Site registered as
