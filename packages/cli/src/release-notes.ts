@@ -9,6 +9,12 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.22": [
+    "Multi-browser install. `chrome-relay install` now writes the native-messaging manifest into every detected Chromium-fork browser's NativeMessagingHosts dir, not just Google Chrome's. Detected: Chrome, Chrome Canary, Chromium, Edge, Brave, Vivaldi, Arc, Opera (macOS + Linux paths). Detection is parent-dir existence — we never speculatively create profile dirs for browsers that aren't installed.",
+    "Why this matters: the extension installs fine via Chrome Web Store in any Chromium fork, but the bridge silently failed because the host manifest was only at Chrome's path. Arc + Brave users hit `connectNative()` errors with no obvious cause.",
+    "`chrome-relay doctor` now reports per-browser manifest status, so when a refresh is needed the failure points at the specific browser whose manifest drifted.",
+    "Fallback: if no Chromium browser is detected on the machine, we still drop the manifest at Chrome's path so a later Chrome install picks it up."
+  ],
   "0.5.21": [
     "Fix: `chrome-relay update` and `chrome-relay install` now SIGTERM any running native-host.js process before exiting, and `update` re-runs `install` from the freshly-installed binary. Chrome respawns the host from the new manifest on its next native-messaging request.",
     "Why this matters: Chrome's native messaging keeps the host process alive for the session. Pre-0.5.21, `chrome-relay update` refreshed the on-disk package but Chrome kept routing through the OLD host. The HTTP bridge served by that old host then reported its own embedded `CHROME_RELAY_VERSION`, which falsely tripped the cli-outdated nudge against the newer extension. Users running the very command the nudge told them to run found the nudge still firing afterwards — the worst kind of UX bug.",
