@@ -9,6 +9,12 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.5.20": [
+    "BREAKING — `chrome-relay navigate` no longer steals focus by default. Background is now the implicit behavior; agents pass `--active` when they actually want the user looking at the new tab. The whole product pitch is 'operate without stealing focus' — the default needed to match.",
+    "`--inactive` flag removed entirely. It was the opt-in for the previous (wrong) default; now it'd be a no-op, and no-op flags are dead code. Agents that were passing `--inactive` should drop it (the behavior is now the default). Commander will reject the unknown flag — that's the right signal to update.",
+    "Workspace `chrome.windows.create({focused: false})` was already correct from earlier work, so workspaces are unaffected.",
+    "Tests: navigate test updated to assert no `active` field in default request, plus a new test verifying `--active` opts in to focus."
+  ],
   "0.5.19": [
     "Coordinate click. `chrome-relay click --x N --y N --tab N` dispatches a trusted Input.dispatchMouseEvent at the given pixel coordinates — no selector required. The selector positional became optional; the protocol parser collapses click args into a discriminated union (`kind: 'selector'` | `kind: 'coords'`) and rejects partial coords (`--x` without `--y`) with `invalid_arguments`.",
     "Intentionally NOT shipping `click-text`. Once coord-click exists, finding text + clicking is fully composable with `js` (TreeWalker → getBoundingClientRect) → `click --x/--y`. Per the CLI philosophy, that's a smart wrapper, not a primitive. The two-step recipe lives in docs/clicking-strategies.md as the documented pattern.",

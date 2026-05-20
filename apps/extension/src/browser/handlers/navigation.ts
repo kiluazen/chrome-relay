@@ -39,7 +39,10 @@ export const navigationHandlers: Partial<Record<string, ToolHandler>> = {
     const parsed = parseChromeNavigateArgs(args);
     const { url } = parsed;
     const newTab = parsed.newTab === true;
-    const active = parsed.active !== false;
+    // 0.5.20: background is the default. Agent must explicitly set
+    // active:true to steal focus — aligning with chrome-relay's
+    // "operate without stealing focus" promise (see docs/cli-philosophy.md).
+    const active = parsed.active === true;
     const allowPartial = parsed.allowPartial === true;
 
     if (newTab) {

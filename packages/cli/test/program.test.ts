@@ -75,9 +75,17 @@ describe("CLI argument parsing", () => {
       expect(lastBody().args).toMatchObject({ newTab: true });
     });
 
-    it("sets active=false with --inactive", async () => {
-      await runArgs("navigate", "https://example.com", "--inactive");
-      expect(lastBody().args).toMatchObject({ active: false });
+    // 0.5.20: background is the default. --active is the opt-in to steal focus.
+    // (--inactive flag removed; was always the default after the flip so it
+    // was dead code.)
+    it("does NOT set active by default — chrome-relay never steals focus on its own", async () => {
+      await runArgs("navigate", "https://example.com");
+      expect(lastBody().args).not.toHaveProperty("active");
+    });
+
+    it("sets active=true with --active", async () => {
+      await runArgs("navigate", "https://example.com", "--active");
+      expect(lastBody().args).toMatchObject({ active: true });
     });
 
     it("rejects bare numeric URL with helpful stderr message", async () => {
