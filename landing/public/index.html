@@ -492,11 +492,14 @@
 
       // Hero email-gate. Button is disabled until the input is a valid
       // email (HTML5 type=email + a pattern that requires a real TLD).
-      // On submit we fire-and-forget the email to the Apps Script via
-      // sendBeacon (persists across navigation) and immediately redirect
-      // to the Chrome Web Store. No "Sending…" text-swap, no "Sent ✓"
-      // state — the user is leaving the page.
-      const ENDPOINT   = "https://script.google.com/macros/s/AKfycbx09f-4aNddxzmVVUStNJwjzVip5u3PqVYN7GSgO83FDz5DqYLEFqy4ysARdZ6oeDo8rA/exec";
+      // On submit we fire-and-forget the email to the audience worker
+      // via sendBeacon (persists across navigation) and immediately
+      // redirect to the Chrome Web Store. No "Sending…" text-swap, no
+      // "Sent ✓" state — the user is leaving the page.
+      //
+      // Worker: solo/audience (Cloudflare Worker + D1). Admin view:
+      // https://audience.kushalsm.com/admin?key=<ADMIN_KEY>
+      const ENDPOINT   = "https://audience.kushalsm.com/capture";
       const WEB_STORE  = "https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb";
       const PRODUCT    = "chrome-relay";
 
