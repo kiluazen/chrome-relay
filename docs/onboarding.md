@@ -47,7 +47,7 @@ node packages/cli/dist/cli.js read -i
 The intended user-facing packaging is:
 
 - Chrome Web Store extension named **Chrome Relay**
-- `npx skills add kiluazen/chrome-relay` agent-skill install surface
+- `npx skills add kiluazen/kstack@chrome-relay` agent-skill install surface
 - a `chrome-relay` skill that explains the CLI setup for agents
 
 The current codebase keeps those surfaces separate:
