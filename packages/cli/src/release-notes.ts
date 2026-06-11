@@ -9,6 +9,19 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.6.0": [
+    "Unified `snapshot` with actionable @refs. `chrome-relay snapshot -i` renders the page as compact text (~4-5x smaller than the old `read -i`; 14 KB on the HN front page) — accessibility tree merged with a cursor-interactive sweep that catches div-soup clickables (cursor:pointer, onclick, tabindex, contenteditable) the AX tree misses. Every element gets a browser-unique @eN ref.",
+    "Refs are actionable everywhere: `click @e12`, `fill @e14 \"v\"`, `hover @e3`, `type -s @e7`. A ref carries its tab — no --tab needed, a contradicting --tab is target_conflict, so an agent can never click into the page the user is reading. Resolution is backendNodeId fast-path with role+name+nth healing on same-page DOM churn (healed clicks report `healed: true`). Refs reach inside shadow DOM, where CSS selectors can't.",
+    "Refs die on real navigation, deliberately: Chromium reuses backendNodeId integers in the new document, so a stale ref could silently click an unrelated element. Dead refs return the new `error.code = stale_ref` with a re-snapshot hint. SPA route changes (pushState) keep refs alive.",
+    "`read`, `ax`, and `click-ax` are deprecated aliases — they now return the unified snapshot format and print a notice. The old DOM-walker, the nth-of-type selector generator, and the separate AX tree (with its separate id space) are deleted. Removal of the aliases: next minor.",
+    "Error hygiene: in-page failures (bad selector, malformed CSS, zero-size element, unfocusable element) now map to structured codes (element_not_found, invalid_arguments) instead of internal_error with a raw JS stack.",
+    "Snapshot flags: -i (ref-bearing only), -d <n> (depth cap), -s <css> (scope to subtree), -u (include hrefs), --json (structured envelope incl. the refs map with backendNodeIds)."
+  ],
+  "0.5.23": [
+    "Windows native-host install. `chrome-relay install` now supports `win32`: it writes a `run-host.cmd` wrapper, writes browser-specific native-messaging manifests under `~/.chrome-relay/NativeMessagingHosts`, and registers each manifest through HKCU registry keys.",
+    "Detected Windows browsers: Chrome, Chrome Canary, Chromium, Edge, Brave, Vivaldi, and Opera. Detection uses the browser profile directory; if none are detected, install falls back to Chrome so a later Chrome install can find the host after re-running install.",
+    "`chrome-relay doctor` now checks the Windows wrapper and registry entries, so stale or missing native-host registration points at the failing browser instead of only showing a generic extension connection failure."
+  ],
   "0.5.22": [
     "Multi-browser install. `chrome-relay install` now writes the native-messaging manifest into every detected Chromium-fork browser's NativeMessagingHosts dir, not just Google Chrome's. Detected: Chrome, Chrome Canary, Chromium, Edge, Brave, Vivaldi, Arc, Opera (macOS + Linux paths). Detection is parent-dir existence — we never speculatively create profile dirs for browsers that aren't installed.",
     "Why this matters: the extension installs fine via Chrome Web Store in any Chromium fork, but the bridge silently failed because the host manifest was only at Chrome's path. Arc + Brave users hit `connectNative()` errors with no obvious cause.",

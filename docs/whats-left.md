@@ -6,6 +6,14 @@ Status as of 2026-05-16 against `chrome-relay@0.3.1`. Companion to
 
 This doc only covers boundaries.md §2 items that are not yet in the CLI.
 
+> **2026-06-11 update (0.6.0):** the loop-ergonomics track from
+> [`agent-browser-adoption-spec.md`](./agent-browser-adoption-spec.md) shipped
+> its core: unified `snapshot` with actionable `@refs` (Changes 1+2) and the
+> error-hygiene sweep (Change 8). `read`/`ax`/`click-ax` are deprecated
+> aliases now. Still open from that spec: `wait` (Change 3), `snapshot --diff`
+> (Change 4), `batch` (Change 5), `get` one-liners (Change 6), `skills get
+> core` (Change 7). The items below predate that spec and remain accurate.
+
 ---
 
 ## Snapshot — what 0.3.x actually shipped

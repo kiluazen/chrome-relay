@@ -1,5 +1,11 @@
 // Trusted-input + JS-eval handlers:
 //   CLICK, FILL, KEYBOARD, TYPE, EVALUATE
+//
+// All element-addressed tools accept three modes (adoption-spec Change 2):
+// @ref (from chrome_snapshot — carries its own tab), CSS selector, or
+// coordinates. Ref mode NEVER falls back to the active tab: the ref's
+// stored tabId is the target, and a contradicting --tab is target_conflict
+// (enforced in resolveRefTarget).
 
 import {
   DEFAULT_EVAL_TIMEOUT_MS,
@@ -11,63 +17,82 @@ import {
   TOOL_NAMES
 } from "@chrome-relay/protocol";
 import { evalExpression, evalInTab, send } from "../cdp";
+import { resolveRefCenter, resolveRefObjectId, mapPageError } from "../element";
 import { pressKey } from "../keyboard";
 import { fillElement, focusSelector, locateForClick } from "../page-actions";
 import { resolveTarget, requireTabId, type ToolHandler } from "./target";
 
+// Trusted CDP mouse click triple at (x, y).
+//
+// Hover first — some pages (Material ripple, anti-bot heuristics) only
+// register clicks that follow a mouse move. pointerType: "mouse" is critical
+// for modern UI libraries (Radix, React-Aria, Headless UI) that listen for
+// `pointerdown` instead of `mousedown` — without it the page receives
+// trusted mouse events but its pointer-event listeners never fire, so
+// dropdowns / menu triggers stay closed. Failure mode is silent.
+async function dispatchClick(tabId: number, x: number, y: number): Promise<void> {
+  await send(tabId, "Input.dispatchMouseEvent", {
+    type: "mouseMoved",
+    x, y,
+    button: "none",
+    buttons: 0,
+    pointerType: "mouse"
+  });
+  await send(tabId, "Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    x, y,
+    button: "left",
+    buttons: 1,
+    clickCount: 1,
+    pointerType: "mouse"
+  });
+  await send(tabId, "Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    x, y,
+    button: "left",
+    buttons: 0,
+    clickCount: 1,
+    pointerType: "mouse"
+  });
+}
+
 export const inputHandlers: Partial<Record<string, ToolHandler>> = {
   async [TOOL_NAMES.CLICK](args) {
     const parsed = parseChromeClickArgs(args);
+
+    if (parsed.kind === "ref") {
+      // Ref mode — the ref's tab IS the target; resolveTarget (active-tab
+      // default) is deliberately not consulted.
+      const r = await resolveRefCenter(TOOL_NAMES.CLICK, parsed.ref, parsed);
+      await dispatchClick(r.tabId, r.x, r.y);
+      return {
+        clicked: true,
+        x: r.x,
+        y: r.y,
+        ref: parsed.ref,
+        tabId: r.tabId,
+        ...(r.healed ? { healed: true } : {})
+      };
+    }
+
     const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
 
-    // Resolve target coords. Selector mode looks the element up in-page
-    // and scrolls it into view; coords mode trusts the caller's numbers
-    // and dispatches at those pixels directly.
     let x: number, y: number;
     if (parsed.kind === "coords") {
       x = parsed.x;
       y = parsed.y;
     } else {
-      const rect = await evalInTab(tabId, locateForClick, [parsed.selector]);
-      x = rect.x;
-      y = rect.y;
+      try {
+        const rect = await evalInTab(tabId, locateForClick, [parsed.selector]);
+        x = rect.x;
+        y = rect.y;
+      } catch (e) {
+        mapPageError(e, TOOL_NAMES.CLICK, "locate_element");
+      }
     }
 
-    // Hover first — some pages (Material ripple, anti-bot heuristics) only
-    // register clicks that follow a mouse move. Then a trusted press/release
-    // pair via CDP.
-    //
-    // pointerType: "mouse" is critical for modern UI libraries (Radix,
-    // React-Aria, Headless UI) that listen for `pointerdown` instead of
-    // `mousedown`. Without it, the CDP dispatch generates only mouse
-    // events — the page receives them as trusted, but its pointer-event
-    // listeners never fire, so dropdowns / menu triggers / select widgets
-    // stay closed. Failure mode is silent: the click "succeeds" but
-    // nothing visibly happens.
-    await send(tabId, "Input.dispatchMouseEvent", {
-      type: "mouseMoved",
-      x, y,
-      button: "none",
-      buttons: 0,
-      pointerType: "mouse"
-    });
-    await send(tabId, "Input.dispatchMouseEvent", {
-      type: "mousePressed",
-      x, y,
-      button: "left",
-      buttons: 1,
-      clickCount: 1,
-      pointerType: "mouse"
-    });
-    await send(tabId, "Input.dispatchMouseEvent", {
-      type: "mouseReleased",
-      x, y,
-      button: "left",
-      buttons: 0,
-      clickCount: 1,
-      pointerType: "mouse"
-    });
+    await dispatchClick(tabId, x, y);
 
     return {
       clicked: true,
@@ -78,8 +103,59 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
 
   async [TOOL_NAMES.FILL](args) {
     const parsed = parseChromeFillArgs(args);
+
+    if (parsed.kind === "ref") {
+      const r = await resolveRefObjectId(TOOL_NAMES.FILL, parsed.ref, parsed);
+      // Same semantics as the in-page fillElement, applied to the resolved
+      // node: native prototype setter (bypasses React's value tracker so
+      // onChange fires), then input + change events.
+      const resp = await send<{
+        result: { value?: unknown };
+        exceptionDetails?: { text: string; exception?: { description?: string } };
+      }>(r.tabId, "Runtime.callFunctionOn", {
+        objectId: r.objectId,
+        functionDeclaration: `function (value) {
+          const element = this;
+          if (element instanceof HTMLSelectElement) {
+            element.value = value;
+            element.dispatchEvent(new Event("change", { bubbles: true }));
+            return { filled: true, valueLength: value.length, kind: "select" };
+          }
+          if (!(element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement)) {
+            throw new Error("Fill target is not an input, textarea, or select. Use chrome_type for contenteditable.");
+          }
+          element.focus();
+          const proto = element instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+          const nativeSet = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+          if (nativeSet) { nativeSet.call(element, value); } else { element.value = value; }
+          element.dispatchEvent(new Event("input", { bubbles: true }));
+          element.dispatchEvent(new Event("change", { bubbles: true }));
+          return { filled: true, valueLength: value.length, kind: "input" };
+        }`,
+        arguments: [{ value: parsed.value }],
+        returnByValue: true
+      });
+      if (resp.exceptionDetails) {
+        mapPageError(
+          new Error(resp.exceptionDetails.exception?.description ?? resp.exceptionDetails.text),
+          TOOL_NAMES.FILL,
+          "fill_ref"
+        );
+      }
+      return {
+        ...(resp.result.value as Record<string, unknown>),
+        ref: parsed.ref,
+        tabId: r.tabId,
+        ...(r.healed ? { healed: true } : {})
+      };
+    }
+
     const tab = await resolveTarget(parsed);
-    return evalInTab(requireTabId(tab), fillElement, [parsed.selector, parsed.value]);
+    try {
+      return await evalInTab(requireTabId(tab), fillElement, [parsed.selector, parsed.value]);
+    } catch (e) {
+      mapPageError(e, TOOL_NAMES.FILL, "fill_selector");
+    }
   },
 
   async [TOOL_NAMES.KEYBOARD](args) {
@@ -92,12 +168,32 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
 
   async [TOOL_NAMES.TYPE](args) {
     const parsed = parseChromeTypeArgs(args);
+
+    if (parsed.ref) {
+      // Resolve + verify (and scroll into view), then trusted focus by
+      // backendNodeId — no CSS round-trip.
+      const r = await resolveRefCenter(TOOL_NAMES.TYPE, parsed.ref, parsed);
+      await send(r.tabId, "DOM.focus", { backendNodeId: r.backendNodeId });
+      await send(r.tabId, "Input.insertText", { text: parsed.text });
+      return {
+        typed: true,
+        length: parsed.text.length,
+        focused: { ref: parsed.ref },
+        tabId: r.tabId,
+        ...(r.healed ? { healed: true } : {})
+      };
+    }
+
     const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
 
     let focused: { selector: string } | null = null;
     if (parsed.selector) {
-      await evalInTab(tabId, focusSelector, [parsed.selector]);
+      try {
+        await evalInTab(tabId, focusSelector, [parsed.selector]);
+      } catch (e) {
+        mapPageError(e, TOOL_NAMES.TYPE, "focus_selector");
+      }
       focused = { selector: parsed.selector };
     }
 

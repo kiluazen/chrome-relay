@@ -1,14 +1,27 @@
 // click / fill / keys / type / js / hover — trusted-input + JS-eval commands.
+//
+// Element-addressed commands accept @eN refs from `chrome-relay snapshot`
+// in the same positional as the CSS selector (adoption-spec Change 2). The
+// @ prefix keeps parsing unambiguous — a bare `e3` is a valid CSS type
+// selector. A ref carries its own tab: no --tab needed, and a contradicting
+// one is target_conflict.
 
+import { parseRefToken } from "@chrome-relay/protocol";
 import { tabOpt, type CommandContext } from "./shared.js";
+
+// Route a selector-or-@ref positional into the right wire arg.
+function addressArg(value: string): Record<string, unknown> {
+  const ref = parseRefToken(value);
+  return ref ? { ref } : { selector: value };
+}
 
 export function registerInput(ctx: CommandContext): void {
   const { program, withBase, run } = ctx;
 
   tabOpt(
     program
-      .command("click [selector]")
-      .description("Click an element. Pass a CSS selector OR --x and --y for a coordinate click.")
+      .command("click [target]")
+      .description("Click an element. Pass a @ref from `snapshot`, a CSS selector, OR --x/--y coordinates.")
       .option("--x <px>", "explicit x coordinate (CSS pixels); requires --y", (v) => Number(v))
       .option("--y <px>", "explicit y coordinate (CSS pixels); requires --x", (v) => Number(v))
       .addHelpText(
@@ -16,18 +29,19 @@ export function registerInput(ctx: CommandContext): void {
         `
 
 Examples:
+  chrome-relay click @e12
   chrome-relay click 'button[aria-label="Save"]'
   chrome-relay click --tab 123 --x 1327 --y 771
 
-Pick selector mode when the element has a stable CSS query. Pick
-coordinate mode when the page wraps content in unmarked divs (Cloudflare
-dashboard, Vercel dashboard, etc.) and you got the rect from a prior
-\`chrome-relay js\` call or a screenshot. See docs/clicking-strategies.md.
+Prefer @refs from \`chrome-relay snapshot\` — they carry their own tab and
+survive DOM churn (backendNodeId + role/name heal). CSS selectors for
+elements you know statically. Coordinates for canvas/SVG chart internals
+where no DOM handle exists. See docs/clicking-strategies.md.
 `
       )
-  ).action(async (selector: string | undefined, opts) => {
+  ).action(async (target: string | undefined, opts) => {
     const extras: Record<string, unknown> = {};
-    if (selector) extras.selector = selector;
+    if (target) Object.assign(extras, addressArg(target));
     // Forward partial input — protocol parser rejects x-without-y so the
     // agent sees the typo instead of a silent fallback to selector mode.
     if (typeof opts.x === "number") extras.x = opts.x;
@@ -37,10 +51,19 @@ dashboard, Vercel dashboard, etc.) and you got the rect from a prior
 
   tabOpt(
     program
-      .command("fill <selector> <value>")
-      .description("Fill an input or textarea.")
-  ).action(async (selector: string, value: string, opts) => {
-    await run("chrome_fill_or_select", withBase(opts, { selector, value }));
+      .command("fill <target> <value>")
+      .description("Fill an input or textarea. Target is a @ref from `snapshot` or a CSS selector.")
+      .addHelpText(
+        "after",
+        `
+
+Examples:
+  chrome-relay fill @e4 "kushal@example.com"
+  chrome-relay fill 'input[name="email"]' "kushal@example.com"
+`
+      )
+  ).action(async (target: string, value: string, opts) => {
+    await run("chrome_fill_or_select", withBase(opts, { ...addressArg(target), value }));
   });
 
   tabOpt(
@@ -68,7 +91,7 @@ For typing text into a field, use \`chrome-relay type\` instead.
     program
       .command("type <text>")
       .description("Insert text via trusted CDP input. Works in contenteditable / Draft.js / Lexical.")
-      .option("-s, --selector <selector>", "focus this element first")
+      .option("-s, --selector <target>", "focus this element first (@ref or CSS selector)")
       .addHelpText(
         "after",
         `
@@ -86,7 +109,7 @@ When to pick which:
       )
   ).action(async (text: string, opts) => {
     const extras: Record<string, unknown> = { text };
-    if (opts.selector) extras.selector = opts.selector;
+    if (opts.selector) Object.assign(extras, addressArg(opts.selector));
     await run("chrome_type", withBase(opts, extras));
   });
 
@@ -119,8 +142,8 @@ Notes:
   // ---------- hover (Input.dispatchMouseEvent type=mouseMoved) ----------
   tabOpt(
     program
-      .command("hover [selector]")
-      .description("Move the pointer over an element or coordinates. Fires :hover styles.")
+      .command("hover [target]")
+      .description("Move the pointer over an element (@ref or CSS selector) or coordinates. Fires :hover styles.")
       .option("--x <px>", "explicit x coordinate (CSS pixels)", (v) => Number(v))
       .option("--y <px>", "explicit y coordinate (CSS pixels)", (v) => Number(v))
       .addHelpText(
@@ -135,9 +158,9 @@ Use before screencast to capture hover-driven micro-states (button glow,
 tooltip appearance, etc.) that a bare click would skip past too quickly.
 `
       )
-  ).action(async (selector: string | undefined, opts) => {
+  ).action(async (target: string | undefined, opts) => {
     const extras: Record<string, unknown> = {};
-    if (selector) extras.selector = selector;
+    if (target) Object.assign(extras, addressArg(target));
     // Forward whatever was passed — even partial (x without y). The
     // protocol parser rejects with invalid_arguments so the agent sees
     // the typo instead of silently falling back to selector mode.

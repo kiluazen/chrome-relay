@@ -2,6 +2,8 @@
 export * from "./args/index";
 // Re-export shared numeric limits + defaults.
 export * from "./limits";
+// Snapshot wire types + the canonical text renderer (adoption-spec Change 1).
+export * from "./snapshot";
 
 export const NATIVE_HOST_NAME = "dev.chrome_relay.native_host";
 export const DEFAULT_HTTP_PORT = 12122;
@@ -60,7 +62,11 @@ export const TOOL_NAMES = {
   // CSS transitions, fade-ins, focus-ring motion) — at the cost of requiring
   // the tab to be ACTIVE (Chrome doesn't paint backgrounded tabs). See
   // docs/recording.md for the active-tab matrix.
-  SCREENCAST: "chrome_screencast"
+  SCREENCAST: "chrome_screencast",
+  // Unified page snapshot (adoption-spec Change 1) — AX tree + cursor-
+  // interactive sweep, one ref space, compact text rendered CLI-side.
+  // Supersedes chrome_read_page and chrome_ax, which now alias to it.
+  SNAPSHOT: "chrome_snapshot"
 } as const;
 
 export type ToolName = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES];
@@ -113,6 +119,9 @@ export type BridgeErrorCode =
   | "target_not_found"
   | "target_conflict"
   | "element_not_found"
+  // A @ref from a previous snapshot no longer resolves — the node is gone
+  // and the role/name/nth heal found no replacement. Fix: re-run snapshot.
+  | "stale_ref"
   | "cdp_error"
   | "chrome_api_error"
   | "timeout"

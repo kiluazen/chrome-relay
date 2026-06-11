@@ -4,7 +4,7 @@
 // workspace, group, screencast — stay in their own files because they're
 // substantially bigger.)
 
-import { RelayError, TOOL_NAMES } from "./../index";
+import { RelayError, TOOL_NAMES, type ToolName } from "./../index";
 import {
   asObject,
   coerceTabId,
@@ -55,15 +55,40 @@ export function parseChromeReadPageArgs(input: unknown): ChromeReadPageArgs {
 // ---------------------------------------------------------------------------
 // chrome_click_element
 //
-// Two shapes — selector OR coords. Mirrors hover. Discriminated so the
-// handler can branch without re-doing the typeof dance. Coord path is the
-// last-resort verb for unmarked SPA cards (CF dashboard) and canvas UIs —
-// the agent supplies (x, y) from a prior `getBoundingClientRect()` read
-// via `js`, or from a known screenshot pixel.
+// Three shapes — ref OR selector OR coords. Discriminated so the handler
+// can branch without re-doing the typeof dance. Ref mode (adoption-spec
+// Change 2) targets a @eN handle from a previous chrome_snapshot; the wire
+// carries the bare id ("e3"). Coord path is the last-resort verb for
+// canvas/SVG chart internals — the agent supplies (x, y) from a prior
+// `getBoundingClientRect()` read via `js`, or from a known screenshot pixel.
 
 export type ChromeClickArgs =
+  | (TargetArgs & { kind: "ref"; ref: string })
   | (TargetArgs & { kind: "selector"; selector: string })
   | (TargetArgs & { kind: "coords"; x: number; y: number });
+
+// Shared by click/fill/type/hover: reject more than one addressing mode in
+// the same call — silent precedence would hide agent mistakes.
+export function rejectMixedAddressing(
+  tool: ToolName,
+  obj: Record<string, unknown>,
+  modes: { ref?: string; selector?: string; coords?: boolean }
+): void {
+  const present: string[] = [];
+  if (modes.ref) present.push("ref");
+  if (modes.selector) present.push("selector");
+  if (modes.coords) present.push("x/y");
+  if (present.length > 1) {
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: `${tool}: ${present.join(" + ")} are mutually exclusive — pass exactly one addressing mode.`,
+      tool,
+      phase: "parse_arguments",
+      details: { received: present },
+      retryable: false
+    });
+  }
+}
 
 export function parseChromeClickArgs(input: unknown): ChromeClickArgs {
   const obj = asObject(input, TOOL_NAMES.CLICK);
@@ -82,30 +107,38 @@ export function parseChromeClickArgs(input: unknown): ChromeClickArgs {
       retryable: false
     });
   }
+  const ref = optString(obj, "ref", TOOL_NAMES.CLICK);
+  const selector = optString(obj, "selector", TOOL_NAMES.CLICK);
+  rejectMixedAddressing(TOOL_NAMES.CLICK, obj, { ref, selector, coords: x !== undefined });
+  if (ref) {
+    return { ...target, kind: "ref", ref };
+  }
   if (x !== undefined && y !== undefined) {
     return { ...target, kind: "coords", x, y };
   }
-  const selector = optString(obj, "selector", TOOL_NAMES.CLICK);
   if (selector) {
     return { ...target, kind: "selector", selector };
   }
   throw new RelayError({
     code: "invalid_arguments",
-    message: "chrome_click_element requires either a selector or x AND y.",
+    message: "chrome_click_element requires a @ref, a selector, or x AND y.",
     tool: TOOL_NAMES.CLICK,
     phase: "parse_arguments",
-    details: { received: { selector: obj.selector, x: obj.x, y: obj.y } },
+    details: { received: { ref: obj.ref, selector: obj.selector, x: obj.x, y: obj.y } },
     retryable: false
   });
 }
 
 // ---------------------------------------------------------------------------
 // chrome_fill_or_select
+//
+// Two addressing shapes — ref OR selector (no coords: filling needs the
+// semantic element). Discriminated like click.
 
-export interface ChromeFillArgs extends TargetArgs {
-  selector: string;
-  value: string;
-}
+export type ChromeFillArgs =
+  | (TargetArgs & { kind: "ref"; ref: string; value: string })
+  | (TargetArgs & { kind: "selector"; selector: string; value: string });
+
 export function parseChromeFillArgs(input: unknown): ChromeFillArgs {
   const obj = asObject(input, TOOL_NAMES.FILL);
   // `value` is permitted to be the empty string (clearing a field). But it
@@ -120,10 +153,18 @@ export function parseChromeFillArgs(input: unknown): ChromeFillArgs {
       retryable: false
     });
   }
+  const target = parseTargetArgs(obj);
+  const ref = optString(obj, "ref", TOOL_NAMES.FILL);
+  const selector = optString(obj, "selector", TOOL_NAMES.FILL);
+  rejectMixedAddressing(TOOL_NAMES.FILL, obj, { ref, selector });
+  if (ref) {
+    return { ...target, kind: "ref", ref, value: obj.value };
+  }
   return {
+    ...target,
+    kind: "selector",
     selector: requireString(obj, "selector", TOOL_NAMES.FILL),
-    value: obj.value,
-    ...parseTargetArgs(obj)
+    value: obj.value
   };
 }
 
@@ -147,6 +188,7 @@ export function parseChromeKeyboardArgs(input: unknown): ChromeKeyboardArgs {
 export interface ChromeTypeArgs extends TargetArgs {
   text: string;
   selector?: string;
+  ref?: string; // focus this @ref before inserting (adoption-spec Change 2)
 }
 export function parseChromeTypeArgs(input: unknown): ChromeTypeArgs {
   const obj = asObject(input, TOOL_NAMES.TYPE);
@@ -155,7 +197,10 @@ export function parseChromeTypeArgs(input: unknown): ChromeTypeArgs {
     ...parseTargetArgs(obj)
   };
   const selector = optString(obj, "selector");
+  const ref = optString(obj, "ref", TOOL_NAMES.TYPE);
+  rejectMixedAddressing(TOOL_NAMES.TYPE, obj, { ref, selector });
   if (selector) out.selector = selector;
+  if (ref) out.ref = ref;
   return out;
 }
 
@@ -267,6 +312,33 @@ export function parseChromeClickAxArgs(input: unknown): ChromeClickAxArgs {
     });
   }
   return { node, ...parseTargetArgs(obj) };
+}
+
+// ---------------------------------------------------------------------------
+// chrome_snapshot (adoption-spec Change 1)
+//
+// Unified page snapshot — AX tree + cursor-interactive sweep, one ref space.
+// `depth` truncates the tree; `scope` restricts to a CSS-selector subtree;
+// `urls` includes link hrefs in the attrs.
+
+export interface ChromeSnapshotArgs extends TargetArgs {
+  interactiveOnly?: boolean;
+  depth?: number;
+  scope?: string;
+  urls?: boolean;
+}
+export function parseChromeSnapshotArgs(input: unknown): ChromeSnapshotArgs {
+  const obj = asObject(input, TOOL_NAMES.SNAPSHOT);
+  const out: ChromeSnapshotArgs = { ...parseTargetArgs(obj, TOOL_NAMES.SNAPSHOT) };
+  const io = optBool(obj, "interactiveOnly", TOOL_NAMES.SNAPSHOT);
+  if (io !== undefined) out.interactiveOnly = io;
+  const depth = optPositiveNumber(obj, "depth", TOOL_NAMES.SNAPSHOT);
+  if (depth !== undefined) out.depth = depth;
+  const scope = optString(obj, "scope", TOOL_NAMES.SNAPSHOT);
+  if (scope) out.scope = scope;
+  const urls = optBool(obj, "urls", TOOL_NAMES.SNAPSHOT);
+  if (urls !== undefined) out.urls = urls;
+  return out;
 }
 
 // ---------------------------------------------------------------------------

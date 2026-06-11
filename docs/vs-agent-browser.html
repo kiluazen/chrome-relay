@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>chrome-relay vs agent-browser</title>
+<style>
+  :root {
+    --bg: #faf8f3;
+    --ink: #1a1814;
+    --muted: #6b6357;
+    --accent: #c2410c;
+    --accent-soft: #fff1e8;
+    --green: #166534;
+    --green-soft: #f0f7ee;
+    --explain-bg: #eef3f8;
+    --explain-border: #3b6ea5;
+    --code-bg: #14120e;
+    --code-ink: #e8e2d6;
+    --line: #e3ddd0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 17px;
+    line-height: 1.65;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 64px 24px 120px; }
+  h1, h2, h3 { font-family: -apple-system, 'Helvetica Neue', sans-serif; line-height: 1.2; letter-spacing: -0.02em; }
+  h1 { font-size: 40px; margin: 0 0 8px; }
+  .sub { color: var(--muted); font-size: 15px; font-family: -apple-system, sans-serif; margin-bottom: 48px; }
+  h2 { font-size: 26px; margin: 64px 0 16px; padding-top: 24px; border-top: 1px solid var(--line); }
+  h3 { font-size: 19px; margin: 36px 0 8px; }
+  p { margin: 0 0 18px; }
+  strong { font-weight: 700; }
+  .big {
+    font-size: 24px; line-height: 1.4; font-family: -apple-system, 'Helvetica Neue', sans-serif;
+    font-weight: 650; margin: 32px 0; padding: 24px 28px;
+    background: var(--accent-soft); border-left: 4px solid var(--accent); border-radius: 4px;
+  }
+  .big .a { color: var(--accent); }
+  code {
+    font-family: 'SF Mono', Menlo, monospace; font-size: 0.85em;
+    background: #efe9dd; padding: 2px 6px; border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg); color: var(--code-ink);
+    padding: 18px 20px; border-radius: 8px; overflow-x: auto;
+    font-size: 13.5px; line-height: 1.6;
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+  table {
+    width: 100%; border-collapse: collapse; margin: 24px 0;
+    font-family: -apple-system, sans-serif; font-size: 14.5px;
+  }
+  th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 12px; border-bottom: 2px solid var(--ink); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:first-child { font-weight: 600; }
+  .win { color: var(--green); font-weight: 700; }
+  .lose { color: var(--accent); font-weight: 700; }
+
+  details.explain {
+    background: var(--explain-bg); border-left: 4px solid var(--explain-border);
+    border-radius: 4px; margin: 20px 0; font-family: -apple-system, sans-serif; font-size: 15px;
+  }
+  details.explain summary {
+    cursor: pointer; padding: 12px 18px; font-weight: 650; color: var(--explain-border);
+    list-style: none; user-select: none;
+  }
+  details.explain summary::before { content: "? "; font-weight: 800; }
+  details.explain summary:hover { text-decoration: underline; }
+  details.explain[open] summary { border-bottom: 1px solid #d3dfeb; }
+  details.explain .body { padding: 14px 18px 16px; }
+  details.explain .body p { margin: 0 0 12px; }
+  details.explain .body p:last-child { margin: 0; }
+
+  .proof {
+    background: var(--green-soft); border-left: 4px solid var(--green);
+    border-radius: 4px; padding: 20px 24px; margin: 28px 0;
+  }
+  .proof .tag { font-family: -apple-system, sans-serif; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--green); display: block; margin-bottom: 8px; }
+
+  ol.build { counter-reset: item; list-style: none; padding: 0; margin: 24px 0; }
+  ol.build > li {
+    counter-increment: item; position: relative; padding: 16px 20px 16px 64px;
+    border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; background: #fff;
+  }
+  ol.build > li::before {
+    content: counter(item); position: absolute; left: 18px; top: 16px;
+    font-family: -apple-system, sans-serif; font-weight: 800; font-size: 20px; color: var(--accent);
+  }
+  ol.build > li .t { font-family: -apple-system, sans-serif; font-weight: 700; display: block; margin-bottom: 4px; }
+  ul { padding-left: 22px; }
+  li { margin-bottom: 8px; }
+  .chain {
+    font-family: 'SF Mono', Menlo, monospace; font-size: 12.5px;
+    background: #fff; border: 1px solid var(--line); border-radius: 8px;
+    padding: 16px 18px; margin: 16px 0; line-height: 2;
+  }
+  .chain .label { font-family: -apple-system, sans-serif; font-weight: 700; font-size: 13px; display: block; margin-bottom: 4px; }
+  .arrow { color: var(--accent); font-weight: 700; }
+  .footer-line {
+    margin-top: 72px; padding: 28px; border-radius: 8px; background: var(--ink); color: #f5f1e8;
+    font-family: -apple-system, sans-serif; font-size: 19px; font-weight: 600; line-height: 1.5;
+  }
+  .footer-line em { color: #f5a623; font-style: normal; }
+  .small { font-size: 13.5px; color: var(--muted); font-family: -apple-system, sans-serif; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>chrome-relay vs agent-browser</h1>
+<p class="sub">Hands-on tested 2026-06-11, both tools on the same machine, same page (Hacker News front page). agent-browser v0.27.x — Vercel Labs, 35.8k stars, launched Jan 2026 as a weekend project by one engineer (Chris Tate). Blue boxes explain the jargon — click them.</p>
+
+<div class="big">agent-browser gives your agent <span class="a">a browser</span>.<br>chrome-relay gives your agent <span class="a">your browser</span>.</div>
+
+<h2>The two architectures</h2>
+
+<p>agent-browser downloads its own copy of Chrome and runs it invisibly in the background. It's a sandbox: fresh profile, no logins, no extensions, no history. Fast and disposable — built for tests, scraping, CI.</p>
+
+<p>chrome-relay attaches to the Chrome you're already using — real cookies, real logins, real extensions — and operates tabs in the background without stealing your focus while you keep working.</p>
+
+<div class="chain">
+<span class="label">agent-browser</span>
+Rust CLI <span class="arrow">→</span> unix socket <span class="arrow">→</span> daemon (stays running) <span class="arrow">→</span> CDP <span class="arrow">→</span> its own hidden Chrome
+</div>
+<div class="chain">
+<span class="label">chrome-relay</span>
+Node CLI <span class="arrow">→</span> localhost HTTP <span class="arrow">→</span> native messaging host <span class="arrow">→</span> extension <span class="arrow">→</span> CDP <span class="arrow">→</span> your real Chrome
+</div>
+
+<details class="explain"><summary>What is CDP?</summary><div class="body">
+<p><strong>Chrome DevTools Protocol</strong> — the wire protocol behind Chrome's DevTools panel. Anything DevTools can do (click, type, screenshot, read the network tab, run JS) is available as commands over this protocol. Both tools speak CDP at the bottom; everything above it is just plumbing to <em>reach</em> a Chrome instance.</p>
+</div></details>
+
+<details class="explain"><summary>What is a "native messaging host"? Why does chrome-relay need an extension?</summary><div class="body">
+<p>Chrome extensions can't talk to your terminal directly — they're sandboxed. <strong>Native messaging</strong> is Chrome's official escape hatch: the extension is allowed to launch and exchange messages with one whitelisted program on your machine (the "host"). chrome-relay's CLI talks HTTP to that host, the host pipes messages to the extension, and the extension uses <code>chrome.debugger</code> (CDP from inside Chrome) to drive tabs.</p>
+<p>Why bother with this longer chain? Because it's the <strong>only way to attach to an already-running Chrome</strong>. The direct route (a debug port) requires relaunching Chrome with a special flag — killing your session — and leaves the port open to any process on your machine. The extension route attaches to the live browser, with Chrome's own permission system in front of it.</p>
+</div></details>
+
+<details class="explain"><summary>What's a daemon / unix socket, and why is agent-browser fast?</summary><div class="body">
+<p>A <strong>daemon</strong> is a background process that starts once and stays alive. agent-browser's first command boots it; every later command just sends a message to it over a <strong>unix socket</strong> (a local file-based pipe, faster than HTTP). So a command costs ~30ms instead of booting anything. The CLI itself is a compiled Rust binary, which starts in ~0ms — versus Node, which pays ~110ms of startup tax per command. That's why chrome-relay commands take 150–260ms: mostly Node booting, not actual work.</p>
+</div></details>
+
+<details class="explain"><summary>What is "Chrome for Testing"?</summary><div class="body">
+<p>A special Chrome build Google ships for automation — no auto-update, no sync, no signing into Google. agent-browser downloads it on install (~171MB, you saw this). The catch: anti-bot systems like <strong>Cloudflare fingerprint it</strong> and block it, and it never has your logins.</p>
+</div></details>
+
+<h2>The live proof</h2>
+
+<div class="proof">
+<span class="tag">Happened during testing</span>
+<p>I opened <code>news.ycombinator.com</code> in both. agent-browser's sandboxed Chrome saw the logged-out page — with a <code>login</code> link. chrome-relay saw <strong>no login link at all</strong>, and my scripted click on it "failed"… because you're logged into HN in your real Chrome. Same URL, two different realities.</p>
+<p style="margin:0">Every page behind auth — dashboards, admin panels, Gmail, Stripe, anything Cloudflare-protected — only exists in chrome-relay's world. That's the moat. Don't compete on "a browser for agents" (Playwright and agent-browser own that). Compete on <strong>"your browser, agent-operable."</strong></p>
+</div>
+
+<h2>Where agent-browser is genuinely ahead</h2>
+
+<p>The uncomfortable part. Same HN front page, measured:</p>
+
+<table>
+<tr><th></th><th>agent-browser</th><th>chrome-relay</th></tr>
+<tr><td>interactive snapshot</td><td class="win">13.5 KB (plain text)</td><td>61 KB <code>read -i</code> · 23 KB <code>ax -i</code> (JSON)</td></tr>
+<tr><td>full snapshot</td><td class="win">27.5 KB</td><td>93 KB <code>read</code> · <span class="lose">337 KB</span> <code>ax</code></td></tr>
+<tr><td>command latency</td><td class="win">26–47 ms</td><td>150–260 ms</td></tr>
+<tr><td>click round-trip</td><td class="win"><code>click @e110</code> → 37 ms</td><td>echo a CSS selector back → 160 ms</td></tr>
+</table>
+
+<details class="explain"><summary>Why do kilobytes matter? (the token economy)</summary><div class="body">
+<p>Every byte a CLI prints lands in the agent's <strong>context window</strong> — the model's working memory, which is limited and billed per token (~4 characters each). A 61&nbsp;KB page read costs ~15,000 tokens; agent-browser's 13.5&nbsp;KB costs ~3,400. Over a 50-step browsing session, that's the difference between the agent staying sharp and the agent drowning in its own page dumps. Token efficiency isn't a nice-to-have — it's <em>the</em> product axis these tools compete on.</p>
+</div></details>
+
+<h3>1. Their action loop is closed. Ours is broken.</h3>
+
+<p>agent-browser's whole workflow is three commands:</p>
+<pre><code>agent-browser snapshot -i     # see the page: every element gets a ref like @e3
+agent-browser click @e3       # act using that ref
+agent-browser snapshot -i     # re-look after the page changed</code></pre>
+
+<p>chrome-relay's <code>read</code> also assigns refs (<code>ref_1</code>, <code>ref_2</code>…) — <strong>but no command accepts them</strong>. They're decoration. To click something, the agent must copy back a brittle 100-character CSS selector like:</p>
+<pre><code>tr:nth-of-type(1) &gt; td:nth-of-type(2) &gt; span:nth-of-type(1) &gt; b:nth-of-type(1) &gt; a:nth-of-type(1)</code></pre>
+<p>…or run a <em>different</em> snapshot command (<code>ax</code>) to get a <em>different</em> kind of id, usable only by a <em>different</em> click command (<code>click-ax</code>). Two snapshot systems, two id spaces, refs that go nowhere.</p>
+
+<details class="explain"><summary>What's an accessibility tree? And what's a backendDOMNodeId?</summary><div class="body">
+<p>The <strong>accessibility tree</strong> is the simplified view of a page that Chrome builds for screen readers: just roles and labels ("button: Submit", "link: Hacker News"), with all the layout divs stripped out. It's the cheapest honest description of a page, which is why both tools use it for snapshots. chrome-relay's <code>ax</code> command reads it via CDP; agent-browser's <code>snapshot</code> renders its own version of it as text.</p>
+<p>A <strong>backendDOMNodeId</strong> is Chrome's internal serial number for a DOM element. It's a better element handle than a CSS selector (no string matching, survives most page reshuffles) — chrome-relay already uses these under the hood for <code>click-ax</code>. The fix is to put a friendly <code>ref_N</code> alias on top and accept it everywhere.</p>
+</div></details>
+
+<h3>2. Output format is the whole token game</h3>
+
+<p>agent-browser prints one short text line per element:</p>
+<pre><code>- link "Hacker News" [ref=e102]
+- cell "1." [ref=e10]</code></pre>
+
+<p>chrome-relay prints pretty-printed JSON where the same element costs ~300 bytes: a <code>bounds</code> object with 4 coordinates, that giant selector string, verbose key names, indentation whitespace. That's the entire 4.5× gap — <strong>it's a formatting problem, not an architecture problem</strong>. None of bounds/selector is needed in the default view once refs are actionable.</p>
+
+<h3>3. Features they have that agents actually use</h3>
+
+<ul>
+<li><strong><code>wait</code></strong> — wait for a selector, for text to appear, for a URL pattern, for the network to go quiet. chrome-relay has nothing; agents sleep blindly and re-read.</li>
+<li><strong><code>get text|value|attr|count</code></strong> — grab one value without paying for a full page snapshot.</li>
+<li><strong><code>find role button click</code></strong> — semantic locators ("the button labeled X") as a fallback when refs are stale.</li>
+<li><strong><code>diff snapshot</code></strong> — print only what changed since the last look. ~100 tokens instead of re-reading the page.</li>
+<li><strong><code>batch</code></strong> — several commands in one process launch.</li>
+<li><strong><code>skills get core</code></strong> — the agent instruction manual ships <em>inside the CLI</em>, so it's always version-matched. Their installable skill file is deliberately tiny: it just says "run <code>agent-browser skills get core</code>". Smart distribution.</li>
+<li><strong><code>screenshot --annotate</code></strong> — numbered labels drawn on the image that match snapshot refs. Vision + refs in one artifact.</li>
+</ul>
+
+<h2>Where the hype cracks</h2>
+
+<ul>
+<li><strong>Ref staleness is their #1 real complaint.</strong> Their refs die the moment the page changes. GitHub issue #1351: a team migrating 150 e2e tests measured <strong>+65% more LLM calls</strong> than with Playwright MCP, because ~30% of all turns were just re-snapshots. The per-snapshot token win got eaten by turn count.</li>
+<li><strong>"100% Rust" is a distribution story, not a product story.</strong> Rust matters for <em>them</em> — it removes the Node dependency from their installer. It does not make snapshots smaller or loops shorter. An independent source-read found their Rust accessibility renderer is actually <em>noisier</em> than the Node/Playwright code they deleted. Rewriting chrome-relay in Rust would be vibes: the extension is necessarily JavaScript, and the real costs are output tokens and round-trips, not binary startup.</li>
+<li><strong>Reception is lopsided.</strong> 35.8k GitHub stars but near-zero Hacker News traction (top submission: 2 points), 517 open issues at 5 months old, Vercel <em>Labs</em> (not core product), one dominant contributor.</li>
+<li><strong>The sandbox is the weakness.</strong> Blocked by Cloudflare fingerprinting, no real auth, loses device settings between opens. One field test scored it 6.1/10 vs Playwright's 8.0 for actual test-writing.</li>
+</ul>
+
+<details class="explain"><summary>What is MCP, and why does neither tool want it?</summary><div class="body">
+<p><strong>Model Context Protocol</strong> — the standard for plugging tools into agents as structured function calls (like the Playwright MCP server). The problem: every MCP tool's schema gets injected into the agent's context on <em>every single turn</em> — measured at ~13–17k tokens of pure overhead for browser-tool servers. A CLI costs zero until the moment it's used, and the agent already knows how to run shell commands. agent-browser's explicit no-MCP stance is correct, and chrome-relay should keep it: <strong>CLI + a skill file is the right interface.</strong></p>
+</div></details>
+
+<h2>What to build, in order</h2>
+
+<ol class="build">
+<li><span class="t">Compact text snapshot as the default output</span>
+One line per element: <code>ref_3 [link] "Hacker News"</code>. JSON moves behind <code>--json</code>; bounds and selectors behind flags. ~5–10× token cut for the cost of a print function. Biggest win, zero architecture change.</li>
+<li><span class="t">Close the ref loop</span>
+<code>click ref_3</code>, <code>fill ref_5 "x"</code>, <code>hover ref_2</code> — the extension keeps a per-tab map of ref → backendDOMNodeId from the last snapshot. Kills the selector-echo entirely. Bonus: backendDOMNodeIds survive page changes that kill agent-browser's refs — you can beat them at their own #1 weakness.</li>
+<li><span class="t">Unify read and ax into one snapshot command</span>
+One command, one ref space. Today's split is pure confusion tax — and full <code>ax</code> output (337 KB) is actually <em>bigger</em> than <code>read</code> because it walks the whole tree unfiltered.</li>
+<li><span class="t">wait</span>
+For a selector / text / URL pattern / network-quiet. Cheap via CDP, removes the sleep-and-re-read loop.</li>
+<li><span class="t">Snapshot diff</span>
+<code>read --diff</code> returns only elements that changed since the last snapshot of that tab. The extension already keeps per-tab state (console/network ring buffers prove the pattern). This turns their #1 weakness into your headline feature.</li>
+<li><span class="t">find — semantic locators</span>
+<code>find role button "Save" click</code>. Deterministic, cheap, better foundation than the planned natural-language resolver.</li>
+<li><span class="t">get one-liners</span>
+<code>get text|value|attr|count &lt;sel&gt;</code> — one value, no full snapshot.</li>
+<li><span class="t">batch</span>
+Multiple commands per invocation — also amortizes Node's 110ms startup.</li>
+<li><span class="t">skills get core in the CLI</span>
+Version-matched agent guide shipped inside the binary; thin SKILL.md that defers to it.</li>
+<li><span class="t">Error hygiene</span>
+Seen live: element-not-found surfaced as <code>internal_error</code> with a raw JS stack trace instead of the structured <code>element_not_found</code> code that already exists. Older handlers bypass the error system.</li>
+</ol>
+
+<p><strong>Non-goals:</strong> Rust rewrite, headless/sandbox mode, cloud browser providers, an MCP server.</p>
+
+<div class="footer-line">agent-browser is what your agent uses to browse the web.<br>chrome-relay is what your agent uses to operate <em>your</em> web — the logged-in, real-profile Chrome you're already sitting in, without taking it over.<br><br>Ship items 1–4 and the token story equalizes. The auth story was never a contest.</div>
+
+<p class="small" style="margin-top:32px">Markdown source: <code>chrome-relay/docs/vs-agent-browser.md</code> · measurements in <code>~/.claude/jobs/3904b6a8/tmp/</code></p>
+
+</main>
+</body>
+</html>

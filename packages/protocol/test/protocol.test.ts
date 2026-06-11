@@ -32,6 +32,7 @@ describe("TOOL_NAMES", () => {
       "SCREENCAST",
       "SCREENSHOT",
       "SELF_RELOAD",
+      "SNAPSHOT",
       "SWITCH_TAB",
       "TYPE",
       "VIEWPORT",

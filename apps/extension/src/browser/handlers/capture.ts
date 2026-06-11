@@ -12,12 +12,15 @@ import {
   parseChromeReadPageArgs,
   parseChromeScreencastArgs,
   parseChromeScreenshotArgs,
+  parseChromeSnapshotArgs,
   RelayError,
   TOOL_NAMES
 } from "@chrome-relay/protocol";
 import { evalExpression, evalInTab, send } from "../cdp";
-import { locateForClick, readPageSnapshot } from "../page-actions";
-import { getAxTree, clickAxNode } from "../a11y";
+import { clickAxNode } from "../a11y";
+import { mapPageError, resolveRefCenter } from "../element";
+import { locateForClick } from "../page-actions";
+import { buildSnapshot } from "../snapshot";
 import { startScreencast, stopScreencast } from "../screencast";
 import { resolveTarget, requireTabId, invalidArg, type ToolHandler } from "./target";
 
@@ -95,7 +98,9 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
       clipMeta = { source: "bbox" };
     } else if (parsed.selector) {
       const padding = parsed.padding ?? 0;
-      const rect = await evalInTab(tabId, locateForClick, [parsed.selector]);
+      const rect = await evalInTab(tabId, locateForClick, [parsed.selector]).catch((e) =>
+        mapPageError(e, TOOL_NAMES.SCREENSHOT, "locate_element")
+      );
       const clip = {
         x: Math.max(0, rect.x - rect.width / 2 - padding),
         y: Math.max(0, rect.y - rect.height / 2 - padding),
@@ -129,22 +134,41 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
     };
   },
 
+  // Unified page snapshot (adoption-spec Change 1) — AX tree + cursor-
+  // interactive sweep, one ref space. Returns structured SnapshotData; the
+  // CLI renders the compact text via the protocol renderer.
+  async [TOOL_NAMES.SNAPSHOT](args) {
+    const parsed = parseChromeSnapshotArgs(args);
+    const tab = await resolveTarget(parsed);
+    const tabId = requireTabId(tab);
+    return buildSnapshot(tabId, parsed);
+  },
+
+  // Deprecated aliases — both dispatch to the unified snapshot builder.
+  // The OLD output formats are gone on purpose: keeping them would mean
+  // keeping the old walker code in parallel (see
+  // docs/adoption-spec-codebase-impact.md §4b). Removal: next minor.
   async [TOOL_NAMES.READ_PAGE](args) {
     const parsed = parseChromeReadPageArgs(args);
     const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
-    return evalInTab(tabId, readPageSnapshot, [parsed.interactiveOnly === true]);
+    const data = await buildSnapshot(tabId, { interactiveOnly: parsed.interactiveOnly === true });
+    return {
+      ...data,
+      deprecated: "chrome_read_page is deprecated — use chrome_snapshot. Output is the unified snapshot format."
+    };
   },
 
   async [TOOL_NAMES.AX](args) {
     const parsed = parseChromeAxArgs(args);
     const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
-    return getAxTree(tabId, {
-      interactiveOnly: parsed.interactiveOnly === true,
-      rootRole: parsed.rootRole,
-      includeSubframes: parsed.includeSubframes === true
-    });
+    const data = await buildSnapshot(tabId, { interactiveOnly: parsed.interactiveOnly === true });
+    return {
+      ...data,
+      deprecated:
+        "chrome_ax is deprecated — use chrome_snapshot. rootRole/includeSubframes are ignored (snapshot --scope replaces rootRole)."
+    };
   },
 
   async [TOOL_NAMES.CLICK_AX](args) {
@@ -159,6 +183,17 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
   // Args parsed via protocol-owned parseChromeHoverArgs (PR 12).
   async [TOOL_NAMES.HOVER](args) {
     const parsed = parseChromeHoverArgs(args);
+    if (parsed.kind === "ref") {
+      const r = await resolveRefCenter(TOOL_NAMES.HOVER, parsed.ref, parsed);
+      await send(r.tabId, "Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: r.x,
+        y: r.y,
+        modifiers: 0,
+        buttons: 0
+      });
+      return { hovered: true, x: r.x, y: r.y, ref: parsed.ref, tabId: r.tabId, ...(r.healed ? { healed: true } : {}) };
+    }
     const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
     let x: number;

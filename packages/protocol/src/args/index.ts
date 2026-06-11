@@ -52,6 +52,8 @@ import {
   parseChromeAxArgs,
   parseChromeClickAxArgs,
   parseChromeScreenshotArgs,
+  parseChromeSnapshotArgs,
+  type ChromeSnapshotArgs,
   type NoArgs,
   type ChromeReadPageArgs,
   type ChromeClickArgs,
@@ -100,6 +102,7 @@ export interface ToolArgMap {
   chrome_network: ChromeNetworkArgs;
   chrome_hover: ChromeHoverArgs;
   chrome_screencast: ChromeScreencastArgs;
+  chrome_snapshot: ChromeSnapshotArgs;
 }
 
 export type ParsedToolArguments<T extends ToolName = ToolName> = ToolArgMap[T];
@@ -127,6 +130,7 @@ export function parseToolArgs<T extends ToolName>(name: T, input: unknown): Tool
     case "chrome_network": return parseChromeNetworkArgs(input) as ToolArgMap[T];
     case "chrome_hover": return parseChromeHoverArgs(input) as ToolArgMap[T];
     case "chrome_screencast": return parseChromeScreencastArgs(input) as ToolArgMap[T];
+    case "chrome_snapshot": return parseChromeSnapshotArgs(input) as ToolArgMap[T];
   }
   const exhaustive: never = name;
   return exhaustive;

@@ -1,0 +1,170 @@
+// Unified snapshot builder tests — scripted CDP responses, fake RefMap.
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+let sendMock: ReturnType<typeof vi.fn>;
+let evalInTabMock: ReturnType<typeof vi.fn>;
+let allocated: { ref: string; entry: Record<string, unknown> }[];
+let invalidatedTabs: number[];
+
+beforeEach(() => {
+  vi.resetModules();
+  sendMock = vi.fn();
+  evalInTabMock = vi.fn(async () => []); // sweep finds nothing by default
+  allocated = [];
+  invalidatedTabs = [];
+  let counter = 0;
+  vi.doMock("../src/browser/cdp", () => ({
+    send: sendMock,
+    evalInTab: evalInTabMock,
+    evalExpression: vi.fn()
+  }));
+  vi.doMock("../src/browser/refs", () => ({
+    allocateRef: vi.fn((entry: Record<string, unknown>) => {
+      counter += 1;
+      const ref = `e${counter}`;
+      allocated.push({ ref, entry });
+      return ref;
+    }),
+    invalidateTabRefs: vi.fn(async (tabId: number) => {
+      invalidatedTabs.push(tabId);
+    }),
+    getRefEntry: vi.fn(),
+    healRefEntry: vi.fn()
+  }));
+  (globalThis as any).chrome = {
+    tabs: { get: vi.fn(async () => ({ title: "Fixture", url: "https://x.test/" })) }
+  };
+});
+
+async function load() {
+  return await import("../src/browser/snapshot");
+}
+
+type Raw = Record<string, unknown>;
+const ax = (nodes: Raw[]) => ({ nodes });
+
+function scriptCdp(axNodes: Raw[], domRoot?: Raw) {
+  sendMock.mockImplementation(async (_tabId: number, method: string) => {
+    switch (method) {
+      case "Accessibility.enable": return {};
+      case "Accessibility.getFullAXTree": return ax(axNodes);
+      case "DOM.getDocument": return { root: domRoot ?? { nodeId: 1, backendNodeId: 1, nodeName: "HTML" } };
+      default: throw new Error(`unscripted CDP method ${method}`);
+    }
+  });
+}
+
+const FIXTURE: Raw[] = [
+  { nodeId: "1", ignored: false, role: { value: "RootWebArea" }, backendDOMNodeId: 100, childIds: ["2", "3", "6", "8"] },
+  { nodeId: "2", ignored: false, role: { value: "heading" }, name: { value: "Welcome" }, backendDOMNodeId: 101,
+    properties: [{ name: "level", value: { type: "integer", value: 1 } }], childIds: ["7"] },
+  { nodeId: "3", ignored: false, role: { value: "generic" }, backendDOMNodeId: 102, childIds: ["4", "5"] },
+  { nodeId: "4", ignored: false, role: { value: "button" }, name: { value: "Save" }, backendDOMNodeId: 103, childIds: [] },
+  { nodeId: "5", ignored: false, role: { value: "checkbox" }, name: { value: "Agree" }, backendDOMNodeId: 104,
+    properties: [{ name: "checked", value: { type: "tristate", value: "true" } }], childIds: [] },
+  { nodeId: "6", ignored: true, role: { value: "presentation" }, backendDOMNodeId: 105, childIds: [] },
+  // StaticText duplicating its parent heading's name — must drop
+  { nodeId: "7", ignored: false, role: { value: "StaticText" }, name: { value: "Welcome" }, backendDOMNodeId: 106, childIds: [] },
+  // Second button with the same role+name — nth disambiguation
+  { nodeId: "8", ignored: false, role: { value: "button" }, name: { value: "Save" }, backendDOMNodeId: 107, childIds: [] }
+];
+
+describe("buildSnapshot", () => {
+  it("builds a collapsed tree: structural nodes promote children, dup text drops", async () => {
+    scriptCdp(FIXTURE);
+    const m = await load();
+    const data = await m.buildSnapshot(42, {});
+
+    expect(data.title).toBe("Fixture");
+    expect(data.tabId).toBe(42);
+    // RootWebArea and the unnamed generic collapse; StaticText dup drops.
+    const roles = data.nodes.map((n) => n.role);
+    expect(roles).toEqual(["heading", "button", "checkbox", "button"]);
+  });
+
+  it("assigns refs to interactive + named-content roles, with nth on duplicates", async () => {
+    scriptCdp(FIXTURE);
+    const m = await load();
+    const data = await m.buildSnapshot(42, {});
+
+    expect(invalidatedTabs).toEqual([42]); // old refs dropped first
+    const heading = data.nodes[0];
+    const save1 = data.nodes[1];
+    const save2 = data.nodes[3];
+    expect(heading.ref).toBeTruthy(); // named content role
+    expect(save1.ref).toBeTruthy();
+    expect(save2.ref).toBeTruthy();
+    expect(data.refs[save1.ref!]).toMatchObject({ tabId: 42, backendNodeId: 103, role: "button", name: "Save" });
+    expect(data.refs[save1.ref!].nth).toBeUndefined(); // first occurrence
+    expect(data.refs[save2.ref!]).toMatchObject({ backendNodeId: 107, nth: 1 });
+  });
+
+  it("renders attrs: level + tristate checked", async () => {
+    scriptCdp(FIXTURE);
+    const m = await load();
+    const data = await m.buildSnapshot(42, {});
+    expect(data.nodes[0].attrs).toEqual({ level: 1 });
+    expect(data.nodes[2].attrs).toEqual({ checked: true });
+  });
+
+  it("interactiveOnly prunes non-ref-bearing nodes but keeps ref-bearing content", async () => {
+    scriptCdp(FIXTURE);
+    const m = await load();
+    const data = await m.buildSnapshot(42, { interactiveOnly: true });
+    const roles = data.nodes.map((n) => n.role);
+    // heading is ref-bearing (named content role) so it survives -i
+    expect(roles).toEqual(["heading", "button", "checkbox", "button"]);
+  });
+
+  it("merges sweep extras as 'clickable' nodes with refs, deduped by backendNodeId", async () => {
+    // Sweep marks two elements; one (backendNodeId 103) already has an AX ref.
+    evalInTabMock.mockImplementation(async (_tabId: number, fn: { name?: string }) => {
+      if (fn?.name === "markCursorInteractive") {
+        return [
+          { i: 0, tag: "div", text: "Open card" },
+          { i: 1, tag: "span", text: "Dup of Save" }
+        ];
+      }
+      return { cleaned: true };
+    });
+    const domRoot: Raw = {
+      nodeId: 1, backendNodeId: 1, nodeName: "HTML",
+      children: [
+        { nodeId: 2, backendNodeId: 200, nodeName: "DIV", attributes: ["data-cr-sweep", "0"] },
+        { nodeId: 3, backendNodeId: 103, nodeName: "SPAN", attributes: ["data-cr-sweep", "1"] }
+      ]
+    };
+    scriptCdp(FIXTURE, domRoot);
+    const m = await load();
+    const data = await m.buildSnapshot(42, {});
+
+    const sweepNodes = data.nodes.filter((n) => n.source === "sweep");
+    expect(sweepNodes.length).toBe(1); // 103 deduped against the Save button
+    expect(sweepNodes[0]).toMatchObject({ role: "clickable", name: "Open card" });
+    expect(data.refs[sweepNodes[0].ref!]).toMatchObject({ tabId: 42, backendNodeId: 200, role: "clickable" });
+  });
+
+  it("depth truncates the tree", async () => {
+    scriptCdp(FIXTURE);
+    const m = await load();
+    const data = await m.buildSnapshot(42, { depth: 1 });
+    for (const n of data.nodes) expect(n.children).toBeUndefined();
+  });
+});
+
+describe("findBackendNodeByRoleName", () => {
+  it("finds the nth matching role+name in document order", async () => {
+    scriptCdp(FIXTURE);
+    const m = await load();
+    expect(await m.findBackendNodeByRoleName(42, "button", "Save", 0)).toBe(103);
+    expect(await m.findBackendNodeByRoleName(42, "button", "Save", 1)).toBe(107);
+    expect(await m.findBackendNodeByRoleName(42, "button", "Save", 2)).toBeNull();
+    expect(await m.findBackendNodeByRoleName(42, "button", "Nope", 0)).toBeNull();
+  });
+
+  it("never heals sweep refs via AX (role 'clickable')", async () => {
+    scriptCdp(FIXTURE);
+    const m = await load();
+    expect(await m.findBackendNodeByRoleName(42, "clickable", "Open card", 0)).toBeNull();
+  });
+});

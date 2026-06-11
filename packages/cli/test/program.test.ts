@@ -200,18 +200,58 @@ describe("CLI argument parsing", () => {
       await runArgs("ax", "--tab", "42");
       expect(lastBody()).toEqual({ name: "chrome_ax", args: { tabId: 42 } });
     });
-    it("ax --interactive-only --root main --include-subframes forwards every flag", async () => {
+    it("ax is a snapshot alias: --root/--include-subframes are accepted but not forwarded", async () => {
       await runArgs("ax", "--tab", "42", "--interactive-only", "--root", "main", "--include-subframes");
       expect(lastBody().args).toEqual({
         tabId: 42,
-        interactiveOnly: true,
-        rootRole: "main",
-        includeSubframes: true
+        interactiveOnly: true
       });
     });
     it("click-ax requires --node and forwards it", async () => {
       await runArgs("click-ax", "--tab", "42", "--node", "123");
       expect(lastBody()).toEqual({ name: "chrome_click_ax", args: { tabId: 42, node: 123 } });
+    });
+  });
+
+  describe("snapshot (adoption-spec Change 1)", () => {
+    it("posts chrome_snapshot with flags and renders the compact text", async () => {
+      mockBridgeResponse({
+        ok: true,
+        data: {
+          title: "T", url: "https://x.test/", tabId: 42, nodeCount: 1,
+          nodes: [{ role: "button", name: "Save", ref: "e1" }],
+          refs: { e1: { tabId: 42, backendNodeId: 5, role: "button", name: "Save" } }
+        }
+      });
+      await runArgs("snapshot", "--tab", "42", "-i", "-d", "3", "-s", "#main", "-u");
+      expect(lastBody()).toEqual({
+        name: "chrome_snapshot",
+        args: { tabId: 42, interactiveOnly: true, depth: 3, scope: "#main", urls: true }
+      });
+      const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(out).toContain('- button "Save" [ref=e1]');
+      expect(out).not.toContain("backendNodeId"); // refs map stays off stdout in text mode
+    });
+
+    it("--json prints the structured envelope instead", async () => {
+      mockBridgeResponse({
+        ok: true,
+        data: { title: "T", url: "u", tabId: 1, nodeCount: 0, nodes: [], refs: {} }
+      });
+      await runArgs("snapshot", "--tab", "1", "--json");
+      const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(out).toContain('"refs"');
+    });
+
+    it("click routes a @ref positional to the ref arg", async () => {
+      await runArgs("click", "@e3");
+      expect(lastBody()).toEqual({ name: "chrome_click_element", args: { kind: "ref", ref: "e3" } });
+    });
+
+    it("read/ax aliases print a deprecation notice on stderr", async () => {
+      await runArgs("read", "--tab", "1");
+      const err = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(err).toContain("deprecated");
     });
   });
 
@@ -415,17 +455,24 @@ describe("CLI argument parsing", () => {
       await runArgs("fill", "input[name=q]", "hello");
       expect(lastBody()).toEqual({
         name: "chrome_fill_or_select",
-        args: { selector: "input[name=q]", value: "hello" }
+        // kind comes from the CLI-side parseToolArgs pass (discriminated union)
+        args: { kind: "selector", selector: "input[name=q]", value: "hello" }
       });
     });
 
     it("forwards --tab", async () => {
       await runArgs("fill", "--tab", "10", "select#country", "IN");
       expect(lastBody().args).toEqual({
+        kind: "selector",
         selector: "select#country",
         value: "IN",
         tabId: 10
       });
+    });
+
+    it("routes a @ref positional to the ref arg", async () => {
+      await runArgs("fill", "@e7", "hello");
+      expect(lastBody().args).toEqual({ kind: "ref", ref: "e7", value: "hello" });
     });
   });
 

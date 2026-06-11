@@ -5,8 +5,10 @@
 // branch on without re-doing the typeof dance.
 import { RelayError, TOOL_NAMES } from "./../index";
 import { asObject, optString, optNumber, parseTargetArgs, type TargetArgs } from "./shared";
+import { rejectMixedAddressing } from "./simple";
 
 export type ChromeHoverArgs =
+  | (TargetArgs & { kind: "ref"; ref: string })
   | (TargetArgs & { kind: "selector"; selector: string })
   | (TargetArgs & { kind: "coords"; x: number; y: number });
 
@@ -28,19 +30,24 @@ export function parseChromeHoverArgs(input: unknown): ChromeHoverArgs {
       retryable: false
     });
   }
+  const ref = optString(obj, "ref", TOOL_NAMES.HOVER);
+  const selector = optString(obj, "selector", TOOL_NAMES.HOVER);
+  rejectMixedAddressing(TOOL_NAMES.HOVER, obj, { ref, selector, coords: x !== undefined });
+  if (ref) {
+    return { ...target, kind: "ref", ref };
+  }
   if (x !== undefined && y !== undefined) {
     return { ...target, kind: "coords", x, y };
   }
-  const selector = optString(obj, "selector", TOOL_NAMES.HOVER);
   if (selector) {
     return { ...target, kind: "selector", selector };
   }
   throw new RelayError({
     code: "invalid_arguments",
-    message: "chrome_hover requires either a selector or x AND y.",
+    message: "chrome_hover requires a @ref, a selector, or x AND y.",
     tool: TOOL_NAMES.HOVER,
     phase: "parse_arguments",
-    details: { received: { selector: obj.selector, x: obj.x, y: obj.y } },
+    details: { received: { ref: obj.ref, selector: obj.selector, x: obj.x, y: obj.y } },
     retryable: false
   });
 }

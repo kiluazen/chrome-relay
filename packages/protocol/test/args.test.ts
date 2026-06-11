@@ -82,9 +82,17 @@ describe("parseChromeHoverArgs", () => {
     expect(r).toEqual({ kind: "coords", x: 10, y: 20 });
   });
 
-  it("prefers coords when both selector and x,y are provided", () => {
-    const r = parseChromeHoverArgs({ selector: "b", x: 1, y: 2 });
-    expect(r.kind).toBe("coords");
+  it("rejects mixed addressing (selector + x,y in one call)", () => {
+    // Was: silent coords precedence. Adoption-spec Change 2 makes mixed
+    // addressing an explicit invalid_arguments — silent precedence hides
+    // agent mistakes.
+    expect(() => parseChromeHoverArgs({ selector: "b", x: 1, y: 2 })).toThrowError(/mutually exclusive/);
+  });
+
+  it("accepts ref form and rejects ref + selector", () => {
+    expect(parseChromeHoverArgs({ ref: "e3", tabId: 7 }))
+      .toEqual({ kind: "ref", ref: "e3", tabId: 7 });
+    expect(() => parseChromeHoverArgs({ ref: "e3", selector: "b" })).toThrowError(/mutually exclusive/);
   });
 
   it("preserves target fields on both forms", () => {

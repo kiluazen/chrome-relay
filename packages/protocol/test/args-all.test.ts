@@ -72,9 +72,12 @@ describe("simple-tool parsers", () => {
     // partial coords reject (mirrors hover's rule)
     expectInvalid(() => parseChromeClickArgs({ x: 10 }));
     expectInvalid(() => parseChromeClickArgs({ y: 20 }));
-    // coords take precedence when both forms are passed (rare; defensible)
-    expect(parseChromeClickArgs({ selector: ".foo", x: 5, y: 5 }))
-      .toEqual({ kind: "coords", x: 5, y: 5 });
+    // mixed addressing rejects (was: silent coords precedence)
+    expectInvalid(() => parseChromeClickArgs({ selector: ".foo", x: 5, y: 5 }));
+    // ref form
+    expect(parseChromeClickArgs({ ref: "e3", tabId: 1 }))
+      .toEqual({ kind: "ref", ref: "e3", tabId: 1 });
+    expectInvalid(() => parseChromeClickArgs({ ref: "e3", selector: ".foo" }));
   });
 
   it("fill: requires selector + string value (empty allowed)", () => {
@@ -82,9 +85,13 @@ describe("simple-tool parsers", () => {
     expectInvalid(() => parseChromeFillArgs({ value: "x" }));               // missing selector
     expectInvalid(() => parseChromeFillArgs({ selector: ".f", value: 1 })); // value not string
     expect(parseChromeFillArgs({ selector: ".f", value: "" }))
-      .toEqual({ selector: ".f", value: "" }); // empty is OK
+      .toEqual({ kind: "selector", selector: ".f", value: "" }); // empty is OK
     expect(parseChromeFillArgs({ selector: ".f", value: "hi" }))
-      .toEqual({ selector: ".f", value: "hi" });
+      .toEqual({ kind: "selector", selector: ".f", value: "hi" });
+    // ref form
+    expect(parseChromeFillArgs({ ref: "e5", value: "hi" }))
+      .toEqual({ kind: "ref", ref: "e5", value: "hi" });
+    expectInvalid(() => parseChromeFillArgs({ ref: "e5", selector: ".f", value: "hi" }));
   });
 
   it("keyboard: requires keys", () => {

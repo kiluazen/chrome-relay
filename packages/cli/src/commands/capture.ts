@@ -1,12 +1,73 @@
-// screenshot / read / ax / click-ax / screencast — visual + structural
-// capture commands.
+// snapshot / screenshot / read / ax / click-ax / screencast — visual +
+// structural capture commands.
 
 import { writeFileSync } from "node:fs";
+import { renderSnapshot, RelayError, type SnapshotData } from "@chrome-relay/protocol";
 import { tabOpt, type CommandContext } from "./shared.js";
 import { callTool } from "../client/call.js";
 
+// Print a snapshot result: compact text by default (that's the product —
+// it's what agents pay tokens on), full JSON envelope behind --json.
+function printSnapshot(result: unknown, asJson: boolean): void {
+  if (asJson) {
+    process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+    return;
+  }
+  process.stdout.write(renderSnapshot(result as SnapshotData) + "\n");
+}
+
+function exitWithError(error: unknown): never {
+  if (error instanceof RelayError) {
+    process.stderr.write(error.message + "\n");
+    process.stderr.write(JSON.stringify({ relayError: error.toBridgeError() }, null, 2) + "\n");
+  } else {
+    process.stderr.write((error instanceof Error ? error.message : String(error)) + "\n");
+  }
+  process.exit(1);
+}
+
 export function registerCapture(ctx: CommandContext): void {
   const { program, withBase, run } = ctx;
+
+  // ---------- snapshot (adoption-spec Change 1) ----------
+  tabOpt(
+    program
+      .command("snapshot")
+      .description("Page snapshot with actionable @refs — accessibility tree + cursor-interactive sweep, compact text.")
+      .option("-i, --interactive", "only ref-bearing elements (buttons, links, inputs, named content, clickables)")
+      .option("-d, --depth <n>", "truncate the tree at this depth", (v) => Number(v))
+      .option("-s, --scope <css>", "restrict to the subtree of the first CSS match")
+      .option("-u, --urls", "include link hrefs as url= attrs")
+      .option("--json", "structured output: { title, url, tabId, nodes, refs }")
+      .addHelpText(
+        "after",
+        `
+
+Examples:
+  chrome-relay snapshot -i                 # see the page, get @refs
+  chrome-relay click @e12                  # act on a ref — no --tab needed
+  chrome-relay snapshot -i -s "#main"      # scope to a subtree
+  chrome-relay snapshot --json             # machine-readable envelope
+
+The core loop: snapshot -i → click/fill @eN → snapshot -i again after the
+page changes. Refs carry their own tab and heal across DOM churn
+(backendNodeId fast path + role/name re-find); a dead ref returns
+error.code = stale_ref, which means: re-run snapshot.
+`
+      )
+  ).action(async (opts) => {
+    const extras: Record<string, unknown> = {};
+    if (opts.interactive) extras.interactiveOnly = true;
+    if (typeof opts.depth === "number") extras.depth = opts.depth;
+    if (opts.scope) extras.scope = opts.scope;
+    if (opts.urls) extras.urls = true;
+    try {
+      const result = await callTool("chrome_snapshot", withBase(opts, extras));
+      printSnapshot(result, opts.json === true);
+    } catch (error) {
+      exitWithError(error);
+    }
+  });
 
   tabOpt(
     program
@@ -56,58 +117,56 @@ full-tab screenshot when an agent only needs to see one component.
       }
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
     } catch (error) {
-      process.stderr.write(
-        (error instanceof Error ? error.message : String(error)) + "\n"
-      );
-      process.exit(1);
+      exitWithError(error);
+    }
+  });
+
+  // ---------- read / ax (deprecated aliases for snapshot) ----------
+  // Both dispatch to the unified snapshot and print the NEW format — the
+  // old walkers are deleted, not parked (docs/adoption-spec-codebase-impact.md
+  // §4b). Removal: next minor.
+  tabOpt(
+    program
+      .command("read")
+      .description("[deprecated — use `snapshot`] Alias for the unified snapshot.")
+      .option("-i, --interactive", "only ref-bearing elements")
+      .option("--json", "structured output")
+  ).action(async (opts) => {
+    process.stderr.write("[chrome-relay] deprecated: `read` is now an alias for `snapshot` (new output format). Use `chrome-relay snapshot`.\n");
+    const extras: Record<string, unknown> = {};
+    if (opts.interactive) extras.interactiveOnly = true;
+    try {
+      const result = await callTool("chrome_read_page", withBase(opts, extras));
+      printSnapshot(result, opts.json === true);
+    } catch (error) {
+      exitWithError(error);
     }
   });
 
   tabOpt(
     program
-      .command("read")
-      .description("Extract page structure and interactive elements.")
-      .option("-i, --interactive", "return only interactive elements")
-  ).action(async (opts) => {
-    const extras: Record<string, unknown> = {};
-    if (opts.interactive) extras.interactiveOnly = true;
-    await run("chrome_read_page", withBase(opts, extras));
-  });
-
-  // ---------- ax (§2.4 — accessibility tree) ----------
-  tabOpt(
-    program
       .command("ax")
-      .description("Extract the accessibility tree — ~30× smaller than `read` and more semantic.")
-      .option("-i, --interactive-only", "filter to actionable roles (button, link, textbox, ...)")
-      .option("--root <role>",           "start from the first node matching this role (e.g. 'main')")
-      .option("--include-subframes",     "walk subframes too (default: top frame only)")
-      .addHelpText(
-        "after",
-        `
-
-Examples:
-  chrome-relay ax --tab 123
-  chrome-relay ax --tab 123 --interactive-only
-  chrome-relay ax --tab 123 --root main --interactive-only
-
-Notes:
-  Each node carries an "id" — that's the backendDOMNodeId. Pass it to
-  \`chrome-relay click-ax --node <id>\` to click without a CSS selector.
-`
-      )
+      .description("[deprecated — use `snapshot`] Alias for the unified snapshot.")
+      .option("-i, --interactive-only", "only ref-bearing elements")
+      .option("--root <role>", "(ignored — use `snapshot --scope <css>`)")
+      .option("--include-subframes", "(ignored — snapshot is top-frame only)")
+      .option("--json", "structured output")
   ).action(async (opts) => {
+    process.stderr.write("[chrome-relay] deprecated: `ax` is now an alias for `snapshot` (new output format, one ref space). Use `chrome-relay snapshot`.\n");
     const extras: Record<string, unknown> = {};
-    if (opts.interactiveOnly)  extras.interactiveOnly = true;
-    if (opts.root)             extras.rootRole = opts.root;
-    if (opts.includeSubframes) extras.includeSubframes = true;
-    await run("chrome_ax", withBase(opts, extras));
+    if (opts.interactiveOnly) extras.interactiveOnly = true;
+    try {
+      const result = await callTool("chrome_ax", withBase(opts, extras));
+      printSnapshot(result, opts.json === true);
+    } catch (error) {
+      exitWithError(error);
+    }
   });
 
   tabOpt(
     program
       .command("click-ax")
-      .description("Click an element by its backendDOMNodeId from a previous `ax` call.")
+      .description("[deprecated — use `click @eN`] Click by raw backendDOMNodeId (from `snapshot --json` refs).")
       .requiredOption("--node <id>", "backendDOMNodeId from `chrome-relay ax`", (v) => Number(v))
       .addHelpText(
         "after",
