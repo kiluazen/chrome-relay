@@ -49,6 +49,7 @@ interface BrowserTarget {
   // The dir we check to decide whether this browser is installed. Usually
   // the parent of manifestDir (the profile dir itself).
   installRoot: string;
+  registryKey?: string;
 }
 
 function getChromiumBrowserTargets(): BrowserTarget[] {
@@ -77,6 +78,56 @@ function getChromiumBrowserTargets(): BrowserTarget[] {
       { label: "Brave",           installRoot: path.join(config, "BraveSoftware/Brave-Browser"),    manifestDir: path.join(config, "BraveSoftware/Brave-Browser/NativeMessagingHosts") },
       { label: "Vivaldi",         installRoot: path.join(config, "vivaldi"),                        manifestDir: path.join(config, "vivaldi/NativeMessagingHosts") },
       { label: "Opera",           installRoot: path.join(config, "opera"),                          manifestDir: path.join(config, "opera/NativeMessagingHosts") }
+    ];
+  }
+
+  if (process.platform === "win32") {
+    const local = process.env.LOCALAPPDATA || path.join(home, "AppData", "Local");
+    const roaming = process.env.APPDATA || path.join(home, "AppData", "Roaming");
+    const manifestBase = path.join(APP_DIR, "NativeMessagingHosts");
+    return [
+      {
+        label: "Google Chrome",
+        installRoot: path.join(local, "Google", "Chrome", "User Data"),
+        manifestDir: path.join(manifestBase, "Google Chrome"),
+        registryKey: `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${NATIVE_HOST_NAME}`
+      },
+      {
+        label: "Google Chrome Canary",
+        installRoot: path.join(local, "Google", "Chrome SxS", "User Data"),
+        manifestDir: path.join(manifestBase, "Google Chrome Canary"),
+        registryKey: `HKCU\\Software\\Google\\Chrome SxS\\NativeMessagingHosts\\${NATIVE_HOST_NAME}`
+      },
+      {
+        label: "Chromium",
+        installRoot: path.join(local, "Chromium", "User Data"),
+        manifestDir: path.join(manifestBase, "Chromium"),
+        registryKey: `HKCU\\Software\\Chromium\\NativeMessagingHosts\\${NATIVE_HOST_NAME}`
+      },
+      {
+        label: "Microsoft Edge",
+        installRoot: path.join(local, "Microsoft", "Edge", "User Data"),
+        manifestDir: path.join(manifestBase, "Microsoft Edge"),
+        registryKey: `HKCU\\Software\\Microsoft\\Edge\\NativeMessagingHosts\\${NATIVE_HOST_NAME}`
+      },
+      {
+        label: "Brave",
+        installRoot: path.join(local, "BraveSoftware", "Brave-Browser", "User Data"),
+        manifestDir: path.join(manifestBase, "Brave"),
+        registryKey: `HKCU\\Software\\BraveSoftware\\Brave-Browser\\NativeMessagingHosts\\${NATIVE_HOST_NAME}`
+      },
+      {
+        label: "Vivaldi",
+        installRoot: path.join(local, "Vivaldi", "User Data"),
+        manifestDir: path.join(manifestBase, "Vivaldi"),
+        registryKey: `HKCU\\Software\\Vivaldi\\NativeMessagingHosts\\${NATIVE_HOST_NAME}`
+      },
+      {
+        label: "Opera",
+        installRoot: path.join(roaming, "Opera Software", "Opera Stable"),
+        manifestDir: path.join(manifestBase, "Opera"),
+        registryKey: `HKCU\\Software\\Opera Software\\NativeMessagingHosts\\${NATIVE_HOST_NAME}`
+      }
     ];
   }
 
@@ -111,6 +162,12 @@ function getDistDir(): string {
 
 async function writeWrapperScript(hostPath: string): Promise<string> {
   await mkdir(APP_DIR, { recursive: true });
+  if (process.platform === "win32") {
+    const wrapperPath = path.join(APP_DIR, "run-host.cmd");
+    const content = `@echo off\r\n"${process.execPath}" "${hostPath}"\r\n`;
+    await writeFile(wrapperPath, content, "utf8");
+    return wrapperPath;
+  }
   const wrapperPath = path.join(APP_DIR, "run-host.sh");
   const content = `#!/bin/sh\nexec "${process.execPath}" "${hostPath}"\n`;
   await writeFile(wrapperPath, content, "utf8");
@@ -121,6 +178,34 @@ async function writeWrapperScript(hostPath: string): Promise<string> {
 interface WrittenManifest {
   browser: string;
   manifestPath: string;
+  registryKey?: string;
+}
+
+function registerWindowsNativeHost(registryKey: string, manifestPath: string): void {
+  const res = spawnSync("reg.exe", [
+    "ADD",
+    registryKey,
+    "/ve",
+    "/t",
+    "REG_SZ",
+    "/d",
+    manifestPath,
+    "/f"
+  ], { encoding: "utf8" });
+  if (res.status !== 0) {
+    const detail = (res.stderr || res.stdout || "").trim();
+    throw new Error(`failed to register ${registryKey}${detail ? `: ${detail}` : ""}`);
+  }
+}
+
+function readWindowsNativeHostRegistry(registryKey: string): string | null {
+  const res = spawnSync("reg.exe", ["QUERY", registryKey, "/ve"], { encoding: "utf8" });
+  if (res.status !== 0 || !res.stdout) return null;
+  for (const line of res.stdout.split("\n")) {
+    const match = line.match(/REG_SZ\s+(.+?)\s*$/);
+    if (match?.[1]) return match[1].trim();
+  }
+  return null;
 }
 
 async function writeManifestsForBrowsers(
@@ -141,7 +226,11 @@ async function writeManifestsForBrowsers(
     await mkdir(target.manifestDir, { recursive: true });
     const manifestPath = path.join(target.manifestDir, `${NATIVE_HOST_NAME}.json`);
     await writeFile(manifestPath, body, "utf8");
-    written.push({ browser: target.label, manifestPath });
+    if (process.platform === "win32") {
+      if (!target.registryKey) throw new Error(`missing registry key for ${target.label}`);
+      registerWindowsNativeHost(target.registryKey, manifestPath);
+    }
+    written.push({ browser: target.label, manifestPath, registryKey: target.registryKey });
   }
   return written;
 }
@@ -205,6 +294,9 @@ export async function runInstall(): Promise<void> {
   console.log(`Manifests written:`);
   for (const m of writtenManifests) {
     console.log(`  • ${m.browser}: ${m.manifestPath}`);
+    if (m.registryKey) {
+      console.log(`    registry: ${m.registryKey}`);
+    }
   }
   console.log(`Local bridge port: ${DEFAULT_HTTP_PORT}`);
   console.log(`Allowed extension IDs: ${formatKnownExtensionIds()}`);
@@ -215,7 +307,7 @@ export async function runInstall(): Promise<void> {
 
 export async function runDoctor(): Promise<boolean> {
   try {
-    const wrapperPath = path.join(APP_DIR, "run-host.sh");
+    const wrapperPath = path.join(APP_DIR, process.platform === "win32" ? "run-host.cmd" : "run-host.sh");
     await stat(wrapperPath);
     console.log(`Wrapper present: yes`);
 
@@ -236,6 +328,14 @@ export async function runDoctor(): Promise<boolean> {
         allHealthy = false;
         console.log(`  • ${target.label}: manifest MISSING (${manifestPath})`);
         continue;
+      }
+      if (process.platform === "win32" && target.registryKey) {
+        const registered = readWindowsNativeHostRegistry(target.registryKey);
+        if (path.normalize(registered || "") !== path.normalize(manifestPath)) {
+          allHealthy = false;
+          console.log(`  • ${target.label}: registry MISSING/STALE (${target.registryKey})`);
+          continue;
+        }
       }
       try {
         const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
