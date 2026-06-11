@@ -43,12 +43,14 @@ async function load() {
 type Raw = Record<string, unknown>;
 const ax = (nodes: Raw[]) => ({ nodes });
 
-function scriptCdp(axNodes: Raw[], domRoot?: Raw) {
+function scriptCdp(axNodes: Raw[], domRoot?: Raw, scope?: { matchNodeId: number; backendNodeId: number }) {
   sendMock.mockImplementation(async (_tabId: number, method: string) => {
     switch (method) {
       case "Accessibility.enable": return {};
       case "Accessibility.getFullAXTree": return ax(axNodes);
       case "DOM.getDocument": return { root: domRoot ?? { nodeId: 1, backendNodeId: 1, nodeName: "HTML" } };
+      case "DOM.querySelector": return { nodeId: scope?.matchNodeId ?? 0 };
+      case "DOM.describeNode": return { node: { backendNodeId: scope?.backendNodeId ?? 0 } };
       default: throw new Error(`unscripted CDP method ${method}`);
     }
   });
@@ -142,6 +144,42 @@ describe("buildSnapshot", () => {
     expect(sweepNodes.length).toBe(1); // 103 deduped against the Save button
     expect(sweepNodes[0]).toMatchObject({ role: "clickable", name: "Open card" });
     expect(data.refs[sweepNodes[0].ref!]).toMatchObject({ tabId: 42, backendNodeId: 200, role: "clickable" });
+  });
+
+  it("scope bounds BOTH the AX subtree and the sweep — no actionable refs outside it", async () => {
+    // Sweep marks one element inside the scoped subtree and one outside.
+    evalInTabMock.mockImplementation(async (_tabId: number, fn: { name?: string }) => {
+      if (fn?.name === "markCursorInteractive") {
+        return [
+          { i: 0, tag: "div", text: "Inside scope" },
+          { i: 1, tag: "div", text: "Outside scope" }
+        ];
+      }
+      return { cleaned: true };
+    });
+    // DOM: scope element (backendNodeId 101 = the heading) contains sweep #0;
+    // sweep #1 lives elsewhere on the page.
+    const domRoot: Raw = {
+      nodeId: 1, backendNodeId: 1, nodeName: "HTML",
+      children: [
+        {
+          nodeId: 5, backendNodeId: 101, nodeName: "H1",
+          children: [{ nodeId: 6, backendNodeId: 300, nodeName: "DIV", attributes: ["data-cr-sweep", "0"] }]
+        },
+        { nodeId: 7, backendNodeId: 301, nodeName: "DIV", attributes: ["data-cr-sweep", "1"] }
+      ]
+    };
+    scriptCdp(FIXTURE, domRoot, { matchNodeId: 5, backendNodeId: 101 });
+    const m = await load();
+    const data = await m.buildSnapshot(42, { scope: "#whatever" });
+
+    // AX tree restricted to the heading subtree
+    expect(data.nodes.filter((n) => n.source !== "sweep").map((n) => n.role)).toEqual(["heading"]);
+    // Sweep restricted to the same subtree — "Outside scope" must not leak
+    const sweepNames = data.nodes.filter((n) => n.source === "sweep").map((n) => n.name);
+    expect(sweepNames).toEqual(["Inside scope"]);
+    const sweepEntries = Object.values(data.refs).filter((e) => e.role === "clickable");
+    expect(sweepEntries.map((e) => e.backendNodeId)).toEqual([300]);
   });
 
   it("depth truncates the tree", async () => {

@@ -189,9 +189,18 @@ function buildAxTree(raw: RawAXNode[], includeUrls: boolean): BuildNode[] {
 // ---------------------------------------------------------------------------
 // Cursor-interactive sweep — backendNodeId resolution via one DOM.getDocument
 
-function collectSweepBackendIds(root: RawDomNode, out: Map<number, number>): void {
+// Collect sweep-tagged backendNodeIds. When `scopeBackendId` is set, only
+// nodes inside that subtree count — `snapshot -s "#modal"` must not hand
+// out actionable refs for cursor-pointer elements elsewhere on the page.
+function collectSweepBackendIds(
+  root: RawDomNode,
+  out: Map<number, number>,
+  scopeBackendId: number | undefined,
+  inScope: boolean
+): void {
+  const nowInScope = inScope || scopeBackendId === undefined || root.backendNodeId === scopeBackendId;
   const attrs = root.attributes;
-  if (attrs) {
+  if (nowInScope && attrs) {
     for (let i = 0; i + 1 < attrs.length; i += 2) {
       if (attrs[i] === "data-cr-sweep") {
         const idx = Number(attrs[i + 1]);
@@ -199,18 +208,21 @@ function collectSweepBackendIds(root: RawDomNode, out: Map<number, number>): voi
       }
     }
   }
-  for (const c of root.children ?? []) collectSweepBackendIds(c, out);
-  for (const s of root.shadowRoots ?? []) collectSweepBackendIds(s, out);
-  if (root.contentDocument) collectSweepBackendIds(root.contentDocument, out);
+  for (const c of root.children ?? []) collectSweepBackendIds(c, out, scopeBackendId, nowInScope);
+  for (const s of root.shadowRoots ?? []) collectSweepBackendIds(s, out, scopeBackendId, nowInScope);
+  if (root.contentDocument) collectSweepBackendIds(root.contentDocument, out, scopeBackendId, nowInScope);
 }
 
-async function runSweep(tabId: number): Promise<{ backendNodeId: number; tag: string; text: string }[]> {
+async function runSweep(
+  tabId: number,
+  scopeBackendId?: number
+): Promise<{ backendNodeId: number; tag: string; text: string }[]> {
   const items = await evalInTab(tabId, markCursorInteractive, [SWEEP_MAX]);
   try {
     if (!items || items.length === 0) return [];
     const doc = await send<{ root: RawDomNode }>(tabId, "DOM.getDocument", { depth: -1, pierce: true });
     const byIdx = new Map<number, number>();
-    collectSweepBackendIds(doc.root, byIdx);
+    collectSweepBackendIds(doc.root, byIdx, scopeBackendId, false);
     const out: { backendNodeId: number; tag: string; text: string }[] = [];
     for (const item of items) {
       const backendNodeId = byIdx.get(item.i);
@@ -313,14 +325,10 @@ export async function buildSnapshot(
 
   let tree = buildAxTree(response.nodes ?? [], opts.urls === true);
 
-  // Sweep BEFORE scope/filters — sweep extras participate in dedup against
-  // the full AX ref set, and scope applies to the AX tree only (sweep
-  // extras are appended flat; a scoped snapshot that needs div-soup inside
-  // the scope still gets it because backendNodeIds don't lie about position
-  // — acceptable v1 simplification).
-  const sweepItems = await runSweep(tabId);
-
-  // --scope <css>: restrict to the subtree of the first match.
+  // --scope <css>: resolve the scope element FIRST so both the AX subtree
+  // filter AND the sweep are bounded by it — a scoped snapshot must never
+  // hand out actionable refs for elements outside the scope.
+  let scopeBackendId: number | undefined;
   if (opts.scope) {
     const doc = await send<{ root: { nodeId: number } }>(tabId, "DOM.getDocument", { depth: 0 });
     const match = await send<{ nodeId: number }>(tabId, "DOM.querySelector", {
@@ -340,9 +348,12 @@ export async function buildSnapshot(
     const described = await send<{ node: { backendNodeId: number } }>(tabId, "DOM.describeNode", {
       nodeId: match.nodeId
     });
-    const subtree = findScopeSubtree(tree, described.node.backendNodeId);
+    scopeBackendId = described.node.backendNodeId;
+    const subtree = findScopeSubtree(tree, scopeBackendId);
     tree = subtree ? [subtree] : [];
   }
+
+  const sweepItems = await runSweep(tabId, scopeBackendId);
 
   if (opts.interactiveOnly) tree = pruneToRefBearing(tree);
   if (opts.depth !== undefined) tree = truncateDepth(tree, opts.depth);

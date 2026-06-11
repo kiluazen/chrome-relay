@@ -17,10 +17,12 @@ There is no single "click" because there is no single way to identify an element
 ### 1. Snapshot ref — `chrome-relay click @e12`
 
 ```bash
-chrome-relay snapshot --tab 42 -i      # every element gets a ref
+chrome-relay snapshot --tab 42 -i      # every actionable element gets a ref
 chrome-relay click @e12                # no --tab, no selector
 chrome-relay fill @e14 "value"         # same refs work for fill/hover/type
 ```
+
+Ref-bearing = interactive roles (always), named content roles (heading, cell, listitem…), and cursor-interactive sweep extras. Anonymous structural nodes don't get refs — there's nothing to do with them.
 
 **Under the hood:**
 1. `snapshot` builds the accessibility tree + a cursor-interactive sweep (div-soup clickables the AX tree misses), assigns each ref-bearing node a browser-unique `eN` id backed by its CDP `backendDOMNodeId`, and stores `{tabId, backendNodeId, role, name, nth}` in the extension.
@@ -28,6 +30,8 @@ chrome-relay fill @e14 "value"         # same refs work for fill/hover/type
 3. If the node was replaced by same-page DOM churn, the resolver re-finds it by role+name+nth in a fresh AX tree, **heals the map entry**, and proceeds.
 
 **Tab safety:** the ref carries its tab. `click @e12` acts on the tab that produced e12, never the active tab — the user can keep browsing. A contradicting `--tab` is `target_conflict`.
+
+**Interception:** before dispatching, the click point is hit-tested. If an unrelated element (overlay, sticky header, modal) owns it, the click fails with `click_intercepted` naming the interceptor — dismiss it or scroll, then retry. Inner text / wrapping labels pass; `fill`/`type` skip the check.
 
 **Use when:** almost always. Covers buttons/links/inputs, named content, cursor-pointer div-soup, and shadow DOM (the AX tree pierces shadow roots; `querySelector` can't).
 

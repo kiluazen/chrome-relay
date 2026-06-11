@@ -171,8 +171,9 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
 
     if (parsed.ref) {
       // Resolve + verify (and scroll into view), then trusted focus by
-      // backendNodeId — no CSS round-trip.
-      const r = await resolveRefCenter(TOOL_NAMES.TYPE, parsed.ref, parsed);
+      // backendNodeId — no CSS round-trip. No hit-test: focusing a covered
+      // element is legitimate (pointer never moves).
+      const r = await resolveRefCenter(TOOL_NAMES.TYPE, parsed.ref, parsed, { hitTest: false });
       await send(r.tabId, "DOM.focus", { backendNodeId: r.backendNodeId });
       await send(r.tabId, "Input.insertText", { text: parsed.text });
       return {

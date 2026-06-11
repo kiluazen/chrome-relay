@@ -122,6 +122,10 @@ export type BridgeErrorCode =
   // A @ref from a previous snapshot no longer resolves — the node is gone
   // and the role/name/nth heal found no replacement. Fix: re-run snapshot.
   | "stale_ref"
+  // The ref resolved, but a hit-test found an unrelated element (overlay,
+  // sticky header, modal) owning the click point. We refuse to click
+  // through it; details name the intercepting element.
+  | "click_intercepted"
   | "cdp_error"
   | "chrome_api_error"
   | "timeout"

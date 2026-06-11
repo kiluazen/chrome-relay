@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>overlay</title>
+<style>
+  #target { position: absolute; top: 100px; left: 100px; width: 160px; height: 40px; }
+  #overlay {
+    position: fixed; top: 80px; left: 80px; width: 300px; height: 100px;
+    background: rgba(0,0,0,0.4); z-index: 1000;
+  }
+</style>
+</head>
+<body>
+  <button id="target">Click me</button>
+  <div id="overlay">modal-ish overlay</div>
+  <div id="result"></div>
+  <script>
+    document.getElementById("target").addEventListener("click", () => {
+      document.getElementById("result").textContent = "clicked";
+    });
+  </script>
+</body>
+</html>

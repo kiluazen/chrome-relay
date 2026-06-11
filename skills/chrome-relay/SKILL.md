@@ -35,7 +35,7 @@ chrome-relay --version
 ```sh
 chrome-relay tabs                             # find or create a tab
 chrome-relay navigate "https://x.com" --new   # background tab by default
-chrome-relay snapshot --tab 1234 -i           # see the page: every element gets a @ref
+chrome-relay snapshot --tab 1234 -i           # see the page: actionable elements get @refs
 chrome-relay click @e12                       # act on refs — no --tab, no selector
 chrome-relay fill @e14 "hello"
 chrome-relay snapshot --tab 1234 -i           # re-look after the page changes
@@ -53,6 +53,8 @@ Snapshot output is compact indented text (~1–15 KB for most pages) — read it
 **Refs carry their own tab.** `click @e12` acts on the tab that produced e12, never the active tab — safe while the user keeps browsing. A contradicting `--tab` errors with `target_conflict`.
 
 **Ref lifetime.** Refs survive same-page DOM churn (cached backendNodeId, healed by role+name re-find when nodes are replaced) but die on real navigation. A dead ref returns `error.code = stale_ref` → re-run `snapshot`.
+
+**Interception.** Ref clicks hit-test the point first: if an overlay / sticky header / modal owns it, you get `error.code = click_intercepted` naming the interceptor — dismiss it or scroll, then retry. The click was NOT delivered. `fill`/`type` skip this check (covered inputs are still writable).
 
 ## Tool surface
 
@@ -128,5 +130,5 @@ Failure modes: [references/troubleshooting.md](references/troubleshooting.md)
 
 ## Guardrails
 
-- Errors are structured: branch on `relayError.code` (`stale_ref`, `element_not_found`, `target_conflict`, `timeout`), not on message text.
+- Errors are structured: branch on `relayError.code` (`stale_ref`, `click_intercepted`, `element_not_found`, `target_conflict`, `timeout`), not on message text.
 - If a flag is unclear, `chrome-relay <command> --help` is authoritative — these docs lag.
