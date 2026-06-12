@@ -31,7 +31,7 @@ The skill is ~120 lines of markdown. The spine:
 
 ```sh
 chrome-relay tabs
-chrome-relay navigate "https://x.com" --new   # background tab
+chrome-relay navigate "https://kushalsm.com" --new   # background tab
 chrome-relay snapshot --tab 1234 -i           # actionable elements get @refs
 chrome-relay click @e12                       # refs need no --tab
 chrome-relay fill @e14 "hello"

@@ -253,6 +253,81 @@ describe("CLI argument parsing", () => {
       const err = stderrSpy.mock.calls.map((c) => String(c[0])).join("");
       expect(err).toContain("deprecated");
     });
+
+    it("snapshot --diff posts diff:true and prints only changes", async () => {
+      mockBridgeResponse({
+        ok: true,
+        data: {
+          title: "T", url: "u", tabId: 1, nodeCount: 1,
+          nodes: [{ role: "button", name: "Save", ref: "e2" }],
+          refs: {},
+          prevText: "Page: T\nURL: u\nTab: 1\n\n- button \"Old\" [ref=e1]"
+        }
+      });
+      await runArgs("snapshot", "--tab", "1", "--diff");
+      expect(lastBody().args).toEqual({ tabId: 1, diff: true });
+      const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(out).toContain('+- button "Save" [ref=e2]');
+      expect(out).toContain("removal");
+    });
+  });
+
+  describe("wait / get / batch / skills (adoption-spec 3,5,6,7)", () => {
+    it("wait with a selector positional posts chrome_wait", async () => {
+      await runArgs("wait", ".results", "--tab", "42");
+      expect(lastBody()).toEqual({
+        name: "chrome_wait",
+        args: { tabId: 42, condition: { kind: "selector", selector: ".results" }, timeoutMs: 10_000 }
+      });
+    });
+
+    it("wait @ref and --text/--url/--load route to the right condition", async () => {
+      await runArgs("wait", "@e3");
+      expect(lastBody().args).toMatchObject({ condition: { kind: "ref", ref: "e3" } });
+      await runArgs("wait", "--text", "Welcome", "--tab", "1");
+      expect(lastBody().args).toMatchObject({ condition: { kind: "text", text: "Welcome" } });
+      await runArgs("wait", "--load", "networkidle", "--tab", "1");
+      expect(lastBody().args).toMatchObject({ condition: { kind: "load", state: "networkidle" } });
+    });
+
+    it("wait <ms> sleeps locally without a tool call", async () => {
+      const before = fetchSpy.mock.calls.length;
+      await runArgs("wait", "5");
+      expect(fetchSpy.mock.calls.length).toBe(before);
+      const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(out).toContain('"sleptMs":5');
+    });
+
+    it("get text @ref posts chrome_get and prints the bare value", async () => {
+      mockBridgeResponse({ ok: true, data: { value: "hello world" } });
+      await runArgs("get", "text", "@e12");
+      expect(lastBody()).toEqual({ name: "chrome_get", args: { what: "text", ref: "e12" } });
+      const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(out).toContain("hello world");
+      expect(out).not.toContain("{"); // bare value, not JSON
+    });
+
+    it("get attr <selector> <name> posts attrName", async () => {
+      mockBridgeResponse({ ok: true, data: { value: "/x" } });
+      await runArgs("get", "attr", "a.link", "href", "--tab", "2");
+      expect(lastBody().args).toEqual({ what: "attr", attrName: "href", selector: "a.link", tabId: 2 });
+    });
+
+    it("batch posts the commands array with bail default true", async () => {
+      mockBridgeResponse({ ok: true, data: { results: [{ ok: true }], completed: 1, total: 1 } });
+      await runArgs("batch", '[{"name":"chrome_navigate","args":{"url":"https://kushalsm.com"}}]');
+      expect(lastBody()).toEqual({
+        name: "chrome_batch",
+        args: { commands: [{ name: "chrome_navigate", args: { url: "https://kushalsm.com" } }], bail: true }
+      });
+    });
+
+    it("skills get core prints the inlined playbook", async () => {
+      await runArgs("skills", "get", "core");
+      const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(out).toContain("core loop");
+      expect(out).toContain("snapshot");
+    });
   });
 
   // 0.4.0 split: what was a "group" (= named Chrome window) is now a

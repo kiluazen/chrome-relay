@@ -8,6 +8,7 @@
 import {
   parseChromeAxArgs,
   parseChromeClickAxArgs,
+  parseChromeGetArgs,
   parseChromeHoverArgs,
   parseChromeReadPageArgs,
   parseChromeScreencastArgs,
@@ -18,7 +19,7 @@ import {
 } from "@chrome-relay/protocol";
 import { evalExpression, evalInTab, send } from "../cdp";
 import { clickAxNode } from "../a11y";
-import { mapPageError, resolveRefCenter } from "../element";
+import { mapPageError, resolveRefCenter, resolveRefObjectId } from "../element";
 import { locateForClick } from "../page-actions";
 import { buildSnapshot } from "../snapshot";
 import { startScreencast, stopScreencast } from "../screencast";
@@ -142,6 +143,75 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
     const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
     return buildSnapshot(tabId, parsed);
+  },
+
+  // chrome_get (adoption-spec Change 6) — one value without a snapshot.
+  // Plain { value } out; the CLI prints it bare.
+  async [TOOL_NAMES.GET](args) {
+    const parsed = parseChromeGetArgs(args);
+
+    if (parsed.what === "title" || parsed.what === "url") {
+      const tab = await resolveTarget(parsed);
+      return { value: (parsed.what === "title" ? tab.title : tab.url) ?? "" };
+    }
+
+    if (parsed.what === "count") {
+      const tab = await resolveTarget(parsed);
+      const tabId = requireTabId(tab);
+      const r = await evalExpression<number>(
+        tabId,
+        `document.querySelectorAll(${JSON.stringify(parsed.selector)}).length`
+      );
+      return { value: r.value ?? 0 };
+    }
+
+    // text | value | attr — by ref (objectId path) or by selector (in-page).
+    const attrName = parsed.what === "attr" ? parsed.attrName : null;
+    if (parsed.ref) {
+      const r = await resolveRefObjectId(TOOL_NAMES.GET, parsed.ref, parsed);
+      const resp = await send<{
+        result: { value?: unknown };
+        exceptionDetails?: { text: string; exception?: { description?: string } };
+      }>(r.tabId, "Runtime.callFunctionOn", {
+        objectId: r.objectId,
+        functionDeclaration: `function (what, attrName) {
+          const el = this;
+          if (what === "text") return (el.innerText ?? el.textContent ?? "").trim();
+          if (what === "value") return "value" in el ? el.value : null;
+          return el.getAttribute(attrName);
+        }`,
+        arguments: [{ value: parsed.what }, { value: attrName }],
+        returnByValue: true
+      });
+      if (resp.exceptionDetails) {
+        mapPageError(
+          new Error(resp.exceptionDetails.exception?.description ?? resp.exceptionDetails.text),
+          TOOL_NAMES.GET,
+          "get_ref"
+        );
+      }
+      return { value: resp.result.value ?? null };
+    }
+
+    const tab = await resolveTarget(parsed);
+    const tabId = requireTabId(tab);
+    const s = JSON.stringify(parsed.selector);
+    try {
+      const r = await evalExpression<unknown>(
+        tabId,
+        `(() => {
+          const el = document.querySelector(${s});
+          if (!el) throw new Error("Element not found for selector: " + ${s});
+          const what = ${JSON.stringify(parsed.what)};
+          if (what === "text") return (el.innerText ?? el.textContent ?? "").trim();
+          if (what === "value") return "value" in el ? el.value : null;
+          return el.getAttribute(${JSON.stringify(attrName)});
+        })()`
+      );
+      return { value: r.value ?? null };
+    } catch (e) {
+      mapPageError(e, TOOL_NAMES.GET, "get_selector");
+    }
   },
 
   // Deprecated aliases — both dispatch to the unified snapshot builder.

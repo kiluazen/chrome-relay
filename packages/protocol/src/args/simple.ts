@@ -326,6 +326,10 @@ export interface ChromeSnapshotArgs extends TargetArgs {
   depth?: number;
   scope?: string;
   urls?: boolean;
+  /** Change 4 — include the previous snapshot's rendered text so the CLI
+   *  can print only what changed. A full snapshot is still taken and the
+   *  ref map still refreshes; diff only changes what is PRINTED. */
+  diff?: boolean;
 }
 export function parseChromeSnapshotArgs(input: unknown): ChromeSnapshotArgs {
   const obj = asObject(input, TOOL_NAMES.SNAPSHOT);
@@ -338,6 +342,8 @@ export function parseChromeSnapshotArgs(input: unknown): ChromeSnapshotArgs {
   if (scope) out.scope = scope;
   const urls = optBool(obj, "urls", TOOL_NAMES.SNAPSHOT);
   if (urls !== undefined) out.urls = urls;
+  const diff = optBool(obj, "diff", TOOL_NAMES.SNAPSHOT);
+  if (diff !== undefined) out.diff = diff;
   return out;
 }
 

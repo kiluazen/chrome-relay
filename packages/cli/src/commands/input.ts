@@ -58,8 +58,8 @@ where no DOM handle exists. See docs/clicking-strategies.md.
         `
 
 Examples:
-  chrome-relay fill @e4 "kushal@example.com"
-  chrome-relay fill 'input[name="email"]' "kushal@example.com"
+  chrome-relay fill @e4 "kushal@kushalsm.com"
+  chrome-relay fill 'input[name="email"]' "kushal@kushalsm.com"
 `
       )
   ).action(async (target: string, value: string, opts) => {

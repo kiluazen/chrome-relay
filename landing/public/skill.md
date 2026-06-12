@@ -17,7 +17,7 @@ Drives the user's real Chrome through a Chrome extension + local native host. Pr
    chrome-relay doctor
    ```
 
-Verify CLI ≥ 0.6.0 — that's where the snapshot/@ref loop landed (and ≥ 0.5.20 fixed a silent click bug on Radix/React-Aria UIs):
+Verify CLI ≥ 0.7.0 — wait/get/batch/`snapshot --diff` landed there (0.6.0 brought the snapshot/@ref loop; ≥ 0.5.20 fixed a silent click bug on Radix/React-Aria UIs):
 ```sh
 chrome-relay --version
 ```
@@ -26,11 +26,12 @@ chrome-relay --version
 
 ```sh
 chrome-relay tabs                             # find or create a tab
-chrome-relay navigate "https://x.com" --new   # background tab by default
+chrome-relay navigate "https://kushalsm.com" --new   # background tab by default
 chrome-relay snapshot --tab 1234 -i           # see the page: actionable elements get @refs
 chrome-relay click @e12                       # act on refs — no --tab, no selector
 chrome-relay fill @e14 "hello"
-chrome-relay snapshot --tab 1234 -i           # re-look after the page changes
+chrome-relay wait --text "Saved" --tab 1234   # block until the page reacts
+chrome-relay snapshot --tab 1234 --diff       # print only what changed (~100 tokens)
 ```
 
 Snapshot output is compact indented text (~1–15 KB for most pages) — read it directly, no jq needed:
@@ -54,7 +55,11 @@ Snapshot output is compact indented text (~1–15 KB for most pages) — read it
 |---|---|
 | `tabs` | List windows + tabs with their `tabId`s |
 | `navigate <url>` | Open in current tab. `--new` opens in a **background** tab (default). `--active` brings it to foreground. `--tab <id>` retargets an existing tab. |
-| `snapshot --tab <id> -i` | Page snapshot with actionable `@refs` — accessibility tree + cursor-interactive sweep, one ref space, compact text. `-d N` depth cap, `-s <css>` scope to subtree, `-u` include hrefs, `--json` structured envelope with the refs map. |
+| `snapshot --tab <id> -i` | Page snapshot with actionable `@refs` — accessibility tree + cursor-interactive sweep, one ref space, compact text. `-d N` depth cap, `-s <css>` scope to subtree, `-u` include hrefs, `--diff` print only changes since the last snapshot, `--json` structured envelope with the refs map. |
+| `wait <css\|@ref>` / `wait --text` / `--url <glob>` / `--load networkidle` / `--fn <js>` | Block until a condition holds (one per call, default 10s, max 25s). `wait 1500` just sleeps. On timeout the error includes current page state. |
+| `get text\|value\|attr\|count\|title\|url <target>` | One value, plain to stdout — no full snapshot. `get text @e12`, `get attr @e7 href`, `get count ".row"`. |
+| `batch '[{"name":"chrome_...","args":{...}}, ...]'` | N tool calls in ONE round-trip, sequential, bail-on-error by default. Use wire tool names. |
+| `skills get core` | Print this playbook, version-matched to the installed binary. |
 | `click <@ref \| selector> --tab <id>` | Trusted hover + press + release at element center (`pointerType: "mouse"`). Refs need no `--tab`. |
 | `click --x N --y N --tab <id>` | Coordinate-mode click — for canvas/SVG chart internals with no DOM handle. |
 | `hover <@ref \| selector \| --x --y>` | Pointer move only — fires `:hover` styles. |
@@ -93,6 +98,16 @@ Snapshot output is compact indented text (~1–15 KB for most pages) — read it
    chrome-relay js --tab 1234 "const r = document.querySelector('svg path').getBoundingClientRect(); return {x: r.x + r.width/2, y: r.y + r.height/2}"
    chrome-relay click --tab 1234 --x 312 --y 218
    ```
+
+## Don't poll — wait
+
+A snapshot after every action wastes turns. The cheap loop on a changing page:
+
+```sh
+chrome-relay click @e12
+chrome-relay wait --text "Saved" --tab 1234     # or wait <selector> / --url / --load
+chrome-relay snapshot --tab 1234 --diff         # only the changes, refs included
+```
 
 ## Top gotchas
 

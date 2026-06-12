@@ -66,7 +66,17 @@ export const TOOL_NAMES = {
   // Unified page snapshot (adoption-spec Change 1) — AX tree + cursor-
   // interactive sweep, one ref space, compact text rendered CLI-side.
   // Supersedes chrome_read_page and chrome_ax, which now alias to it.
-  SNAPSHOT: "chrome_snapshot"
+  SNAPSHOT: "chrome_snapshot",
+  // Adoption-spec Change 3 — block until a condition holds (selector/@ref
+  // visible, text present, URL glob, load state, JS truthy).
+  WAIT: "chrome_wait",
+  // Adoption-spec Change 5 — run N tool calls in one round-trip,
+  // sequentially, bail-on-error by default. Amortizes CLI startup + the
+  // HTTP/native-messaging hop.
+  BATCH: "chrome_batch",
+  // Adoption-spec Change 6 — one value (text/value/attr/count/title/url)
+  // without paying for a full snapshot.
+  GET: "chrome_get"
 } as const;
 
 export type ToolName = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES];

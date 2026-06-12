@@ -24,6 +24,7 @@ export * from "./hover";
 export * from "./network";
 export * from "./simple";
 export * from "./multi";
+export * from "./loop";
 
 import type { ToolName } from "../index";
 import {
@@ -68,6 +69,14 @@ import {
   type ChromeScreenshotArgs
 } from "./simple";
 import {
+  parseChromeWaitArgs,
+  parseChromeBatchArgs,
+  parseChromeGetArgs,
+  type ChromeWaitArgs,
+  type ChromeBatchArgs,
+  type ChromeGetArgs
+} from "./loop";
+import {
   parseChromeViewportArgs,
   parseChromeConsoleArgs,
   parseChromeWorkspaceArgs,
@@ -103,6 +112,9 @@ export interface ToolArgMap {
   chrome_hover: ChromeHoverArgs;
   chrome_screencast: ChromeScreencastArgs;
   chrome_snapshot: ChromeSnapshotArgs;
+  chrome_wait: ChromeWaitArgs;
+  chrome_batch: ChromeBatchArgs;
+  chrome_get: ChromeGetArgs;
 }
 
 export type ParsedToolArguments<T extends ToolName = ToolName> = ToolArgMap[T];
@@ -131,6 +143,9 @@ export function parseToolArgs<T extends ToolName>(name: T, input: unknown): Tool
     case "chrome_hover": return parseChromeHoverArgs(input) as ToolArgMap[T];
     case "chrome_screencast": return parseChromeScreencastArgs(input) as ToolArgMap[T];
     case "chrome_snapshot": return parseChromeSnapshotArgs(input) as ToolArgMap[T];
+    case "chrome_wait": return parseChromeWaitArgs(input) as ToolArgMap[T];
+    case "chrome_batch": return parseChromeBatchArgs(input) as ToolArgMap[T];
+    case "chrome_get": return parseChromeGetArgs(input) as ToolArgMap[T];
   }
   const exhaustive: never = name;
   return exhaustive;

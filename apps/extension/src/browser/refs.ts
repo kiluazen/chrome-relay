@@ -66,14 +66,49 @@ function schedulePersist(): void {
   }, 50);
 }
 
-/** Drop every ref belonging to a tab. Called at the start of each snapshot
- *  of that tab (refs are snapshot-scoped) and on tab close. */
+/** Drop every ref belonging to a tab. Called on tab close and on real
+ *  navigation (the document is gone; backendNodeIds get reused). */
 export async function invalidateTabRefs(tabId: number): Promise<void> {
   await ensureHydrated();
   for (const [ref, entry] of entries) {
     if (entry.tabId === tabId) entries.delete(ref);
   }
   schedulePersist();
+}
+
+/** Start a new snapshot of a tab: collect the tab's current refs as reuse
+ *  candidates (backendNodeId → ref) and remove them from the live map —
+ *  assignRef re-registers the ones that still exist.
+ *
+ *  Why reuse instead of renumbering: STABLE refs across re-snapshots. An
+ *  element that survived keeps its @eN, so (a) `snapshot --diff` shows only
+ *  real changes instead of a wall of renumbering, and (b) an agent's refs
+ *  from the previous look remain valid for everything that didn't change.
+ *  Elements that vanished simply never get re-registered — their refs die
+ *  here, exactly as before. */
+export async function beginTabSnapshot(tabId: number): Promise<Map<number, string>> {
+  await ensureHydrated();
+  const prior = new Map<number, string>();
+  for (const [ref, entry] of entries) {
+    if (entry.tabId === tabId) {
+      prior.set(entry.backendNodeId, ref);
+      entries.delete(ref);
+    }
+  }
+  schedulePersist();
+  return prior;
+}
+
+/** Assign a ref for a snapshot node: reuse the element's previous id when
+ *  it had one (stable refs), otherwise allocate the next global id. */
+export function assignRef(entry: SnapshotRefEntry, prior: Map<number, string>): string {
+  const reuse = prior.get(entry.backendNodeId);
+  if (reuse) {
+    entries.set(reuse, entry);
+    schedulePersist();
+    return reuse;
+  }
+  return allocateRef(entry);
 }
 
 /** Allocate the next global ref id for an entry. Returns "eN". */

@@ -14,13 +14,14 @@ import { registerNavigation } from "./commands/navigation.js";
 import { registerInput } from "./commands/input.js";
 import { registerCapture } from "./commands/capture.js";
 import { registerSessions } from "./commands/sessions.js";
+import { registerLoop } from "./commands/loop.js";
 
 export function buildProgram(): Command {
   const program = new Command();
 
   program
     .name("chrome-relay")
-    .description("Connect your local Chrome browser to coding agents through a local bridge.")
+    .description("Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms from any shell.")
     .version(CHROME_RELAY_VERSION)
     .showHelpAfterError()
     // Global --workspace and --group flags: usable at the top level
@@ -39,20 +40,26 @@ export function buildProgram(): Command {
       "after",
       `
 
-Common agent flow:
+The core loop:
   chrome-relay tabs
-  chrome-relay navigate --tab <tabId> "https://example.com"
-  chrome-relay read --tab <tabId> -i
-  chrome-relay click --tab <tabId> "<selector>"
-  chrome-relay fill --tab <tabId> "<selector>" "value"
-  chrome-relay type --tab <tabId> -s "<selector>" "text into rich editor"
+  chrome-relay navigate "https://chrome-relay.kushalsm.com" --new      # background tab
+  chrome-relay snapshot --tab <tabId> -i                 # actionable elements get @refs
+  chrome-relay click @e12                                # act on a ref — no --tab needed
+  chrome-relay fill @e14 "value"
+  chrome-relay snapshot --tab <tabId> -i                 # re-look after the page changes
+
+Also:
+  chrome-relay wait --tab <tabId> --text "Welcome"       # selector/@ref/text/url/load/fn
+  chrome-relay get text @e12                             # one value, no full snapshot
   chrome-relay keys --tab <tabId> Enter
   chrome-relay js --tab <tabId> "return document.title"
   chrome-relay screenshot --tab <tabId> -o evidence.png
+  chrome-relay skills get core                           # the agent playbook, version-matched
 
 Notes:
-  navigate takes a URL. Use --tab to target an existing tab.
-  Tools attach via CDP and run on backgrounded tabs without stealing focus.
+  Refs come from snapshot and carry their own tab. Tools attach via CDP and
+  run on backgrounded tabs without stealing focus. Errors are structured —
+  branch on relayError.code (stale_ref means: re-run snapshot).
 `
     );
 
@@ -75,6 +82,7 @@ Notes:
   registerInput(ctx);
   registerCapture(ctx);
   registerSessions(ctx);
+  registerLoop(ctx);
 
   return program;
 }

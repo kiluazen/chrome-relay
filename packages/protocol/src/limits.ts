@@ -29,6 +29,22 @@ export const DEFAULT_EVAL_TIMEOUT_MS = 15_000;
 /** chrome_network body: default head-bytes when neither --head nor --full set. */
 export const DEFAULT_BODY_PREVIEW_BYTES = 8 * 1024;
 
+/** chrome_wait: default timeout when caller omits timeoutMs. */
+export const DEFAULT_WAIT_TIMEOUT_MS = 10_000;
+/** chrome_wait: hard ceiling — must stay below DEFAULT_TOOL_CALL_TIMEOUT_MS
+ *  so the wait resolves (or times out) inside its own HTTP round-trip
+ *  instead of the transport killing it first. */
+export const MAX_WAIT_TIMEOUT_MS = 25_000;
+/** chrome_wait: poll interval for selector/text/fn conditions. */
+export const WAIT_POLL_INTERVAL_MS = 100;
+/** chrome_wait --load networkidle: quiet window with no new resources. */
+export const NETWORKIDLE_QUIET_MS = 500;
+
+/** chrome_batch: max commands per batch. */
+export const MAX_BATCH_COMMANDS = 50;
+/** chrome_batch: max serialized request bytes (native-messaging frame safety). */
+export const MAX_BATCH_BYTES = 900_000;
+
 // ---------------------------------------------------------------------------
 // Per-tab capture buffer ceilings
 

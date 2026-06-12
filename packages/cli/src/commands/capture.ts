@@ -2,9 +2,37 @@
 // structural capture commands.
 
 import { writeFileSync } from "node:fs";
+import { structuredPatch } from "diff";
 import { renderSnapshot, RelayError, type SnapshotData } from "@chrome-relay/protocol";
 import { tabOpt, type CommandContext } from "./shared.js";
 import { callTool } from "../client/call.js";
+
+// snapshot --diff (adoption-spec Change 4): print only what changed since
+// the previous snapshot of this tab. The full snapshot was still taken and
+// the ref map refreshed — refs in the diff are current and clickable.
+function printSnapshotDiff(current: string, prevText: string | null): void {
+  if (prevText === null) {
+    process.stderr.write("[chrome-relay] no previous snapshot for this tab — showing full output.\n");
+    process.stdout.write(current + "\n");
+    return;
+  }
+  if (prevText === current) {
+    process.stdout.write("no changes since last snapshot\n");
+    return;
+  }
+  const patch = structuredPatch("prev", "current", prevText, current, "", "", { context: 3 });
+  let added = 0;
+  let removed = 0;
+  for (const hunk of patch.hunks) {
+    process.stdout.write(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@\n`);
+    for (const line of hunk.lines) {
+      if (line.startsWith("+")) added++;
+      else if (line.startsWith("-")) removed++;
+      process.stdout.write(line + "\n");
+    }
+  }
+  process.stdout.write(`${added} addition${added === 1 ? "" : "s"}, ${removed} removal${removed === 1 ? "" : "s"}\n`);
+}
 
 // Print a snapshot result: compact text by default (that's the product —
 // it's what agents pay tokens on), full JSON envelope behind --json.
@@ -38,6 +66,7 @@ export function registerCapture(ctx: CommandContext): void {
       .option("-d, --depth <n>", "truncate the tree at this depth", (v) => Number(v))
       .option("-s, --scope <css>", "restrict to the subtree of the first CSS match")
       .option("-u, --urls", "include link hrefs as url= attrs")
+      .option("--diff", "print only what changed since the previous snapshot of this tab (~100 tokens instead of a re-read)")
       .option("--json", "structured output: { title, url, tabId, nodes, refs }")
       .addHelpText(
         "after",
@@ -61,8 +90,14 @@ error.code = stale_ref, which means: re-run snapshot.
     if (typeof opts.depth === "number") extras.depth = opts.depth;
     if (opts.scope) extras.scope = opts.scope;
     if (opts.urls) extras.urls = true;
+    if (opts.diff) extras.diff = true;
     try {
       const result = await callTool("chrome_snapshot", withBase(opts, extras));
+      if (opts.diff && !opts.json) {
+        const data = result as SnapshotData;
+        printSnapshotDiff(renderSnapshot(data), data.prevText ?? null);
+        return;
+      }
       printSnapshot(result, opts.json === true);
     } catch (error) {
       exitWithError(error);

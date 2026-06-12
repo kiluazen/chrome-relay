@@ -20,10 +20,10 @@ import type {
   SnapshotNode,
   SnapshotRefEntry
 } from "@chrome-relay/protocol";
-import { RelayError, TOOL_NAMES } from "@chrome-relay/protocol";
+import { RelayError, renderSnapshot, TOOL_NAMES } from "@chrome-relay/protocol";
 import { evalInTab, send } from "./cdp";
 import { markCursorInteractive, unmarkCursorInteractive } from "./page-actions";
-import { allocateRef, invalidateTabRefs } from "./refs";
+import { assignRef as registerRef, beginTabSnapshot } from "./refs";
 
 // Interactive AX roles — always ref-bearing, even unnamed. Same 17-role set
 // the old chrome_ax used.
@@ -270,7 +270,8 @@ function assignRefs(
   nodes: BuildNode[],
   tabId: number,
   nthCounter: Map<string, number>,
-  refs: Record<string, SnapshotRefEntry>
+  refs: Record<string, SnapshotRefEntry>,
+  prior: Map<number, string>
 ): void {
   for (const n of nodes) {
     if ((n.refEligible || n.source === "sweep") && n.backendNodeId !== undefined) {
@@ -284,11 +285,11 @@ function assignRefs(
         name: n.name ?? "",
         ...(nth > 0 ? { nth } : {})
       };
-      const ref = allocateRef(entry);
+      const ref = registerRef(entry, prior);
       n.ref = ref;
       refs[ref] = entry;
     }
-    assignRefs(n.children, tabId, nthCounter, refs);
+    assignRefs(n.children, tabId, nthCounter, refs, prior);
   }
 }
 
@@ -316,9 +317,17 @@ function countNodes(nodes: SnapshotNode[]): number {
 // ---------------------------------------------------------------------------
 // Public builder
 
+// Previous rendered snapshot per tab — feeds `snapshot --diff` (Change 4).
+// In-memory only: an SW restart loses it and the next --diff prints full,
+// which is the safe degradation. Dropped on tab close.
+const lastSnapshotText = new Map<number, string>();
+if (typeof chrome !== "undefined" && chrome.tabs?.onRemoved) {
+  chrome.tabs.onRemoved.addListener((tabId) => lastSnapshotText.delete(tabId));
+}
+
 export async function buildSnapshot(
   tabId: number,
-  opts: Pick<ChromeSnapshotArgs, "interactiveOnly" | "depth" | "scope" | "urls">
+  opts: Pick<ChromeSnapshotArgs, "interactiveOnly" | "depth" | "scope" | "urls" | "diff">
 ): Promise<SnapshotData> {
   await send(tabId, "Accessibility.enable", {});
   const response = await send<{ nodes: RawAXNode[] }>(tabId, "Accessibility.getFullAXTree", { depth: -1 });
@@ -358,12 +367,13 @@ export async function buildSnapshot(
   if (opts.interactiveOnly) tree = pruneToRefBearing(tree);
   if (opts.depth !== undefined) tree = truncateDepth(tree, opts.depth);
 
-  // Refs: snapshot-scoped — drop this tab's old refs, then assign fresh ids
-  // in document order. The global counter makes them browser-unique.
-  await invalidateTabRefs(tabId);
+  // Refs: stable across re-snapshots. Elements that survived keep their
+  // @eN (reused via the prior map); new elements get fresh global ids;
+  // vanished elements' refs die because they're never re-registered.
+  const prior = await beginTabSnapshot(tabId);
   const refs: Record<string, SnapshotRefEntry> = {};
   const nthCounter = new Map<string, number>();
-  assignRefs(tree, tabId, nthCounter, refs);
+  assignRefs(tree, tabId, nthCounter, refs, prior);
 
   // Sweep extras — div-soup clickables the AX tree missed. Dedupe against
   // backendNodeIds that already got a ref above.
@@ -380,7 +390,7 @@ export async function buildSnapshot(
       refEligible: true
     });
   }
-  assignRefs(sweepNodes, tabId, nthCounter, refs);
+  assignRefs(sweepNodes, tabId, nthCounter, refs, prior);
   tree = tree.concat(sweepNodes);
 
   let title = "";
@@ -392,7 +402,18 @@ export async function buildSnapshot(
   } catch { /* non-fatal */ }
 
   const nodes = toWire(tree);
-  return { title, url, tabId, nodeCount: countNodes(nodes), nodes, refs };
+  const data: SnapshotData = { title, url, tabId, nodeCount: countNodes(nodes), nodes, refs };
+
+  // Always record the rendered text (so the FIRST --diff after plain
+  // snapshots has a baseline); only ship prevText over the wire when the
+  // caller asked to diff. A full snapshot is still taken and the ref map
+  // still refreshed — diff changes what is printed, never what happened.
+  const text = renderSnapshot(data);
+  const prevText = lastSnapshotText.get(tabId);
+  lastSnapshotText.set(tabId, text);
+  if (opts.diff) data.prevText = prevText ?? null;
+
+  return data;
 }
 
 // ---------------------------------------------------------------------------

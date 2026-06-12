@@ -9,7 +9,7 @@ Chrome Relay lets a terminal agent — Claude Code, Codex, anything that runs sh
 
 ```sh
 chrome-relay tabs                             # find or open a tab
-chrome-relay navigate "https://x.com" --new   # opens in the background
+chrome-relay navigate "https://kushalsm.com" --new   # opens in the background
 chrome-relay snapshot --tab 1234 -i           # see the page: actionable elements get @refs
 chrome-relay click @e12                       # act on a ref — no selectors, no --tab
 chrome-relay fill @e14 "hello"

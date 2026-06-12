@@ -66,6 +66,27 @@ describe("RefMap", () => {
     expect(m.allocateRef(entry(10, 101))).toBe("e3");
   });
 
+  it("stable refs: beginTabSnapshot collects reuse candidates, assignRef keeps surviving ids", async () => {
+    const m = await load();
+    m.allocateRef(entry(10, 100)); // e1
+    m.allocateRef(entry(10, 200)); // e2
+    m.allocateRef(entry(20, 300)); // e3 — other tab, untouched
+
+    const prior = await m.beginTabSnapshot(10);
+    expect(prior.get(100)).toBe("e1");
+    expect(prior.get(200)).toBe("e2");
+    // tab 10's refs are out of the live map until re-registered
+    expect(await m.getRefEntry("e1")).toBeUndefined();
+    expect((await m.getRefEntry("e3"))?.tabId).toBe(20);
+
+    // element 100 survived → keeps e1; element 200 vanished (never
+    // re-registered); a new element gets a fresh global id
+    expect(m.assignRef(entry(10, 100), prior)).toBe("e1");
+    expect(m.assignRef(entry(10, 999), prior)).toBe("e4");
+    expect((await m.getRefEntry("e1"))?.backendNodeId).toBe(100);
+    expect(await m.getRefEntry("e2")).toBeUndefined(); // vanished element's ref is dead
+  });
+
   it("heals an entry in place", async () => {
     const m = await load();
     m.allocateRef(entry(10, 100)); // e1

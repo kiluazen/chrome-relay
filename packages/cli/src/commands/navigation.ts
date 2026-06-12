@@ -31,10 +31,10 @@ export function registerNavigation(ctx: CommandContext): void {
         `
 
 Examples:
-  chrome-relay navigate "https://example.com"                    # navigate current tab
-  chrome-relay navigate --tab 123 "https://example.com"          # navigate an existing tab
-  chrome-relay navigate "https://example.com" --new              # open in a new background tab
-  chrome-relay navigate "https://example.com" --new --active     # open new tab AND show it to the user
+  chrome-relay navigate "https://chrome-relay.kushalsm.com"                    # navigate current tab
+  chrome-relay navigate --tab 123 "https://chrome-relay.kushalsm.com"          # navigate an existing tab
+  chrome-relay navigate "https://chrome-relay.kushalsm.com" --new              # open in a new background tab
+  chrome-relay navigate "https://chrome-relay.kushalsm.com" --new --active     # open new tab AND show it to the user
 
 By default chrome-relay never steals focus — navigated tabs (new or
 existing) stay in whatever state they're in. Pass --active when you
@@ -46,7 +46,7 @@ actually want the user looking at the page.
       process.stderr.write(
         `navigate expects a URL, but "${url}" looks like a tab ID.\n` +
           `Use "chrome-relay switch ${url}" to activate that tab, or ` +
-          `"chrome-relay navigate --tab ${url} https://example.com" to navigate it.\n`
+          `"chrome-relay navigate --tab ${url} https://chrome-relay.kushalsm.com" to navigate it.\n`
       );
       process.exit(1);
     }

@@ -244,7 +244,7 @@ Notes:
 
 Examples:
   chrome-relay network --tab 123                              # last ${NETWORK_BUFFER_MAX_ENTRIES} requests
-  chrome-relay network --tab 123 --filter api.example.com      # url substring
+  chrome-relay network --tab 123 --filter api.kushalsm.com      # url substring
   chrome-relay network --tab 123 --status failed
   chrome-relay network --tab 123 --method POST
   chrome-relay network body <requestId> --tab 123              # lazy body fetch

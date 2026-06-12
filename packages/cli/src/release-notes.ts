@@ -9,6 +9,15 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.7.0": [
+    "`wait` — block until a condition holds: `wait <css|@ref>` (exists and visible), `wait --text <s>`, `wait --url <glob>`, `wait --load load|domcontentloaded|networkidle`, `wait --fn <js>`, or `wait <ms>` for a plain sleep. One condition per call; default 10s, capped 25s (under the transport timeout, so waits always resolve in their own round-trip). Timeout errors include the page's current state so no follow-up probe is needed.",
+    "`snapshot --diff` — print only what changed since this tab's previous snapshot (unified hunks + an additions/removals count; ~100 tokens instead of a full re-read). The full snapshot is still taken and the ref map still refreshes — refs in the diff are current and clickable.",
+    "`get text|value|attr|count|title|url <target>` — one value, plain on stdout, no snapshot. Targets are @refs or CSS selectors; built for $(...) substitution.",
+    "`batch` — run up to 50 tool calls in ONE round-trip (one HTTP POST, one native-messaging message, sequential in the extension). Bail-on-error by default, `--no-bail` to continue; per-command result envelopes; nested batches rejected.",
+    "`skills get core` — the agent playbook is now inlined in the binary, always version-matched. `chrome-relay skills` lists; the same guide is hosted at https://chrome-relay.kushalsm.com/skill.md.",
+    "Top-level --help rewritten around the snapshot -> @ref loop (the old read -> selector flow was stale). Example URLs across help/docs now point at real pages.",
+    "Extension + CLI must both be 0.7.0 for wait/get/batch/--diff — an older extension returns unsupported_tool (update at chrome://extensions)."
+  ],
   "0.6.0": [
     "Unified `snapshot` with actionable @refs. `chrome-relay snapshot -i` renders the page as compact text (~4-5x smaller than the old `read -i`; 14 KB on the HN front page) — accessibility tree merged with a cursor-interactive sweep that catches div-soup clickables (cursor:pointer, onclick, tabindex, contenteditable) the AX tree misses. Every element gets a browser-unique @eN ref.",
     "Refs are actionable everywhere: `click @e12`, `fill @e14 \"v\"`, `hover @e3`, `type -s @e7`. A ref carries its tab — no --tab needed, a contradicting --tab is target_conflict, so an agent can never click into the page the user is reading. Resolution is backendNodeId fast-path with role+name+nth healing on same-page DOM churn (healed clicks report `healed: true`). Refs reach inside shadow DOM, where CSS selectors can't.",

@@ -19,15 +19,22 @@ beforeEach(() => {
     evalExpression: vi.fn()
   }));
   vi.doMock("../src/browser/refs", () => ({
-    allocateRef: vi.fn((entry: Record<string, unknown>) => {
+    assignRef: vi.fn((entry: Record<string, unknown>, prior: Map<number, string>) => {
+      const reuse = prior.get(entry.backendNodeId as number);
+      if (reuse) {
+        allocated.push({ ref: reuse, entry });
+        return reuse;
+      }
       counter += 1;
       const ref = `e${counter}`;
       allocated.push({ ref, entry });
       return ref;
     }),
-    invalidateTabRefs: vi.fn(async (tabId: number) => {
+    beginTabSnapshot: vi.fn(async (tabId: number) => {
       invalidatedTabs.push(tabId);
+      return new Map<number, string>();
     }),
+    invalidateTabRefs: vi.fn(),
     getRefEntry: vi.fn(),
     healRefEntry: vi.fn()
   }));

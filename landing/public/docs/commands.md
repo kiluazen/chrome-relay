@@ -16,9 +16,9 @@ Global targeting: most commands accept `-t/--tab <id>`, `--workspace <name>`, or
 ## Navigate
 
 ```sh
-chrome-relay navigate "https://example.com" --new        # background tab (default for --new)
-chrome-relay navigate "https://example.com" --new --active  # foreground
-chrome-relay navigate "https://example.com" --tab 42     # retarget an existing tab
+chrome-relay navigate "https://chrome-relay.kushalsm.com" --new        # background tab (default for --new)
+chrome-relay navigate "https://chrome-relay.kushalsm.com" --new --active  # foreground
+chrome-relay navigate "https://chrome-relay.kushalsm.com" --tab 42     # retarget an existing tab
 ```
 
 ## Read the page
@@ -34,9 +34,50 @@ chrome-relay snapshot --tab 42 -i -s "#main" -d 3 -u --json
 | `-d, --depth <n>` | truncate tree depth |
 | `-s, --scope <css>` | subtree of the first match; refs outside it are never issued |
 | `-u, --urls` | include link hrefs |
+| `--diff` | print only what changed since this tab's previous snapshot (~100 tokens instead of a re-read; refs in the diff are current and clickable) |
 | `--json` | structured `{ title, url, tabId, nodes, refs }` |
 
 `read` / `ax` are deprecated aliases for `snapshot`.
+
+## Wait
+
+```sh
+chrome-relay wait @e12                        # ref resolves and has a box
+chrome-relay wait ".results" --tab 42         # selector exists and visible
+chrome-relay wait --text "Welcome" --tab 42
+chrome-relay wait --url "**/dashboard" --tab 42
+chrome-relay wait --load networkidle --tab 42 # also: load | domcontentloaded
+chrome-relay wait --fn "window.__READY" --tab 42
+chrome-relay wait 1500                        # plain sleep
+```
+
+One condition per call; default timeout 10 s, capped at 25 s. On timeout the structured error includes the page's current state (url, readyState, whether the selector exists) — no follow-up probe needed.
+
+## Get — one value, no snapshot
+
+```sh
+chrome-relay get text @e12
+chrome-relay get value 'input[name="email"]' --tab 42
+chrome-relay get attr @e7 href
+chrome-relay get count ".result" --tab 42
+chrome-relay get title --tab 42
+chrome-relay get url --tab 42
+```
+
+Plain value on stdout, nothing else — built for `$(...)` substitution in scripts.
+
+## Batch — N calls, one round-trip
+
+```sh
+chrome-relay batch '[
+  {"name":"chrome_navigate","args":{"url":"https://chrome-relay.kushalsm.com","newTab":true}},
+  {"name":"chrome_wait","args":{"load":"load"}},
+  {"name":"chrome_snapshot","args":{"interactiveOnly":true}}
+]'
+cat commands.json | chrome-relay batch --stdin
+```
+
+Sequential execution in the extension, bail-on-error by default (`--no-bail` to continue). Uses wire tool names. Amortizes process startup and the bridge hop across N actions; nested batches are rejected.
 
 ## Act
 
@@ -104,7 +145,7 @@ chrome-relay viewport list
 
 ```sh
 chrome-relay workspace create hypothesis-1     # a named Chrome window
-chrome-relay --workspace hypothesis-1 navigate "https://example.com" --new
+chrome-relay --workspace hypothesis-1 navigate "https://chrome-relay.kushalsm.com" --new
 chrome-relay group create research --color blue --tab 42   # native tab groups
 ```
 
@@ -118,6 +159,7 @@ Details: [Workspaces](/docs/workspaces/).
 | `doctor` | validate the whole chain end to end |
 | `update` | update the CLI, print what changed (JSON) |
 | `release-notes --since <ver>` | the changelog, agent-readable |
+| `skills get core` | print the agent playbook, version-matched to the binary |
 | `self-reload` | restart the extension service worker (dev loop) |
 | `call <tool> [json]` | raw pass-through to any internal tool |
 

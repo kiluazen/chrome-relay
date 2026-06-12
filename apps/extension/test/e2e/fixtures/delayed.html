@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>delayed</title></head>
+<body>
+  <input id="name" value="seed" aria-label="Name" />
+  <button id="save">Save</button>
+  <div id="status"></div>
+  <script>
+    document.getElementById("save").addEventListener("click", () => {
+      setTimeout(() => {
+        document.getElementById("status").textContent = "Saved";
+      }, 400);
+    });
+  </script>
+</body>
+</html>

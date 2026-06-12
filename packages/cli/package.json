@@ -1,6 +1,6 @@
 {
   "name": "chrome-relay",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,7 +16,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
-  "description": "Your agent drives the Chrome you're signed into \u2014 read pages, click buttons, fill forms from any shell. No robot browser, no cookie export, no focus stealing.",
+  "description": "Your agent drives the Chrome you're signed into — read pages, click buttons, fill forms from any shell. No robot browser, no cookie export, no focus stealing.",
   "keywords": [
     "chrome",
     "browser",
@@ -28,10 +28,12 @@
   "dependencies": {
     "chalk": "^5.4.1",
     "commander": "^13.1.0",
+    "diff": "^7.0.0",
     "fastify": "^5.3.2"
   },
   "devDependencies": {
     "@chrome-relay/protocol": "workspace:*",
+    "@types/diff": "^7",
     "tsup": "^8.4.0",
     "vitest": "^3.0.0"
   }

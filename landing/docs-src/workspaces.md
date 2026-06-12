@@ -18,7 +18,7 @@ chrome-relay workspace close research
 Every command accepts `--workspace <name>` to target the active tab *in that window*:
 
 ```sh
-chrome-relay --workspace research navigate "https://example.com" --new
+chrome-relay --workspace research navigate "https://chrome-relay.kushalsm.com" --new
 chrome-relay snapshot --workspace research -i
 chrome-relay screenshot --workspace research -o out.png
 ```

@@ -16,12 +16,14 @@ describe("TOOL_NAMES", () => {
   it("exposes the expected stable tool surface", () => {
     expect(Object.keys(TOOL_NAMES).sort()).toEqual([
       "AX",
+      "BATCH",
       "CLICK",
       "CLICK_AX",
       "CLOSE_TABS",
       "CONSOLE",
       "EVALUATE",
       "FILL",
+      "GET",
       "GET_WINDOWS_AND_TABS",
       "GROUP",
       "HOVER",
@@ -36,6 +38,7 @@ describe("TOOL_NAMES", () => {
       "SWITCH_TAB",
       "TYPE",
       "VIEWPORT",
+      "WAIT",
       "WORKSPACE"
     ]);
   });

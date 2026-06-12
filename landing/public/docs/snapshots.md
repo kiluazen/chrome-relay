@@ -66,7 +66,10 @@ chrome-relay snapshot --tab <id> -d 3        # cap depth
 chrome-relay snapshot --tab <id> -s "#main"  # scope to a CSS subtree — refs outside it are never issued
 chrome-relay snapshot --tab <id> -u          # include link hrefs as url= attrs
 chrome-relay snapshot --tab <id> --json      # structured envelope: { title, url, tabId, nodes, refs }
+chrome-relay snapshot --tab <id> --diff      # only what changed since this tab's last snapshot
 ```
+
+`--diff` attacks the re-snapshot tax directly: after an action, print the handful of changed lines (~100 tokens) instead of the whole page. A full snapshot is still taken and the ref map still refreshes — refs in the diff are current and clickable. Use consistent flags between snapshots (`-i` vs full) or the diff gets noisy.
 
 `--json` includes the full refs map — each ref's `backendNodeId`, role, name — for programmatic callers. The text form is for reading; the JSON form is for building on.
 

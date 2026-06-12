@@ -70,6 +70,10 @@ export interface SnapshotData {
   nodeCount: number;
   nodes: SnapshotNode[];
   refs: Record<string, SnapshotRefEntry>;
+  /** Present only when the caller asked for a diff: the previous snapshot's
+   *  rendered text for this tab (null when there is none). The CLI diffs;
+   *  the wire carries both, stdout carries only the changes. */
+  prevText?: string | null;
 }
 
 // ---------------------------------------------------------------------------

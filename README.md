@@ -4,7 +4,7 @@ Your agent drives the Chrome you're signed into — reads pages, clicks buttons,
 
 ```sh
 pnpm add -g chrome-relay && chrome-relay install     # plus the Chrome extension
-chrome-relay navigate "https://x.com" --new          # background tab
+chrome-relay navigate "https://kushalsm.com" --new          # background tab
 chrome-relay snapshot --tab 1234 -i                  # actionable elements get @refs
 chrome-relay click @e12                              # act — no selectors, no --tab
 ```
