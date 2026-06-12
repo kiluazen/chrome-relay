@@ -111,6 +111,7 @@ chrome-relay snapshot --tab 1234 --diff         # only the changes, refs include
 
 ## Top gotchas
 
+0. **`snapshot -i` is for ACTING, not fact extraction.** It prints ref-bearing elements only — non-interactive values (dashboard metrics, paragraph text, chart labels) drop out. Measured live: a Cloudflare Pages metrics page lost all its numbers under `-i`. To READ facts, use full `snapshot`, `get text <target>`, or a `js` projection.
 1. **`type` appends** — it inserts at the caret. If the input had a value (autosaved draft, default text), clear it first via `js` or `keys` (Cmd+A then Backspace).
 2. **Refs die on navigation** — `stale_ref` means the page changed under you; re-snapshot. Don't retry the same ref.
 3. **Coords go stale fast** — read `getBoundingClientRect`, scroll/reflow, then click → you hit the wrong element. For autocomplete popups especially, use keyboard nav, not coord clicks.
@@ -133,6 +134,7 @@ Failure modes: [references/troubleshooting.md](references/troubleshooting.md)
   chrome-relay console --tab 1234
   ```
 - **Don't echo secrets.** When extracting tokens / API keys via `js`, write the result directly to a file. Never `echo $TOKEN` or interpolate into shell strings — it ends up in scrollback, logs, and tool transcripts.
+- **Redact `network` output.** Request/response headers carry cookies, auth/CSRF tokens, account and project IDs. Never paste raw `chrome-relay network` output into chat, docs, issues, or commits — filter to the fields you need (url, status, timings) or redact headers first.
 - **Capture before irreversible actions** (form submit, send message, account change). Save the screenshot path.
 
 ## Guardrails

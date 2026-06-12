@@ -171,6 +171,9 @@ chrome-relay network har --tab 42 -o session.har         # full HAR export
 chrome-relay network clear --tab 42
 </code></pre>
 <p>Per-tab ring buffer (200 entries, 512 KB, metadata only — bodies fetched on demand because they&#39;re big and usually unneeded). Each entry: URL, method, status, mime, headers, timings, sizes, cache/service-worker flags.</p>
+<blockquote>
+<p><strong>Redact before sharing.</strong> Network entries carry request/response headers — cookies, auth and CSRF tokens, account/project IDs. Never paste raw <code>network</code> output into chat, issues, docs, or commits; filter to the fields you need (url, status, timings) or strip headers first. The data never leaves your machine until <em>you</em> paste it somewhere.</p>
+</blockquote>
 <p>Caveat worth knowing: Chrome evicts response bodies aggressively — <code>network body</code> on a request older than ~30 seconds may fail. Read bodies soon after the request, or capture a HAR while it&#39;s fresh.</p>
 <h2 id="screenshots">Screenshots<a class="anchor" href="#screenshots" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay screenshot --tab 42 -o shot.png                 # background tabs fine

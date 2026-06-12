@@ -44,6 +44,8 @@ chrome-relay network clear --tab 42
 
 Per-tab ring buffer (200 entries, 512 KB, metadata only — bodies fetched on demand because they're big and usually unneeded). Each entry: URL, method, status, mime, headers, timings, sizes, cache/service-worker flags.
 
+> **Redact before sharing.** Network entries carry request/response headers — cookies, auth and CSRF tokens, account/project IDs. Never paste raw `network` output into chat, issues, docs, or commits; filter to the fields you need (url, status, timings) or strip headers first. The data never leaves your machine until *you* paste it somewhere.
+
 Caveat worth knowing: Chrome evicts response bodies aggressively — `network body` on a request older than ~30 seconds may fail. Read bodies soon after the request, or capture a HAR while it's fresh.
 
 ## Screenshots

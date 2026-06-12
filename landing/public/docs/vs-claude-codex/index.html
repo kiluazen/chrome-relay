@@ -173,11 +173,44 @@ blockquote p { margin: 0; }
 <td>Chrome Relay</td>
 </tr>
 </tbody></table>
+<h2 id="measured-head-to-head-same-logged-in-dashboard">Measured head-to-head, same logged-in dashboard<a class="anchor" href="#measured-head-to-head-same-logged-in-dashboard" aria-hidden="true">#</a></h2>
+<p>We ran the Codex Chrome extension and Chrome Relay through the same read-only path in a real authenticated Cloudflare dashboard — overview, Security Insights, a Details drawer, Cmd+K command palette to Audit Logs, Pages metrics (2026-06-12, live):</p>
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th align="right">Codex extension (<code>domSnapshot</code>)</th>
+<th align="right">Chrome Relay (<code>snapshot -i</code> / full)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Dashboard overview</td>
+<td align="right">21.4 KB</td>
+<td align="right">4.9 KB / 8.6 KB</td>
+</tr>
+<tr>
+<td>Security Details drawer</td>
+<td align="right">31.0 KB</td>
+<td align="right">11.5 KB</td>
+</tr>
+<tr>
+<td>Pages metrics</td>
+<td align="right">18.3 KB</td>
+<td align="right">6.6 KB full</td>
+</tr>
+<tr>
+<td>Command palette mid-flow</td>
+<td align="right">—</td>
+<td align="right"><strong>393 bytes</strong>, with the selected option as a clickable ref</td>
+</tr>
+</tbody></table>
+<p>Both completed the whole path — capability is a tie, which is the honest headline. The deltas are payload size and the loop shape: Codex&#39;s API is JavaScript objects inside its runtime (<code>tab.playwright.getByRole(...)</code>, locator disambiguation when three links match); Chrome Relay&#39;s is text refs in a shell (<code>click @e147</code>). One observed caveat cuts our way <em>and</em> against us: <code>snapshot -i</code> is for <strong>acting</strong> — it dropped the Pages metrics <em>values</em> (use full <code>snapshot</code> or <a href="/docs/commands/"><code>get</code></a> to read facts), while Codex&#39;s bigger dumps carried them by default.</p>
 <h2 id="the-secondary-differences-honestly">The secondary differences, honestly<a class="anchor" href="#the-secondary-differences-honestly" aria-hidden="true">#</a></h2>
 <p><strong>Safety posture.</strong> The vendor extensions ship supervised-mode machinery Chrome Relay doesn&#39;t: per-site permission prompts, &quot;ask before acting&quot;, confirmation gates on risky actions, default-blocked site categories. Chrome Relay&#39;s model is one trust decision at install — local processes that can run the CLI can drive the browser — with strict, loud failures rather than per-action prompts (<a href="/docs/architecture/">architecture</a>). If you want a permission prompt before every click, the vendor extensions do that and we don&#39;t.</p>
 <p><strong>Focus model.</strong> Claude in Chrome runs &quot;in a visible Chrome window in real time.&quot; Codex works in its own tab groups alongside yours. Chrome Relay runs on background tabs without activating them (and keeps pages behaving as if visible), which is what makes <a href="/docs/workspaces/">parallel agents in named windows</a> practical.</p>
 <p><strong>Scriptability.</strong> Vendor extensions are reachable only from inside their vendor&#39;s product session. Chrome Relay is a binary: pipe it, cron it, call it from any harness.</p>
 <p><strong>Cost coupling.</strong> Browser actions through vendor extensions consume your plan&#39;s usage limits. Chrome Relay costs whatever your agent&#39;s tokens cost — the tool itself adds nothing.</p>
+<p><strong>Debugging surface.</strong> Chrome Relay exposes the network ring buffer (request/response metadata, on-demand bodies, HAR export) alongside console — in the live test it captured the dashboard&#39;s GraphQL calls with statuses and timings. The vendor extensions expose console logs and screenshots; comparable raw network capture wasn&#39;t in their exposed surface. Flip side stated plainly: network output carries auth headers, so <a href="/docs/observability/">redact before sharing</a> — a narrower surface is also a safety feature, and theirs is narrower.</p>
 <h2 id="adjacent-vendor-neutral-mcp-bridges">Adjacent: vendor-neutral MCP bridges<a class="anchor" href="#adjacent-vendor-neutral-mcp-bridges" aria-hidden="true">#</a></h2>
 <p>Playwright MCP&#39;s extension mode, Chrome DevTools MCP, and Browser MCP also connect agents to a real Chrome, vendor-neutrally, over MCP. The honest difference there is interface economics: MCP tool schemas occupy context on every turn, a CLI occupies none until used — plus Chrome Relay&#39;s <a href="/docs/refs/">snapshot/ref loop</a> and <a href="/docs/errors/">structured errors</a> are built for agent loops specifically. Same family, different interface bet.</p>
 <p>And if you don&#39;t need <em>your</em> browser at all — fresh-profile scraping, e2e tests, CI fleets — none of the above is the right tool: see <a href="/docs/vs-agent-browser/">vs agent-browser</a>.</p>

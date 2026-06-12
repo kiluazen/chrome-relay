@@ -61,13 +61,15 @@ Same refs, same actions. Without the sweep, "interactive only" filtering would s
 
 ```sh
 chrome-relay snapshot --tab <id>             # full tree
-chrome-relay snapshot --tab <id> -i          # ref-bearing elements only (use this)
+chrome-relay snapshot --tab <id> -i          # ref-bearing elements only — for ACTING
 chrome-relay snapshot --tab <id> -d 3        # cap depth
 chrome-relay snapshot --tab <id> -s "#main"  # scope to a CSS subtree — refs outside it are never issued
 chrome-relay snapshot --tab <id> -u          # include link hrefs as url= attrs
 chrome-relay snapshot --tab <id> --json      # structured envelope: { title, url, tabId, nodes, refs }
 chrome-relay snapshot --tab <id> --diff      # only what changed since this tab's last snapshot
 ```
+
+**`-i` is for acting, not fact extraction.** It deliberately drops non-interactive content — measured live on a Cloudflare Pages metrics page, all the metric values vanished under `-i` while every button survived. To *read* facts, use the full `snapshot`, [`get text`](/docs/commands/#get--one-value-no-snapshot), or a `js` projection. Action loops and fact reads are different jobs; pick the mode for the job.
 
 `--diff` attacks the re-snapshot tax directly: after an action, print the handful of changed lines (~100 tokens) instead of the whole page. A full snapshot is still taken and the ref map still refreshes — refs in the diff are current and clickable. Use consistent flags between snapshots (`-i` vs full) or the diff gets noisy.
 

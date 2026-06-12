@@ -185,13 +185,14 @@ Tab: 460154464
 <p>Same refs, same actions. Without the sweep, &quot;interactive only&quot; filtering would silently hide real targets — that was the dealbreaker that decided this design.</p>
 <h2 id="flags">Flags<a class="anchor" href="#flags" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay snapshot --tab &lt;id&gt;             # full tree
-chrome-relay snapshot --tab &lt;id&gt; -i          # ref-bearing elements only (use this)
+chrome-relay snapshot --tab &lt;id&gt; -i          # ref-bearing elements only — for ACTING
 chrome-relay snapshot --tab &lt;id&gt; -d 3        # cap depth
 chrome-relay snapshot --tab &lt;id&gt; -s &quot;#main&quot;  # scope to a CSS subtree — refs outside it are never issued
 chrome-relay snapshot --tab &lt;id&gt; -u          # include link hrefs as url= attrs
 chrome-relay snapshot --tab &lt;id&gt; --json      # structured envelope: { title, url, tabId, nodes, refs }
 chrome-relay snapshot --tab &lt;id&gt; --diff      # only what changed since this tab&#39;s last snapshot
 </code></pre>
+<p><strong><code>-i</code> is for acting, not fact extraction.</strong> It deliberately drops non-interactive content — measured live on a Cloudflare Pages metrics page, all the metric values vanished under <code>-i</code> while every button survived. To <em>read</em> facts, use the full <code>snapshot</code>, <a href="/docs/commands/#get--one-value-no-snapshot"><code>get text</code></a>, or a <code>js</code> projection. Action loops and fact reads are different jobs; pick the mode for the job.</p>
 <p><code>--diff</code> attacks the re-snapshot tax directly: after an action, print the handful of changed lines (~100 tokens) instead of the whole page. A full snapshot is still taken and the ref map still refreshes — refs in the diff are current and clickable. Use consistent flags between snapshots (<code>-i</code> vs full) or the diff gets noisy.</p>
 <p><code>--json</code> includes the full refs map — each ref&#39;s <code>backendNodeId</code>, role, name — for programmatic callers. The text form is for reading; the JSON form is for building on.</p>
 <h2 id="frames-and-shadow-dom">Frames and shadow DOM<a class="anchor" href="#frames-and-shadow-dom" aria-hidden="true">#</a></h2>
