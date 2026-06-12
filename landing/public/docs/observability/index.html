@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Observability | Chrome Relay</title>
+<meta name="description" content="Console, network, screenshots, screencast — what the page did, not just what it looks like." />
+<meta property="og:title" content="Observability | Chrome Relay" />
+<meta property="og:description" content="Console, network, screenshots, screencast — what the page did, not just what it looks like." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/observability/" />
+<link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/observability/" />
+<link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/observability.md" title="Markdown version" />
+<link rel="icon" type="image/png" href="/icon-128.png" />
+<style>
+:root {
+  color-scheme: light;
+  --paper: #f7f3e8; --ink: #181818; --muted: #58544c; --line: #d6d0c2;
+  --panel: #fffdf6; --green: #1f7a4d; --green-soft: #e6f2eb;
+}
+* { box-sizing: border-box; }
+html { background: var(--paper); }
+body {
+  margin: 0; color: var(--ink); line-height: 1.6; font-size: 16px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.bg-art {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: url('/bg.jpg') center/cover no-repeat;
+  opacity: 0.12; filter: saturate(0.25) contrast(0.4) brightness(1.7);
+}
+a { color: inherit; }
+.nav {
+  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 0;
+}
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; }
+.brand img { width: 32px; height: 32px; border-radius: 8px; }
+.nav-links { display: flex; gap: 18px; font-size: 14.5px; }
+.nav-links a { text-decoration: none; color: var(--muted); font-weight: 550; }
+.nav-links a:hover { color: var(--ink); }
+.layout {
+  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding: 12px 0 90px;
+}
+.sidebar { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+.sidebar a {
+  display: block; padding: 5px 10px; text-decoration: none; color: var(--muted);
+  border-left: 2px solid transparent; border-radius: 0 6px 6px 0;
+}
+.sidebar a:hover { color: var(--ink); }
+.sidebar a.active { color: var(--green); border-left-color: var(--green); background: var(--green-soft); font-weight: 600; }
+.sidebar .group { margin: 14px 0 4px; padding-left: 10px; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); opacity: 0.75; }
+main { max-width: 760px; min-width: 0; }
+main h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin: 10px 0 6px; }
+.page-desc { color: var(--muted); margin: 0 0 28px; font-size: 17px; }
+main h2 { font-size: 22px; margin: 42px 0 10px; letter-spacing: -0.01em; }
+main h3 { font-size: 17px; margin: 28px 0 8px; }
+main p, main li { color: #2a2722; }
+main hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
+code {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.86em;
+  background: #ece7d9; padding: 2px 6px; border-radius: 5px;
+}
+pre {
+  background: #14120e; color: #e8e2d6; border-radius: 10px;
+  padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.55;
+  border: 1px solid #2a2620;
+}
+pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14.5px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--ink); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:first-child code, td:first-child { white-space: nowrap; }
+td:first-child { font-weight: 600; }
+blockquote {
+  margin: 18px 0; padding: 12px 18px; border-left: 3px solid var(--green);
+  background: var(--green-soft); border-radius: 0 8px 8px 0;
+}
+blockquote p { margin: 0; }
+.md-link { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.md-link a { color: var(--green); }
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; font-size: 14.5px; }
+.pager a { text-decoration: none; color: var(--green); font-weight: 600; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.footer { width: min(1240px, calc(100% - 56px)); margin: 0 auto; display: flex; justify-content: space-between; padding: 26px 0 40px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+.footer a { color: var(--muted); }
+@media (max-width: 880px) {
+  .layout { grid-template-columns: 1fr; gap: 8px; }
+  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .sidebar .group { display: none; }
+  .sidebar a { border-left: 0; border-radius: 6px; }
+}
+</style>
+</head>
+<body>
+<div class="bg-art" aria-hidden="true"></div>
+<nav class="nav" aria-label="Primary">
+  <a class="brand" href="/"><img src="/icon-128.png" alt="" /><span>Chrome Relay</span></a>
+  <div class="nav-links">
+    <a href="/docs/">Docs</a>
+    <a href="https://github.com/kiluazen/chrome-relay">GitHub</a>
+    <a href="https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb">Chrome Web Store</a>
+  </div>
+</nav>
+<div class="layout">
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/" class="active">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Positioning</div><a href="/docs/vs-agent-browser/">vs agent-browser</a></aside>
+  <main>
+    <h1>Observability</h1>
+    <p class="page-desc">Console, network, screenshots, screencast — what the page did, not just what it looks like.</p>
+    <p>Debugging a web app through an agent means the agent needs what <em>you&#39;d</em> open DevTools for. Chrome Relay buffers it per tab and serves it on demand.</p>
+<h2>Console</h2>
+<pre><code class="language-sh">chrome-relay console read --tab 42
+chrome-relay console read --tab 42 --level error,warn
+chrome-relay console read --tab 42 --since 1718200000000 --limit 50
+chrome-relay console clear --tab 42
+</code></pre>
+<p><code>console.log/info/warn/error/debug</code> plus uncaught page exceptions, in a per-tab ring buffer (last 200 entries, capped at 256 KB). Each entry: level, text, timestamp, source URL, line, stack.</p>
+<p>The debugging pattern that earns its keep — plant a listener, act, then read what fired:</p>
+<pre><code class="language-sh">chrome-relay js --tab 42 &quot;
+  [&#39;pointerdown&#39;,&#39;mousedown&#39;,&#39;click&#39;].forEach(t =&gt;
+    document.addEventListener(t, e =&gt; console.log(t, e.target.tagName, e.target.className), {capture:true}));
+  return &#39;listening&#39;&quot;
+chrome-relay click @e12
+chrome-relay console read --tab 42
+</code></pre>
+<p>A click that &quot;succeeded but nothing happened&quot; stops being a mystery.</p>
+<h2>Network</h2>
+<pre><code class="language-sh">chrome-relay network read --tab 42                       # request/response metadata
+chrome-relay network read --tab 42 --url &quot;/api/&quot; --method POST
+chrome-relay network read --tab 42 --status failed       # buckets: ok|redirect|client_error|server_error|failed
+chrome-relay network body --tab 42 --request-id &lt;id&gt;     # fetch a response body on demand
+chrome-relay network har --tab 42 -o session.har         # full HAR export
+chrome-relay network clear --tab 42
+</code></pre>
+<p>Per-tab ring buffer (200 entries, 512 KB, metadata only — bodies fetched on demand because they&#39;re big and usually unneeded). Each entry: URL, method, status, mime, headers, timings, sizes, cache/service-worker flags.</p>
+<p>Caveat worth knowing: Chrome evicts response bodies aggressively — <code>network body</code> on a request older than ~30 seconds may fail. Read bodies soon after the request, or capture a HAR while it&#39;s fresh.</p>
+<h2>Screenshots</h2>
+<pre><code class="language-sh">chrome-relay screenshot --tab 42 -o shot.png                 # background tabs fine
+chrome-relay screenshot --tab 42 --full -o page.png          # beyond the viewport
+chrome-relay screenshot --tab 42 --selector &quot;.card&quot; --padding 8 -o card.png
+chrome-relay screenshot --tab 42 --max-edge 800 -o small.png # downscale for vision models
+</code></pre>
+<p>Use <a href="/docs/snapshots/">snapshots</a> to <em>act</em> and screenshots to <em>verify</em> — text is cheap, pixels are proof. Take one before anything irreversible (form submit, send, delete).</p>
+<h2>Screencast</h2>
+<pre><code class="language-sh">chrome-relay screencast start --tab 42 --quality 80 --max-width 900
+chrome-relay hover @e12       # the micro-interaction you&#39;re capturing
+chrome-relay screencast stop --tab 42 --out /tmp/rec --gif
+</code></pre>
+<p>Paint-driven frame capture — it sees CSS transitions, fade-ins, and hover states that screenshot polling misses. Two constraints: the tab must be <strong>active</strong> (Chrome doesn&#39;t paint background tabs), and <code>--gif</code>/<code>--mp4</code> stitching needs ffmpeg on PATH (fails with <code>external_dependency_missing</code> if absent, or pass <code>--allow-missing-ffmpeg</code> to keep the raw frames). Consecutive identical frames are deduped by hash before stitching.</p>
+<h2>What stays on your machine</h2>
+<p>All of it. Buffers live in the extension&#39;s memory, capped, per tab, dropped when the tab closes. Nothing is uploaded anywhere — there is nowhere to upload to.</p>
+
+    <div class="pager"><span><a href="/docs/commands/">← Commands</a></span><span><a href="/docs/workspaces/"> Workspaces</a>→</span></div>
+    <p class="md-link">Agents: this page as <a href="https://chrome-relay.kushalsm.com/docs/observability.md">plain markdown</a> · all docs in <a href="/llms.txt">/llms.txt</a></p>
+  </main>
+</div>
+<footer class="footer">
+  <a href="https://kushalsm.com">kushalsm.com</a>
+  <div><a href="/privacy/">Privacy</a> · <a href="/support/">Support</a></div>
+</footer>
+</body>
+</html>

@@ -12,4 +12,46 @@
   <url>
     <loc>https://chrome-relay.kushalsm.com/terms/</loc>
   </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/installation/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/quickstart/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/why-your-real-chrome/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/architecture/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/snapshots/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/refs/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/clicking/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/commands/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/observability/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/workspaces/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/errors/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/skill/</loc>
+  </url>
+  <url>
+    <loc>https://chrome-relay.kushalsm.com/docs/vs-agent-browser/</loc>
+  </url>
 </urlset>

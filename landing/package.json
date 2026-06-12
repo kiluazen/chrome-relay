@@ -1,0 +1,12 @@
+{
+  "name": "chrome-relay-landing",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build:docs": "node build-docs.mjs"
+  },
+  "devDependencies": {
+    "marked": "^15.0.0"
+  }
+}

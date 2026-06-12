@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Clicking strategies | Chrome Relay</title>
+<meta name="description" content="Three addressing modes, each with a distinct failure mode. Pick by what the page gives you." />
+<meta property="og:title" content="Clicking strategies | Chrome Relay" />
+<meta property="og:description" content="Three addressing modes, each with a distinct failure mode. Pick by what the page gives you." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/clicking/" />
+<link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/clicking/" />
+<link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/clicking.md" title="Markdown version" />
+<link rel="icon" type="image/png" href="/icon-128.png" />
+<style>
+:root {
+  color-scheme: light;
+  --paper: #f7f3e8; --ink: #181818; --muted: #58544c; --line: #d6d0c2;
+  --panel: #fffdf6; --green: #1f7a4d; --green-soft: #e6f2eb;
+}
+* { box-sizing: border-box; }
+html { background: var(--paper); }
+body {
+  margin: 0; color: var(--ink); line-height: 1.6; font-size: 16px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.bg-art {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: url('/bg.jpg') center/cover no-repeat;
+  opacity: 0.12; filter: saturate(0.25) contrast(0.4) brightness(1.7);
+}
+a { color: inherit; }
+.nav {
+  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 0;
+}
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; }
+.brand img { width: 32px; height: 32px; border-radius: 8px; }
+.nav-links { display: flex; gap: 18px; font-size: 14.5px; }
+.nav-links a { text-decoration: none; color: var(--muted); font-weight: 550; }
+.nav-links a:hover { color: var(--ink); }
+.layout {
+  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding: 12px 0 90px;
+}
+.sidebar { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+.sidebar a {
+  display: block; padding: 5px 10px; text-decoration: none; color: var(--muted);
+  border-left: 2px solid transparent; border-radius: 0 6px 6px 0;
+}
+.sidebar a:hover { color: var(--ink); }
+.sidebar a.active { color: var(--green); border-left-color: var(--green); background: var(--green-soft); font-weight: 600; }
+.sidebar .group { margin: 14px 0 4px; padding-left: 10px; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); opacity: 0.75; }
+main { max-width: 760px; min-width: 0; }
+main h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin: 10px 0 6px; }
+.page-desc { color: var(--muted); margin: 0 0 28px; font-size: 17px; }
+main h2 { font-size: 22px; margin: 42px 0 10px; letter-spacing: -0.01em; }
+main h3 { font-size: 17px; margin: 28px 0 8px; }
+main p, main li { color: #2a2722; }
+main hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
+code {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.86em;
+  background: #ece7d9; padding: 2px 6px; border-radius: 5px;
+}
+pre {
+  background: #14120e; color: #e8e2d6; border-radius: 10px;
+  padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.55;
+  border: 1px solid #2a2620;
+}
+pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14.5px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--ink); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:first-child code, td:first-child { white-space: nowrap; }
+td:first-child { font-weight: 600; }
+blockquote {
+  margin: 18px 0; padding: 12px 18px; border-left: 3px solid var(--green);
+  background: var(--green-soft); border-radius: 0 8px 8px 0;
+}
+blockquote p { margin: 0; }
+.md-link { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.md-link a { color: var(--green); }
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; font-size: 14.5px; }
+.pager a { text-decoration: none; color: var(--green); font-weight: 600; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.footer { width: min(1240px, calc(100% - 56px)); margin: 0 auto; display: flex; justify-content: space-between; padding: 26px 0 40px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+.footer a { color: var(--muted); }
+@media (max-width: 880px) {
+  .layout { grid-template-columns: 1fr; gap: 8px; }
+  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .sidebar .group { display: none; }
+  .sidebar a { border-left: 0; border-radius: 6px; }
+}
+</style>
+</head>
+<body>
+<div class="bg-art" aria-hidden="true"></div>
+<nav class="nav" aria-label="Primary">
+  <a class="brand" href="/"><img src="/icon-128.png" alt="" /><span>Chrome Relay</span></a>
+  <div class="nav-links">
+    <a href="/docs/">Docs</a>
+    <a href="https://github.com/kiluazen/chrome-relay">GitHub</a>
+    <a href="https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb">Chrome Web Store</a>
+  </div>
+</nav>
+<div class="layout">
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/" class="active">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Positioning</div><a href="/docs/vs-agent-browser/">vs agent-browser</a></aside>
+  <main>
+    <h1>Clicking strategies</h1>
+    <p class="page-desc">Three addressing modes, each with a distinct failure mode. Pick by what the page gives you.</p>
+    <p>There is no single &quot;click&quot; because there is no single way to identify an element across the web. Chrome Relay exposes the strategies as explicit modes instead of hiding them behind a smart wrapper — when something fails, your transcript already contains the diagnosis.</p>
+<h2>The ladder</h2>
+<table>
+<thead>
+<tr>
+<th>You have</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>A <code>@ref</code> from <code>snapshot -i</code></td>
+<td><code>chrome-relay click @e12</code> — default, start here</td>
+</tr>
+<tr>
+<td>A CSS selector you know statically</td>
+<td><code>chrome-relay click &#39;button[aria-label=&quot;Save&quot;]&#39;</code></td>
+</tr>
+<tr>
+<td>Pixel coordinates</td>
+<td><code>chrome-relay click --x 540 --y 320</code></td>
+</tr>
+<tr>
+<td>Only visible text</td>
+<td><code>js</code> probe → coordinate click (recipe below)</td>
+</tr>
+</tbody></table>
+<p>All three dispatch the same trusted CDP mouse sequence — hover, press, release, <code>pointerType: &quot;mouse&quot;</code>, <code>isTrusted: true</code>. Anti-bot heuristics and React-Aria/Radix widgets can&#39;t tell them from a human.</p>
+<h2>1. Refs — <code>click @e12</code></h2>
+<p>The default. Covers buttons, links, inputs, named content, cursor-pointer div-soup (via the <a href="/docs/snapshots/">sweep</a>), and shadow DOM. Carries its own tab, heals across re-renders, refuses to click through overlays. Full semantics: <a href="/docs/refs/">Refs</a>.</p>
+<p>Fails on: real navigation (<code>stale_ref</code> → re-snapshot), covered targets (<code>click_intercepted</code> → dismiss the overlay), and anything not in the DOM.</p>
+<h2>2. CSS selectors — <code>click &#39;&lt;selector&gt;&#39;</code></h2>
+<pre><code class="language-sh">chrome-relay click &#39;button[aria-label=&quot;Save&quot;]&#39; --tab 42
+</code></pre>
+<p>For when you already know a stable selector and don&#39;t need to look at the page first. Resolution is in-page <code>querySelector</code> → scroll into view → center → trusted click.</p>
+<p>Fails on: hash-rotated class names (<code>._3a8K9d</code>), shadow DOM (querySelector can&#39;t pierce; refs can), and selectors you&#39;d have to guess. Failure is <code>element_not_found</code> with the selector echoed; malformed CSS is <code>invalid_arguments</code>.</p>
+<h2>3. Coordinates — <code>click --x N --y N</code></h2>
+<pre><code class="language-sh">chrome-relay js --tab 42 &quot;const r = document.querySelector(&#39;svg path&#39;).getBoundingClientRect(); return { x: r.x + r.width/2, y: r.y + r.height/2 }&quot;
+chrome-relay click --tab 42 --x 312 --y 218
+</code></pre>
+<p>The escape hatch for things with no DOM handle at all: canvas UIs and SVG chart internals (anonymous <code>&lt;path&gt;</code> segments have no role, no name, and no sane selector — measured 70–100 of them per analytics dashboard). Get fresh coordinates from a <code>js</code> rect probe or a screenshot, click immediately — coords go stale the moment the page scrolls.</p>
+<p>The contract is deliberately thin: &quot;fire a click at (x, y)&quot;. It always reports <code>clicked: true</code>; whether it hit something useful is yours to verify.</p>
+<h2>Recipe: click by visible text</h2>
+<p>First try <code>snapshot -i</code> — visible text is almost always a node name with a ref next to it. When it genuinely isn&#39;t:</p>
+<pre><code class="language-sh">COORDS=$(chrome-relay js --tab 42 &quot;
+  const target = &#39;the text you see&#39;;
+  const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = tw.nextNode())) {
+    if ((n.textContent || &#39;&#39;).includes(target)) {
+      const r = n.parentElement.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    }
+  }
+  return null;
+&quot;)
+# parse x/y, then: chrome-relay click --tab 42 --x $X --y $Y
+</code></pre>
+<p>There&#39;s intentionally no <code>click-text</code> verb — it would be a smart wrapper hiding which strategy ran.</p>
+<h2>Anti-patterns</h2>
+<ul>
+<li><strong>Retrying a stale ref.</strong> <code>stale_ref</code> means the page changed; the ref is never coming back. One snapshot fixes it.</li>
+<li><strong><code>js</code> + <code>.click()</code> on clickable elements.</strong> Synthetic event, <code>isTrusted: false</code> — silently ignored by anti-bot pages and pointer-event widgets. Use <code>js</code> to <em>find</em>, trusted verbs to <em>act</em>.</li>
+<li><strong>Coordinate clicks from old data.</strong> Re-read the rect right before clicking, every time.</li>
+<li><strong>Strategy roulette.</strong> Looping selector → ref → coords until something returns success burns round-trips and eventually clicks the wrong thing. Look at the page (<code>snapshot -i</code>), pick once, fail loudly.</li>
+</ul>
+<h2>Typing, while you&#39;re here</h2>
+<table>
+<thead>
+<tr>
+<th>Target</th>
+<th>Tool</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>&lt;input&gt;</code> / <code>&lt;textarea&gt;</code> / <code>&lt;select&gt;</code>, React-controlled, shadow DOM</td>
+<td><code>fill @ref</code> — atomic write, bypasses React&#39;s value tracker</td>
+</tr>
+<tr>
+<td>contenteditable, Draft.js, Lexical, ProseMirror (X compose, LinkedIn DM)</td>
+<td><code>type &quot;text&quot; -s @ref</code> — trusted insertText at the caret. <strong>Appends</strong> — clear first if the field had a value</td>
+</tr>
+<tr>
+<td>Enter, Tab, Escape, Cmd+K, arrows</td>
+<td><code>keys &lt;chord&gt;</code></td>
+</tr>
+<tr>
+<td>Combobox/autocomplete</td>
+<td><code>type</code> into the filter → <code>keys ArrowDown</code> → <code>keys Enter</code></td>
+</tr>
+</tbody></table>
+
+    <div class="pager"><span><a href="/docs/refs/">← Refs</a></span><span><a href="/docs/commands/"> Commands</a>→</span></div>
+    <p class="md-link">Agents: this page as <a href="https://chrome-relay.kushalsm.com/docs/clicking.md">plain markdown</a> · all docs in <a href="/llms.txt">/llms.txt</a></p>
+  </main>
+</div>
+<footer class="footer">
+  <a href="https://kushalsm.com">kushalsm.com</a>
+  <div><a href="/privacy/">Privacy</a> · <a href="/support/">Support</a></div>
+</footer>
+</body>
+</html>

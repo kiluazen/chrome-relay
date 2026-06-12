@@ -1,0 +1,1033 @@
+# Chrome Relay — full documentation
+# https://chrome-relay.kushalsm.com
+
+
+
+---
+
+# Chrome Relay docs
+
+> A local bridge between your coding agent and the Chrome you already have open. Nothing leaves the machine.
+
+
+Chrome Relay lets a terminal agent — Claude Code, Codex, anything that runs shell commands — operate your real Chrome. Not a headless automation browser with an empty profile: the actual browser you're signed into, with your cookies, SSO sessions, extensions, and localhost tabs. It works on background tabs without stealing focus, so you keep browsing while the agent works.
+
+```sh
+chrome-relay tabs                             # find or open a tab
+chrome-relay navigate "https://x.com" --new   # opens in the background
+chrome-relay snapshot --tab 1234 -i           # see the page: actionable elements get @refs
+chrome-relay click @e12                       # act on a ref — no selectors, no --tab
+chrome-relay fill @e14 "hello"
+chrome-relay snapshot --tab 1234 -i           # look again after the page changes
+```
+
+That's the whole loop. A snapshot of the Hacker News front page is ~14 KB of plain text. A click round-trip is ~150 ms.
+
+## What it is, in one diagram
+
+```
+your agent (terminal)
+  → chrome-relay CLI
+  → localhost HTTP (127.0.0.1:12122)
+  → native messaging host
+  → Chrome extension (service worker)
+  → CDP (chrome.debugger)
+  → your real tabs
+```
+
+Everything is local. There is no cloud relay, no account, no telemetry. The extension talks to one whitelisted local process through Chrome's own native-messaging permission system — the same Chrome you'd have to trust anyway.
+
+## Where to go
+
+| You want to | Read |
+|---|---|
+| Install it | [Installation](/docs/installation/) |
+| Drive a page in 2 minutes | [Quickstart](/docs/quickstart/) |
+| Understand why it uses *your* Chrome | [Why your real Chrome](/docs/why-your-real-chrome/) |
+| Know how the pieces connect | [Architecture](/docs/architecture/) |
+| Read pages cheaply | [Snapshots](/docs/snapshots/) |
+| Click things reliably | [Refs](/docs/refs/) · [Clicking strategies](/docs/clicking/) |
+| Look up a command | [Command reference](/docs/commands/) |
+| Teach your agent | [The agent skill](/docs/skill/) |
+| Compare with agent-browser | [vs agent-browser](/docs/vs-agent-browser/) |
+
+## Design positions, briefly
+
+- **CLI, not MCP.** Tool schemas cost thousands of context tokens on every agent turn; a CLI costs nothing until invoked, and every agent already knows how to run shell commands.
+- **Verbs, not magic.** There's no "smart click" with hidden fallbacks. Each addressing mode (`@ref`, CSS selector, coordinates) is explicit, and each failure is a structured error code the agent can branch on.
+- **Strict by default.** No silent partial success. If a click would land on an overlay instead of the target, you get `click_intercepted` naming the overlay — not a success report and a broken page.
+- **Output is the product.** Agents pay for every byte on stdout. The snapshot format exists to be small.
+
+
+---
+
+# Installation
+
+> Two pieces — the Chrome extension and the CLI. One command wires them together.
+
+
+Chrome Relay is two artifacts that meet in the middle:
+
+1. **The extension** — runs inside Chrome, holds the CDP session, executes every browser action.
+2. **The CLI** — what your agent invokes. Ships with the native messaging host that the extension connects to.
+
+## 1. Install the extension
+
+From the [Chrome Web Store](https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb). Works in Chrome and Chromium forks — Edge, Brave, Arc, Vivaldi, Opera.
+
+Permissions it asks for, and why:
+
+| Permission | Used for |
+|---|---|
+| `nativeMessaging` | connecting to the local CLI host — the only channel out of the extension, and it goes to your own machine |
+| `debugger` | CDP: trusted clicks, snapshots, screenshots, network/console capture |
+| `tabs`, `tabGroups` | listing and targeting tabs, workspaces |
+| `storage` | ref-map persistence across extension service-worker restarts |
+
+## 2. Install the CLI
+
+```sh
+pnpm add -g chrome-relay     # or npm i -g chrome-relay
+chrome-relay install
+```
+
+`install` detects every Chromium-family browser on the machine and registers the native messaging host for each (macOS, Linux, and Windows — on Windows it also writes the HKCU registry entries Chrome reads).
+
+## 3. Verify
+
+```sh
+chrome-relay doctor
+```
+
+Doctor checks the whole chain: wrapper script present, native host starts, extension connects, local bridge reachable. Then:
+
+```sh
+chrome-relay tabs
+```
+
+If you get your window and tab list as JSON, you're done.
+
+## 4. Teach your agent (optional but recommended)
+
+```sh
+npx skills add kiluazen/kstack@chrome-relay
+```
+
+This installs the [agent skill](/docs/skill/) — the playbook that tells Claude Code / Codex how to use the commands well (the snapshot→ref loop, which text tool to pick for which editor, the fallback ladder). Also available raw at [/skill.md](/skill.md).
+
+## Troubleshooting
+
+| Symptom | Cause → fix |
+|---|---|
+| `extension_not_connected` | Extension not installed, or installed after `chrome-relay install` ran → re-run `chrome-relay install`, then restart Chrome |
+| `doctor` says no wrapper | CLI installed but `install` never ran → `chrome-relay install` |
+| Worked yesterday, dead today | Chrome updated and restarted the native host → usually self-heals on first command; otherwise toggle the extension off/on |
+| Commands hang ~15 s then time out | Another process is holding port 12122 → kill it or reboot the bridge by restarting Chrome |
+| `unsupported_tool` on `snapshot` | Extension is older than the CLI → update the extension (Web Store updates roll out on Chrome's schedule; `chrome://extensions` → Update forces it) |
+
+## Updating
+
+```sh
+chrome-relay update          # updates the CLI and prints what changed, as JSON
+chrome-relay release-notes --since 0.5.22   # just read the changelog
+```
+
+The changelog is agent-readable on purpose — your agent can check what changed before relying on a new flag.
+
+
+---
+
+# Quickstart
+
+> The snapshot → ref → act loop, end to end, with real output.
+
+
+Everything an agent does with Chrome Relay is one loop: look at the page, act on what you saw, look again. This page runs it once, for real.
+
+## Open a page in the background
+
+```sh
+chrome-relay navigate "https://news.ycombinator.com" --new
+```
+
+```json
+{ "tabId": 460154464, "windowId": 460153891 }
+```
+
+`--new` opens a **background** tab — the user's focus is never stolen. Keep the `tabId`.
+
+## Look at the page
+
+```sh
+chrome-relay snapshot --tab 460154464 -i
+```
+
+```
+Page: Hacker News
+URL: https://news.ycombinator.com/
+Tab: 460154464
+
+- link "Hacker News" [ref=e4]
+- link "new" [ref=e5]
+- link "past" [ref=e7]
+- cell "1." [ref=e16]
+- cell "MiMo Code Is Now Released and Open-Source (xiaomi.com)" [ref=e18]
+  - link "MiMo Code Is Now Released and Open-Source" [ref=e19]
+  - link "xiaomi.com" [ref=e20]
+...
+```
+
+`-i` prints only actionable elements. The whole front page is ~14 KB of this. Every `[ref=eN]` is a handle you can act on.
+
+## Act on a ref
+
+```sh
+chrome-relay click @e5
+```
+
+```json
+{ "clicked": true, "x": 250, "y": 20, "ref": "e5", "tabId": 460154464 }
+```
+
+No `--tab`. No CSS selector. The ref knows which tab it came from — it acts there even if you (the human) are reading a different tab right now.
+
+## Fill, type, press
+
+```sh
+chrome-relay fill @e41 "search term"     # inputs, textareas, selects — atomic write
+chrome-relay type "hello" -s @e23        # contenteditable / Lexical / ProseMirror
+chrome-relay keys Enter --tab 460154464  # chords: Cmd+K, Shift+ArrowDown, Escape
+```
+
+## Look again
+
+After anything that changes the page, re-snapshot:
+
+```sh
+chrome-relay snapshot --tab 460154464 -i
+```
+
+Refs survive same-page DOM churn (a toast appearing won't kill them — there's a heal step that re-finds moved nodes). They **die on navigation**, on purpose. If you act on a dead one:
+
+```json
+{ "relayError": { "code": "stale_ref",
+  "message": "chrome_click_element: @e19 is not a known ref (...). Re-run `chrome-relay snapshot` and use a fresh ref." } }
+```
+
+The fix is always the same: snapshot again. See [Refs](/docs/refs/) for the full lifetime rules.
+
+## Capture proof
+
+```sh
+chrome-relay screenshot --tab 460154464 -o /tmp/evidence.png
+```
+
+Works on background tabs without activating them.
+
+## The loop, named
+
+```
+snapshot -i  →  click/fill @ref  →  snapshot -i  →  ...
+```
+
+That's the whole interface. Three more things worth knowing before you go deep:
+
+- `js` runs arbitrary JavaScript in the page when the DOM doesn't expose what you need: `chrome-relay js --tab <id> "return document.title"`
+- Errors are structured — branch on `relayError.code`, never regex the message. [Error reference](/docs/errors/).
+- For everything the CLI can do: [Command reference](/docs/commands/).
+
+
+---
+
+# Why your real Chrome
+
+> Automation browsers give your agent a browser. Chrome Relay gives it yours — and that difference is the whole product.
+
+
+Every browser-automation tool for agents makes one of two choices:
+
+1. **Launch a browser for the agent.** Playwright, Puppeteer, agent-browser — they download or spawn a separate Chrome (usually Chrome for Testing), drive it over CDP, and give the agent a clean, disposable sandbox.
+2. **Attach to the browser you already use.** That's Chrome Relay.
+
+Neither is wrong. They're different products. The sandbox is right for e2e tests, scraping, CI. But the moment the task involves *your* accounts, the sandbox has nothing to offer:
+
+## What only exists in your real browser
+
+**Your logins.** Here's a live test from our own benchmarking: we opened `news.ycombinator.com` in an automation browser and through Chrome Relay, same machine, same minute. The automation browser saw the logged-out page — a `login` link. Chrome Relay saw a logged-in session: username in the header, no login link anywhere. Same URL, two different realities. Every dashboard, admin panel, inbox, and internal tool your agent might operate lives exclusively in the second one.
+
+**Cloudflare and friends.** Chrome for Testing is fingerprinted by anti-bot systems and routinely blocked or challenged. Your real Chrome is indistinguishable from you, because it *is* you. There's no stealth plugin arms race when there's nothing to disguise.
+
+**Your extensions.** Password manager, ad blocker, that internal company extension — present and working.
+
+**localhost.** The dev server you're running, with whatever auth state your browser already negotiated with it.
+
+**No credential handoff.** The alternative way to get an agent "logged in" is exporting cookies or storing credentials in a vault it can replay. With Chrome Relay there's nothing to export — the session never leaves the browser it lives in.
+
+## The objections, honestly
+
+**"Isn't attaching to my real browser dangerous?"** It's a real trade and you should make it consciously. Two things bound the risk:
+
+- *Scope.* Everything is local: CLI → `127.0.0.1` → native messaging → extension. The bridge binds to localhost only and rejects browser-origin requests, so a web page can't call it. There's no cloud relay that could be compromised, no account that could leak.
+- *Visibility.* The agent acts in tabs you can see (or background tabs you can switch to). Actions are auditable in your own browser history and the agent's transcript. Contrast with a sandbox browser doing things in a window you'll never look at.
+
+What it doesn't bound: an agent with your sessions can do what you can do. That's the point, and it's why Chrome Relay favors strict, loud failure over silent cleverness — structured error codes, no auto-fallbacks, refusal to click through overlays (`click_intercepted`). You should know what your agent did and why.
+
+**"Why not just launch Chrome with `--remote-debugging-port`?"** Because that requires *relaunching* Chrome (killing your session), and it exposes the raw debugging protocol — every tab, every cookie — to any process on the machine that can reach the port. The extension + native-messaging route attaches to the already-running browser, with Chrome's own permission model in front of it, scoped to one whitelisted local binary. [Architecture](/docs/architecture/) covers this in detail.
+
+**"Won't the agent steal my focus while I work?"** No — that constraint shaped the whole design. Commands run on background tabs via CDP; the extension even patches `document.visibilityState` so pages keep behaving normally while backgrounded. You browse in one tab while the agent works in another. Multiple agents can drive separate named windows ([workspaces](/docs/workspaces/)).
+
+## When you should NOT use Chrome Relay
+
+Honesty section. Use a sandbox browser instead when:
+
+- You're running **CI or e2e tests** — you want determinism and a clean profile, not your cookies.
+- You're **scraping at volume** — you want parallel disposable sessions.
+- The task needs **no auth at all** — the sandbox is simpler and can't touch anything of yours.
+- You can't supervise it and the blast radius of "the agent can do what I can do" is unacceptable.
+
+The two-line summary we'd want an agent to remember:
+
+> agent-browser (and Playwright) are what your agent uses to browse *the web*.
+> Chrome Relay is what your agent uses to operate *your* web — logged-in, real-profile, without taking the browser away from you.
+
+
+---
+
+# Architecture
+
+> Five hops, each with one job. Why the extension route is the only safe way into a running Chrome.
+
+
+```
+agent (any shell)
+  → chrome-relay CLI            parses args, renders output
+  → HTTP, 127.0.0.1:12122       localhost-only bridge (Fastify)
+  → native messaging host       long-lived Node process, spawned by Chrome
+  → extension service worker    tool handlers, ref map, buffers
+  → chrome.debugger (CDP)       trusted input, snapshots, capture
+  → your tabs
+```
+
+Every hop is local. The wire format is one JSON envelope per call: `{ name, args }` in, `{ ok, data } | { ok: false, errorDetails }` out.
+
+## Why not `--remote-debugging-port`?
+
+The standard way tools attach to a real Chrome is launching it with a CDP debug port. Two problems:
+
+1. **You have to relaunch Chrome.** Your running session — every tab, every WebSocket, every half-written form — dies so the flag can take effect.
+2. **The port is a skeleton key.** Anything on your machine that can reach `localhost:9222` gets the full protocol: read any cookie, open any URL, in every profile window. No permission prompt, no scoping.
+
+The extension + native-messaging route inverts both. It attaches to the *already running* browser, and the only process that can talk to the extension is the one binary whitelisted in the native-messaging manifest — a file Chrome itself verifies. The browser's own permission model is the gate.
+
+The cost is more moving parts (install registers the host; the extension must be present). `chrome-relay doctor` exists because of that cost.
+
+## What lives where
+
+| Piece | Owns |
+|---|---|
+| **CLI** (`chrome-relay`, npm) | argument parsing, output rendering (snapshot text, JSON), exit codes. Stateless — every invocation is one HTTP call. |
+| **Protocol** (bundled into the CLI) | tool names, argument schemas, error codes, the snapshot renderer. One source of truth both ends import. |
+| **Native host** | spawned by Chrome on the extension's `connectNative()`; runs the localhost HTTP server; relays frames. No logic. |
+| **Extension** | everything that touches the browser: the [ref map](/docs/refs/), the [snapshot builder](/docs/snapshots/), per-tab console/network ring buffers, CDP sessions, trusted input dispatch. |
+
+## Security model
+
+- **Localhost only.** The bridge binds `127.0.0.1`. It also rejects requests carrying a browser `Origin` header, so a web page you visit can't script your own bridge.
+- **No cloud, no account, no telemetry.** There is nothing to sign into and nowhere for your data to go. The extension's only outbound channel is native messaging to your own machine.
+- **Chrome-verified pairing.** The native-messaging manifest whitelists exact extension IDs; Chrome enforces it in both directions.
+- **One trust decision.** Installing Chrome Relay means: processes on my machine that can run `chrome-relay` may drive my browser. That's the honest statement of the model — the same trust you extend to anything you `npm i -g`. If your threat model can't accept it, use a sandboxed browser instead ([when not to use this](/docs/why-your-real-chrome/)).
+
+## Trusted input, specifically
+
+Clicks and keys go through CDP `Input.dispatchMouseEvent` / `dispatchKeyEvent`, so the page receives `isTrusted: true` events with `pointerType: "mouse"` — indistinguishable from a human. This matters on real apps: React-Aria/Radix widgets listen for pointer events and ignore synthetic `.click()`; login and payment flows gate on trusted events. JS-side `.click()` is available via `chrome-relay js` when you want it, but it's the fallback, not the path.
+
+## Background tabs that act foregrounded
+
+Chrome throttles and hides backgrounded tabs (`document.hidden`, paused rAF, visibility events). The extension patches visibility APIs on relay-driven tabs so pages behave normally while the agent works and you keep your focus elsewhere. The one hard limit: Chrome doesn't *paint* background tabs, so `screencast` (video capture) needs the tab active — screenshots don't.
+
+
+---
+
+# Snapshots
+
+> One command turns a page into ~1–15 KB of text where every actionable element has a handle.
+
+
+```sh
+chrome-relay snapshot --tab <id> -i
+```
+
+```
+Page: Hacker News
+URL: https://news.ycombinator.com/
+Tab: 460154464
+
+- link "Hacker News" [ref=e4]
+- textbox "Search" [ref=e41]: current value
+- checkbox "Remember me" [checked, ref=e42]
+- cell "1." [ref=e16]
+  - link "MiMo Code Is Now Released and Open-Source" [ref=e19]
+- clickable "Open card" [ref=e88]
+```
+
+Agents pay context tokens for every byte a tool prints, so the snapshot format exists to be small. Measured: the HN front page is **14 KB** with `-i` (the DOM is 599 KB; the old JSON reader was 61 KB). A typical app view is 1–5 KB.
+
+## The grammar
+
+One line per node, indented to tree depth:
+
+```
+- {role} "{name}" [{attrs}]: {value}
+```
+
+- `role` — from the accessibility tree: `link`, `button`, `textbox`, `heading`, `cell`…
+- `name` — what a screen reader would announce. Quoted, escaped.
+- attrs, in order: `level=N`, `checked`/`checked=false`/`checked=mixed`, `expanded`, `selected`, `disabled`, `required`, `readonly`, `pressed`, `ref=eN`, `url=…` (with `-u`)
+- `: value` — current input value, only when it differs from the name. A form readback is free with the snapshot; no second round-trip to ask "what does the field say now?"
+
+## What gets a ref
+
+Refs are handles you can [act on](/docs/refs/). Three kinds of node earn one:
+
+1. **Interactive roles** — button, link, textbox, checkbox, combobox, menuitem, tab, … always, even unnamed.
+2. **Named content roles** — heading, cell, listitem, img, dialog … only when they have a name (an anonymous heading is noise).
+3. **Cursor-interactive sweep finds** — see below.
+
+Anonymous structural nodes (layout divs, unnamed containers) collapse: their children promote up a level. That's most of why the output is small.
+
+## The sweep — catching div-soup
+
+The accessibility tree only knows what page authors told it. Modern Tailwind-style SPAs are full of clickable `<div>`s and `<span>`s with no role: measured on a real app, one email-list view had **37 clickable elements the AX tree couldn't see at all** (cursor-pointer rows, dates, sender names). A well-built dashboard (Cloudflare's, measured) had zero.
+
+So every snapshot also runs a one-pass sweep for elements that *behave* clickable — `cursor: pointer`, `onclick`, `tabindex`, `contenteditable` — deduplicated to the topmost clickable (cursor inherits; you want the row, not its twelve children). They appear as:
+
+```
+- clickable "sylvain@zerolooplabs.dev" [ref=e704]
+```
+
+Same refs, same actions. Without the sweep, "interactive only" filtering would silently hide real targets — that was the dealbreaker that decided this design.
+
+## Flags
+
+```sh
+chrome-relay snapshot --tab <id>             # full tree
+chrome-relay snapshot --tab <id> -i          # ref-bearing elements only (use this)
+chrome-relay snapshot --tab <id> -d 3        # cap depth
+chrome-relay snapshot --tab <id> -s "#main"  # scope to a CSS subtree — refs outside it are never issued
+chrome-relay snapshot --tab <id> -u          # include link hrefs as url= attrs
+chrome-relay snapshot --tab <id> --json      # structured envelope: { title, url, tabId, nodes, refs }
+```
+
+`--json` includes the full refs map — each ref's `backendNodeId`, role, name — for programmatic callers. The text form is for reading; the JSON form is for building on.
+
+## Frames and shadow DOM
+
+- **Shadow DOM: pierced.** The accessibility tree sees through shadow roots, so web-component internals get refs that `querySelector` could never reach. (Pinned by an e2e test: a `<input>` inside a shadow root gets a ref, and `fill @ref` writes through the boundary.)
+- **Same-process iframes: included** — they appear in the tab's AX tree.
+- **Cross-origin iframes: not yet.** Snapshot is top-frame scoped for OOPIFs. Coordinate clicks still land in them (input is dispatched at page level); ref/selector addressing doesn't. Stated limitation, on the roadmap.
+
+## Deprecated: `read` and `ax`
+
+Earlier versions had two separate readers (`read` = DOM walk with CSS selectors, `ax` = accessibility tree with its own id space). Both are now aliases for `snapshot` and print a deprecation notice; they'll be removed. If you have scripts parsing the old shapes, switch to `snapshot --json`.
+
+
+---
+
+# Refs
+
+> "@eN handles that carry their own tab, heal across DOM churn, and refuse to click through overlays."
+
+
+Every actionable element in a [snapshot](/docs/snapshots/) gets a ref — `@e12` — and every element-addressed command accepts one:
+
+```sh
+chrome-relay click @e12
+chrome-relay fill @e14 "value"
+chrome-relay hover @e3
+chrome-relay type "text" -s @e7
+```
+
+A ref is not a CSS selector and not a coordinate. Under the hood it's the element's Chrome-internal node id (`backendDOMNodeId`) plus enough semantics (`role`, `name`, position-among-twins) to find the element again if the id goes stale.
+
+## Refs carry their own tab
+
+This is the rule that makes refs safe in a browser a *human* is also using. `click @e12` acts on the tab that produced `e12` — never "the active tab", which is whatever you happen to be reading right now. Concretely:
+
+- No `--tab` needed on ref actions.
+- Ref numbers are unique across the whole browser (the counter never resets), so `@e12` can't mean two things.
+- A contradicting `--tab` is an error, not a guess:
+
+```json
+{ "relayError": { "code": "target_conflict",
+  "message": "@e16 belongs to tab 460154464 but --tab 99999 was passed. Refs carry their own tab — drop --tab or use a ref from that tab's snapshot." } }
+```
+
+## Lifetime: churn heals, navigation kills
+
+**Same-page DOM churn: refs survive.** Pages re-render constantly — a toast appears, a list reorders, React swaps a subtree. The resolver tries the cached node id first (one CDP call verifies it's live), and if the node was replaced, re-finds it by role + name + position and *heals* the ref in place. Healed actions report it:
+
+```json
+{ "clicked": true, "ref": "e16", "healed": true }
+```
+
+**Real navigation: refs die, on purpose.** Chrome reuses node-id integers in a new document — a ref from the old page could silently resolve to an unrelated element on the new one. (We caught this live: a stale ref "successfully" clicked a random link on the page that replaced it.) So navigation invalidates the tab's refs, and acting on one fails loud:
+
+```json
+{ "relayError": { "code": "stale_ref",
+  "message": "@e19 is not a known ref (no snapshot produced it, or its tab was re-snapshotted). Re-run `chrome-relay snapshot` and use a fresh ref." } }
+```
+
+SPA route changes (pushState — the document persists) keep refs alive; the heal step covers the re-render.
+
+The agent rule is one line: **`stale_ref` → snapshot again.** Never retry the same ref; it isn't coming back.
+
+## Interception: no clicking through overlays
+
+Before dispatching, a ref click hit-tests its target point. If an unrelated element owns it — a modal, cookie banner, sticky header — the click is refused, naming the interceptor:
+
+```json
+{ "relayError": { "code": "click_intercepted",
+  "message": "@e8 resolved, but an unrelated <div> owns the click point (412, 96) — an overlay, sticky header, or modal is covering it. Dismiss it or scroll, then retry.",
+  "details": { "interceptor": { "nodeName": "DIV", "backendNodeId": 1042 } } } }
+```
+
+Without this check, the click "succeeds", the overlay eats it, and the agent's next snapshot makes no sense. The check allows same-lineage hits (a button's inner text, a label wrapping its input) and is best-effort — if the hit-test itself can't run, the click proceeds rather than false-positive.
+
+`fill` and `type` skip the check deliberately: they write via the node, not the pointer, and writing into a visually covered input is legitimate.
+
+## Service-worker restarts
+
+Chrome kills idle extension service workers whenever it likes. The ref map persists across restarts (and is re-verified through CDP before any action — persistence restores ids, not trust), so an agent's refs don't vanish mid-task because Chrome got tidy.
+
+## When refs aren't the tool
+
+Refs cover the DOM. Two things aren't in the DOM in any useful way:
+
+- **Canvas internals** (Figma-style UIs) — nothing to reference.
+- **SVG chart segments** — anonymous `<path>` elements; no role, no name, no sane selector either.
+
+For those, get coordinates from a `js` probe or a screenshot and use `click --x N --y N`. The full decision tree is in [Clicking strategies](/docs/clicking/).
+
+
+---
+
+# Clicking strategies
+
+> Three addressing modes, each with a distinct failure mode. Pick by what the page gives you.
+
+
+There is no single "click" because there is no single way to identify an element across the web. Chrome Relay exposes the strategies as explicit modes instead of hiding them behind a smart wrapper — when something fails, your transcript already contains the diagnosis.
+
+## The ladder
+
+| You have | Use |
+|---|---|
+| A `@ref` from `snapshot -i` | `chrome-relay click @e12` — default, start here |
+| A CSS selector you know statically | `chrome-relay click 'button[aria-label="Save"]'` |
+| Pixel coordinates | `chrome-relay click --x 540 --y 320` |
+| Only visible text | `js` probe → coordinate click (recipe below) |
+
+All three dispatch the same trusted CDP mouse sequence — hover, press, release, `pointerType: "mouse"`, `isTrusted: true`. Anti-bot heuristics and React-Aria/Radix widgets can't tell them from a human.
+
+## 1. Refs — `click @e12`
+
+The default. Covers buttons, links, inputs, named content, cursor-pointer div-soup (via the [sweep](/docs/snapshots/)), and shadow DOM. Carries its own tab, heals across re-renders, refuses to click through overlays. Full semantics: [Refs](/docs/refs/).
+
+Fails on: real navigation (`stale_ref` → re-snapshot), covered targets (`click_intercepted` → dismiss the overlay), and anything not in the DOM.
+
+## 2. CSS selectors — `click '<selector>'`
+
+```sh
+chrome-relay click 'button[aria-label="Save"]' --tab 42
+```
+
+For when you already know a stable selector and don't need to look at the page first. Resolution is in-page `querySelector` → scroll into view → center → trusted click.
+
+Fails on: hash-rotated class names (`._3a8K9d`), shadow DOM (querySelector can't pierce; refs can), and selectors you'd have to guess. Failure is `element_not_found` with the selector echoed; malformed CSS is `invalid_arguments`.
+
+## 3. Coordinates — `click --x N --y N`
+
+```sh
+chrome-relay js --tab 42 "const r = document.querySelector('svg path').getBoundingClientRect(); return { x: r.x + r.width/2, y: r.y + r.height/2 }"
+chrome-relay click --tab 42 --x 312 --y 218
+```
+
+The escape hatch for things with no DOM handle at all: canvas UIs and SVG chart internals (anonymous `<path>` segments have no role, no name, and no sane selector — measured 70–100 of them per analytics dashboard). Get fresh coordinates from a `js` rect probe or a screenshot, click immediately — coords go stale the moment the page scrolls.
+
+The contract is deliberately thin: "fire a click at (x, y)". It always reports `clicked: true`; whether it hit something useful is yours to verify.
+
+## Recipe: click by visible text
+
+First try `snapshot -i` — visible text is almost always a node name with a ref next to it. When it genuinely isn't:
+
+```sh
+COORDS=$(chrome-relay js --tab 42 "
+  const target = 'the text you see';
+  const tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let n;
+  while ((n = tw.nextNode())) {
+    if ((n.textContent || '').includes(target)) {
+      const r = n.parentElement.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    }
+  }
+  return null;
+")
+# parse x/y, then: chrome-relay click --tab 42 --x $X --y $Y
+```
+
+There's intentionally no `click-text` verb — it would be a smart wrapper hiding which strategy ran.
+
+## Anti-patterns
+
+- **Retrying a stale ref.** `stale_ref` means the page changed; the ref is never coming back. One snapshot fixes it.
+- **`js` + `.click()` on clickable elements.** Synthetic event, `isTrusted: false` — silently ignored by anti-bot pages and pointer-event widgets. Use `js` to *find*, trusted verbs to *act*.
+- **Coordinate clicks from old data.** Re-read the rect right before clicking, every time.
+- **Strategy roulette.** Looping selector → ref → coords until something returns success burns round-trips and eventually clicks the wrong thing. Look at the page (`snapshot -i`), pick once, fail loudly.
+
+## Typing, while you're here
+
+| Target | Tool |
+|---|---|
+| `<input>` / `<textarea>` / `<select>`, React-controlled, shadow DOM | `fill @ref` — atomic write, bypasses React's value tracker |
+| contenteditable, Draft.js, Lexical, ProseMirror (X compose, LinkedIn DM) | `type "text" -s @ref` — trusted insertText at the caret. **Appends** — clear first if the field had a value |
+| Enter, Tab, Escape, Cmd+K, arrows | `keys <chord>` |
+| Combobox/autocomplete | `type` into the filter → `keys ArrowDown` → `keys Enter` |
+
+
+---
+
+# Command reference
+
+> Every command, its flags, and an example. `--help` on any command is always authoritative.
+
+
+Global targeting: most commands accept `-t/--tab <id>`, `--workspace <name>`, or `--group <name>` (exactly one). With none, the active tab is used — except ref actions, which target the ref's own tab.
+
+## See the browser
+
+| Command | Does |
+|---|---|
+| `tabs` | List all windows and tabs with ids, titles, URLs |
+| `switch <tabId>` | Activate a tab (steals focus — that's its job) |
+| `close <tabIds...>` | Close tabs |
+
+## Navigate
+
+```sh
+chrome-relay navigate "https://example.com" --new        # background tab (default for --new)
+chrome-relay navigate "https://example.com" --new --active  # foreground
+chrome-relay navigate "https://example.com" --tab 42     # retarget an existing tab
+```
+
+## Read the page
+
+```sh
+chrome-relay snapshot --tab 42 -i        # the way — see /docs/snapshots/
+chrome-relay snapshot --tab 42 -i -s "#main" -d 3 -u --json
+```
+
+| Flag | Does |
+|---|---|
+| `-i, --interactive` | only ref-bearing elements |
+| `-d, --depth <n>` | truncate tree depth |
+| `-s, --scope <css>` | subtree of the first match; refs outside it are never issued |
+| `-u, --urls` | include link hrefs |
+| `--json` | structured `{ title, url, tabId, nodes, refs }` |
+
+`read` / `ax` are deprecated aliases for `snapshot`.
+
+## Act
+
+```sh
+chrome-relay click @e12                          # ref (preferred)
+chrome-relay click 'button.save' --tab 42        # CSS selector
+chrome-relay click --x 540 --y 320 --tab 42      # coordinates
+chrome-relay fill @e14 "value"                   # input/textarea/select — atomic write
+chrome-relay type "text" -s @e7                  # contenteditable/Lexical — trusted insertText
+chrome-relay keys "Cmd+K" --tab 42               # single key or chord
+chrome-relay hover @e3                           # pointer move only; fires :hover
+chrome-relay click-ax --node 4837 --tab 42       # deprecated — raw backendNodeId
+```
+
+## Evaluate JavaScript
+
+```sh
+chrome-relay js --tab 42 "return document.title"
+chrome-relay js --tab 42 "const r = await fetch('/api/me'); return await r.json()"
+```
+
+MAIN world, async IIFE, top-level `await` works, `return` sends the value back. Page globals and framework internals are reachable.
+
+## Capture
+
+```sh
+chrome-relay screenshot --tab 42 -o out.png            # works on background tabs
+chrome-relay screenshot --tab 42 --full -o page.png    # beyond the viewport
+chrome-relay screenshot --tab 42 --selector "header" --padding 8 -o hdr.png
+chrome-relay screenshot --tab 42 --bbox 0,0,1280,80 -o region.png
+chrome-relay screenshot --tab 42 --max-edge 800 -o small.png
+```
+
+Region screenshots are ~10× cheaper in tokens than full-tab when you only need one component.
+
+```sh
+chrome-relay screencast start --tab 42 --quality 80 --max-width 900
+# ...drive the interaction...
+chrome-relay screencast stop --tab 42 --out /tmp/rec --gif
+```
+
+Paint-driven recording (catches CSS transitions and hover states). Requires the tab to be **active** — Chrome doesn't paint background tabs. With `--gif`/`--mp4` and ffmpeg on PATH, frames get stitched; consecutive identical frames are deduped.
+
+## Observe
+
+```sh
+chrome-relay console read --tab 42 --level error,warn
+chrome-relay network read --tab 42 --status failed
+chrome-relay network body --tab 42 --request-id <id>
+chrome-relay network har --tab 42 -o session.har
+```
+
+Per-tab ring buffers, last 200 entries each. Details: [Observability](/docs/observability/).
+
+## Emulate
+
+```sh
+chrome-relay viewport preset iphone-14 --tab 42
+chrome-relay viewport set --width 390 --height 844 --dpr 3 --mobile --touch --tab 42
+chrome-relay viewport clear --tab 42
+chrome-relay viewport list
+```
+
+## Multi-agent
+
+```sh
+chrome-relay workspace create hypothesis-1     # a named Chrome window
+chrome-relay --workspace hypothesis-1 navigate "https://example.com" --new
+chrome-relay group create research --color blue --tab 42   # native tab groups
+```
+
+Details: [Workspaces](/docs/workspaces/).
+
+## Maintain
+
+| Command | Does |
+|---|---|
+| `install` | register the native host for every detected browser |
+| `doctor` | validate the whole chain end to end |
+| `update` | update the CLI, print what changed (JSON) |
+| `release-notes --since <ver>` | the changelog, agent-readable |
+| `self-reload` | restart the extension service worker (dev loop) |
+| `call <tool> [json]` | raw pass-through to any internal tool |
+
+## Output contract
+
+Success prints JSON (or snapshot text) on stdout. Failure prints a human line plus a machine block on stderr and exits 1:
+
+```json
+{ "relayError": { "code": "stale_ref", "message": "...", "tool": "chrome_click_element", "details": {} } }
+```
+
+Branch on `code`. The full list: [Errors](/docs/errors/).
+
+
+---
+
+# Observability
+
+> Console, network, screenshots, screencast — what the page did, not just what it looks like.
+
+
+Debugging a web app through an agent means the agent needs what *you'd* open DevTools for. Chrome Relay buffers it per tab and serves it on demand.
+
+## Console
+
+```sh
+chrome-relay console read --tab 42
+chrome-relay console read --tab 42 --level error,warn
+chrome-relay console read --tab 42 --since 1718200000000 --limit 50
+chrome-relay console clear --tab 42
+```
+
+`console.log/info/warn/error/debug` plus uncaught page exceptions, in a per-tab ring buffer (last 200 entries, capped at 256 KB). Each entry: level, text, timestamp, source URL, line, stack.
+
+The debugging pattern that earns its keep — plant a listener, act, then read what fired:
+
+```sh
+chrome-relay js --tab 42 "
+  ['pointerdown','mousedown','click'].forEach(t =>
+    document.addEventListener(t, e => console.log(t, e.target.tagName, e.target.className), {capture:true}));
+  return 'listening'"
+chrome-relay click @e12
+chrome-relay console read --tab 42
+```
+
+A click that "succeeded but nothing happened" stops being a mystery.
+
+## Network
+
+```sh
+chrome-relay network read --tab 42                       # request/response metadata
+chrome-relay network read --tab 42 --url "/api/" --method POST
+chrome-relay network read --tab 42 --status failed       # buckets: ok|redirect|client_error|server_error|failed
+chrome-relay network body --tab 42 --request-id <id>     # fetch a response body on demand
+chrome-relay network har --tab 42 -o session.har         # full HAR export
+chrome-relay network clear --tab 42
+```
+
+Per-tab ring buffer (200 entries, 512 KB, metadata only — bodies fetched on demand because they're big and usually unneeded). Each entry: URL, method, status, mime, headers, timings, sizes, cache/service-worker flags.
+
+Caveat worth knowing: Chrome evicts response bodies aggressively — `network body` on a request older than ~30 seconds may fail. Read bodies soon after the request, or capture a HAR while it's fresh.
+
+## Screenshots
+
+```sh
+chrome-relay screenshot --tab 42 -o shot.png                 # background tabs fine
+chrome-relay screenshot --tab 42 --full -o page.png          # beyond the viewport
+chrome-relay screenshot --tab 42 --selector ".card" --padding 8 -o card.png
+chrome-relay screenshot --tab 42 --max-edge 800 -o small.png # downscale for vision models
+```
+
+Use [snapshots](/docs/snapshots/) to *act* and screenshots to *verify* — text is cheap, pixels are proof. Take one before anything irreversible (form submit, send, delete).
+
+## Screencast
+
+```sh
+chrome-relay screencast start --tab 42 --quality 80 --max-width 900
+chrome-relay hover @e12       # the micro-interaction you're capturing
+chrome-relay screencast stop --tab 42 --out /tmp/rec --gif
+```
+
+Paint-driven frame capture — it sees CSS transitions, fade-ins, and hover states that screenshot polling misses. Two constraints: the tab must be **active** (Chrome doesn't paint background tabs), and `--gif`/`--mp4` stitching needs ffmpeg on PATH (fails with `external_dependency_missing` if absent, or pass `--allow-missing-ffmpeg` to keep the raw frames). Consecutive identical frames are deduped by hash before stitching.
+
+## What stays on your machine
+
+All of it. Buffers live in the extension's memory, capped, per tab, dropped when the tab closes. Nothing is uploaded anywhere — there is nowhere to upload to.
+
+
+---
+
+# Workspaces & tab groups
+
+> Named Chrome windows so multiple agents work in parallel without colliding — or with you.
+
+
+One browser, several actors: you, and however many agents you've got running. Workspaces keep them out of each other's way.
+
+## Workspaces — named windows
+
+```sh
+chrome-relay workspace create research          # opens a new Chrome window, names it
+chrome-relay workspace list                     # name, windowId, tabCount, alive
+chrome-relay workspace close research
+```
+
+Every command accepts `--workspace <name>` to target the active tab *in that window*:
+
+```sh
+chrome-relay --workspace research navigate "https://example.com" --new
+chrome-relay snapshot --workspace research -i
+chrome-relay screenshot --workspace research -o out.png
+```
+
+The pattern this enables: give each agent its own workspace. Agent A drives the `research` window, agent B drives `checkout-flow`, and your own window is never touched. Since everything runs on background tabs anyway, none of them steals your focus.
+
+## Tab groups — folders inside a window
+
+```sh
+chrome-relay group create sources --color blue --tab 42   # Chrome's native colored groups
+chrome-relay group add sources --tab 43 --tab 44
+chrome-relay group list
+chrome-relay group remove sources --tab 43
+chrome-relay group close sources                          # closes the group's tabs
+```
+
+And `--group <name>` targets the active tab inside a group, same as `--workspace`.
+
+Groups are lighter than workspaces — same window, visual organization, one collapse-click for the human watching. Use workspaces for isolation between agents; use groups for organizing one agent's working set.
+
+## Targeting rules (strict on purpose)
+
+- Exactly **one** of `--tab` / `--workspace` / `--group` per command. Two at once is `target_conflict`, not a guess.
+- Subcommand-level flags override program-level ones, and the override is announced on stderr (`target_overridden`) so it's never silent.
+- [Ref](/docs/refs/) actions ignore all of this — a ref carries its own tab, and combining it with `--workspace`/`--group` is `target_conflict`.
+
+## Viewport per tab
+
+Emulation composes with all of it — each tab can hold its own device profile:
+
+```sh
+chrome-relay viewport preset iphone-14 --workspace research
+chrome-relay viewport set --width 390 --height 844 --dpr 3 --mobile --touch --tab 42
+chrome-relay viewport clear --tab 42
+```
+
+Survives navigation, cleared when the tab closes. Useful for checking responsive layouts in one window while desktop work continues in another.
+
+
+---
+
+# Error reference
+
+> Every failure is a closed-set code with structured details. Branch on the code, never regex the message.
+
+
+Every failure prints a human line plus a machine block on stderr, and exits 1:
+
+```json
+{ "relayError": {
+    "code": "stale_ref",
+    "message": "chrome_click_element: @e19 is not a known ref (...). Re-run `chrome-relay snapshot` and use a fresh ref.",
+    "tool": "chrome_click_element",
+    "phase": "resolve_ref",
+    "details": { "ref": "e19" },
+    "retryable": false } }
+```
+
+An agent that gets a string error has to regex-match prose to decide what to do next. A code is mechanical. The set is closed — these are all of them:
+
+## The codes, and what to do about each
+
+| Code | Means | Agent's move |
+|---|---|---|
+| `stale_ref` | The @ref's element is gone — navigation killed it, or the node vanished and no same-role/name replacement exists | Re-run `snapshot`, use a fresh ref. Never retry the old one |
+| `click_intercepted` | The ref resolved, but an overlay / sticky header / modal owns the click point. The click was NOT delivered | Read `details.interceptor`, dismiss it (close the modal, scroll), retry |
+| `element_not_found` | CSS selector matched nothing, or matched a zero-size/unfocusable element | Check the selector against a fresh `snapshot`; or switch to refs |
+| `target_conflict` | Two targeting modes at once (`--tab` + `--workspace`, or a ref + `--tab` pointing elsewhere) | Drop one. Refs need no target at all |
+| `target_not_found` | The tab/workspace/group doesn't exist (closed, typo) | `chrome-relay tabs` to re-orient |
+| `invalid_arguments` | Malformed input: bad CSS syntax, x-without-y, wrong types | Fix the call — the message names the field |
+| `timeout` | The operation outran its deadline | Usually the page is slow — check `console`/`network`, then retry once |
+| `cdp_error` | Chrome's debugger protocol refused (e.g. attaching to a `chrome://` page) | Some surfaces are off-limits to CDP; work in a normal tab |
+| `chrome_api_error` | A `chrome.*` extension API failed | Read the message; often a transient tab state |
+| `extension_not_connected` | The extension isn't installed/connected to the host | `chrome-relay doctor`, [installation](/docs/installation/) |
+| `native_host_disconnected` | The bridge process died mid-call | Retry once — Chrome respawns the host on demand |
+| `external_dependency_missing` | A system tool the command needs is absent (e.g. ffmpeg for `--gif`) | Install it, or pass the documented skip flag |
+| `partial_success_disallowed` | A multi-target operation could only partially apply, and you didn't opt into that | Pass `--allow-partial` if partial is acceptable; otherwise fix the failing target |
+| `unsupported_tool` | The extension doesn't know this tool — it's older than the CLI | Update the extension (`chrome://extensions` → Update) |
+| `internal_error` | A bug — something threw outside the closed set | Worth reporting. By design this should be unreachable from normal agent mistakes |
+
+## Notices (non-fatal, stderr)
+
+| Notice | Means |
+|---|---|
+| `deprecated` | You used `read`/`ax`/`click-ax` — they work, but switch to `snapshot`/refs |
+| `target_overridden` | A subcommand-level target overrode a program-level one |
+| `cli_outdated` / `extension_outdated` | Version skew across the bridge — run `chrome-relay update` or update the extension |
+
+## The design rule behind this
+
+No silent partial success, no auto-fallbacks, no "click failed" without saying which of the five things that could mean. The error is the diagnosis: `stale_ref` tells you the page moved on, `click_intercepted` hands you the interceptor's tag and node id, `invalid_arguments` names the field. An agent transcript containing the error should already contain the fix.
+
+
+---
+
+# The agent skill
+
+> A playbook your agent loads once, so it drives Chrome Relay well from the first command.
+
+
+Chrome Relay is a CLI, so any agent that can run shell commands can use it with zero integration. The skill is the difference between *can use* and *uses well* — it teaches the snapshot→ref loop, which text tool fits which editor, the fallback ladder, and the gotchas, so the agent doesn't rediscover them by failing.
+
+## Install
+
+For Claude Code / Codex-style agents with a skills directory:
+
+```sh
+npx skills add kiluazen/kstack@chrome-relay
+```
+
+Or fetch it directly — the skill lives on this site as plain markdown:
+
+```
+https://chrome-relay.kushalsm.com/skill.md
+```
+
+Agents reading this page: that URL is the canonical playbook. Load it before driving Chrome Relay.
+
+## What's in it
+
+The skill is ~120 lines of markdown. The spine:
+
+**The core loop** — see, act, see again:
+
+```sh
+chrome-relay tabs
+chrome-relay navigate "https://x.com" --new   # background tab
+chrome-relay snapshot --tab 1234 -i           # actionable elements get @refs
+chrome-relay click @e12                       # refs need no --tab
+chrome-relay fill @e14 "hello"
+chrome-relay snapshot --tab 1234 -i           # re-look after changes
+```
+
+**Ref lifetime rules** — refs survive same-page churn (healing), die on navigation (`stale_ref` → re-snapshot, never retry), refuse covered targets (`click_intercepted` → dismiss, retry).
+
+**The text-tool table** — the single highest-value piece, because text entry is where browser agents quietly fail:
+
+| Target | Tool |
+|---|---|
+| `<input>` / `<textarea>` / `<select>`, React-controlled, shadow DOM | `fill @ref` |
+| contenteditable, Draft.js, Lexical, ProseMirror | `type` (appends at caret — clear first) |
+| Submit, navigate, shortcuts | `keys` |
+| Combobox / autocomplete | `type` filter → `keys ArrowDown` → `keys Enter` |
+
+**Operational guardrails** — don't echo secrets into shell strings; screenshot before irreversible actions; a failing click is information (plant a capture-phase listener, act, read the console) — not a stop signal.
+
+## Why a skill and not an MCP server
+
+MCP tool schemas are injected into the agent's context on every turn — for browser-tool servers that's measured in thousands of tokens per turn before any work happens. A CLI costs zero until invoked, and the skill is loaded once. Same capability, none of the standing tax. This is a deliberate position, not a missing feature.
+
+## Keeping it current
+
+`chrome-relay <command> --help` is always authoritative — the skill says so itself, and agents should trust the binary over any doc, including this one. The skill's canonical source is versioned in [kstack](https://github.com/kiluazen/kstack/tree/main/skills/chrome-relay); this site's copy tracks it.
+
+
+---
+
+# vs agent-browser
+
+> Different products that look alike. Measured, with respect — and a clear rule for which to pick.
+
+
+[agent-browser](https://agent-browser.dev) is Vercel Labs' browser-automation CLI for agents. It's good — fast, token-efficient, and its snapshot/ref loop set the bar (Chrome Relay's own loop ergonomics owe it a debt, openly). If you're choosing tooling, here's the honest comparison.
+
+## The one-line difference
+
+**agent-browser gives your agent a browser. Chrome Relay gives your agent *yours*.**
+
+agent-browser downloads its own Chrome for Testing and drives it headless behind a daemon — a fresh, disposable sandbox. Chrome Relay attaches to the Chrome you're already using, with everything that implies: your logins, your extensions, your localhost, and a human sharing the browser.
+
+| | agent-browser | Chrome Relay |
+|---|---|---|
+| Browser | its own Chrome for Testing, headless by default | the one you have open |
+| Auth state | none (profile copy is a read-only snapshot) | everything you're signed into |
+| Anti-bot (Cloudflare etc.) | fingerprinted as automation, often blocked | indistinguishable from you |
+| Parallel isolated sessions | yes — its core strength | one browser; isolation via [workspaces](/docs/workspaces/) |
+| CI / headless servers | yes | no — needs a running desktop Chrome |
+| Human + agent simultaneously | n/a — the agent owns the browser | yes — background tabs, no focus stealing |
+| Attach to a real Chrome | via `--cdp` debug port (requires relaunching Chrome; port exposes everything to localhost) | native: extension + native messaging, no relaunch, Chrome-gated |
+
+We tested both on the same machine, same minute, same URL: agent-browser's Chrome saw logged-out Hacker News; Chrome Relay saw a logged-in session. Every page behind auth only exists in one of those worlds.
+
+## The ergonomics are now comparable
+
+The historical knock on real-browser bridges was clunky loops. Measured today, same page (HN front page):
+
+| | agent-browser | Chrome Relay |
+|---|---|---|
+| Interactive snapshot | 13.5 KB | 14.3 KB |
+| Act on an element | `click @e12` | `click @e12` |
+| Click round-trip | ~40 ms | ~150 ms |
+
+The remaining latency gap is Node process startup vs a Rust binary — real, and irrelevant next to LLM turn time. Two places Chrome Relay's loop goes further:
+
+- **Refs heal.** agent-browser's refs go stale on any DOM change, and its docs tell agents to re-snapshot constantly — a real-world migration measured ~30% of turns burned on re-snapshots. Chrome Relay refs survive same-page churn via a role/name re-find that writes the fix back; they die only on [real navigation](/docs/refs/), loudly.
+- **Refs are tab-safe under a human.** In a browser only the agent uses, "active tab" is unambiguous. In *your* browser it's whatever you're reading — so Chrome Relay refs carry their tab, and a bare `click @e12` can never land in your inbox.
+
+agent-browser counters with breadth Chrome Relay doesn't have: built-in `wait` primitives, snapshot diffs, batch execution, video, traces, proxies, cloud-provider backends. If you need those today, that's a real reason to pick it.
+
+## The rule
+
+- **E2E tests, CI, scraping, parallel fleets, no auth needed** → agent-browser (or Playwright). The sandbox is the feature.
+- **Operating apps you're signed into, debugging your own logged-in product, anything behind SSO or Cloudflare, working alongside the agent** → Chrome Relay. The real browser is the feature.
+
+They compose, too: plenty of workflows scrape with a sandbox and act with the real browser. Nothing about installing one precludes the other.

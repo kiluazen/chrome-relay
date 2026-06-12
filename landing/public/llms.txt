@@ -1,0 +1,24 @@
+# Chrome Relay
+
+> A local bridge between coding agents and the user's real Chrome — the session that already has cookies, SSO, extensions, and localhost. CLI → localhost HTTP → native messaging host → Chrome extension → CDP. Nothing leaves the machine.
+
+## Docs
+- [Chrome Relay docs](https://chrome-relay.kushalsm.com/docs/index.md): A local bridge between your coding agent and the Chrome you already have open. Nothing leaves the machine.
+- [Installation](https://chrome-relay.kushalsm.com/docs/installation.md): Two pieces — the Chrome extension and the CLI. One command wires them together.
+- [Quickstart](https://chrome-relay.kushalsm.com/docs/quickstart.md): The snapshot → ref → act loop, end to end, with real output.
+- [Why your real Chrome](https://chrome-relay.kushalsm.com/docs/why-your-real-chrome.md): Automation browsers give your agent a browser. Chrome Relay gives it yours — and that difference is the whole product.
+- [Architecture](https://chrome-relay.kushalsm.com/docs/architecture.md): Five hops, each with one job. Why the extension route is the only safe way into a running Chrome.
+- [Snapshots](https://chrome-relay.kushalsm.com/docs/snapshots.md): One command turns a page into ~1–15 KB of text where every actionable element has a handle.
+- [Refs](https://chrome-relay.kushalsm.com/docs/refs.md): "@eN handles that carry their own tab, heal across DOM churn, and refuse to click through overlays."
+- [Clicking strategies](https://chrome-relay.kushalsm.com/docs/clicking.md): Three addressing modes, each with a distinct failure mode. Pick by what the page gives you.
+- [Command reference](https://chrome-relay.kushalsm.com/docs/commands.md): Every command, its flags, and an example. `--help` on any command is always authoritative.
+- [Observability](https://chrome-relay.kushalsm.com/docs/observability.md): Console, network, screenshots, screencast — what the page did, not just what it looks like.
+- [Workspaces & tab groups](https://chrome-relay.kushalsm.com/docs/workspaces.md): Named Chrome windows so multiple agents work in parallel without colliding — or with you.
+- [Error reference](https://chrome-relay.kushalsm.com/docs/errors.md): Every failure is a closed-set code with structured details. Branch on the code, never regex the message.
+- [The agent skill](https://chrome-relay.kushalsm.com/docs/skill.md): A playbook your agent loads once, so it drives Chrome Relay well from the first command.
+- [vs agent-browser](https://chrome-relay.kushalsm.com/docs/vs-agent-browser.md): Different products that look alike. Measured, with respect — and a clear rule for which to pick.
+
+## Install
+- [Agent skill](https://chrome-relay.kushalsm.com/skill.md): the playbook agents load to drive Chrome Relay
+- CLI: `pnpm add -g chrome-relay && chrome-relay install`
+- Extension: https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb

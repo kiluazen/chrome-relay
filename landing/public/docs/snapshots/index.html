@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Snapshots | Chrome Relay</title>
+<meta name="description" content="One command turns a page into ~1–15 KB of text where every actionable element has a handle." />
+<meta property="og:title" content="Snapshots | Chrome Relay" />
+<meta property="og:description" content="One command turns a page into ~1–15 KB of text where every actionable element has a handle." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/snapshots/" />
+<link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/snapshots/" />
+<link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/snapshots.md" title="Markdown version" />
+<link rel="icon" type="image/png" href="/icon-128.png" />
+<style>
+:root {
+  color-scheme: light;
+  --paper: #f7f3e8; --ink: #181818; --muted: #58544c; --line: #d6d0c2;
+  --panel: #fffdf6; --green: #1f7a4d; --green-soft: #e6f2eb;
+}
+* { box-sizing: border-box; }
+html { background: var(--paper); }
+body {
+  margin: 0; color: var(--ink); line-height: 1.6; font-size: 16px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.bg-art {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: url('/bg.jpg') center/cover no-repeat;
+  opacity: 0.12; filter: saturate(0.25) contrast(0.4) brightness(1.7);
+}
+a { color: inherit; }
+.nav {
+  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 0;
+}
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; }
+.brand img { width: 32px; height: 32px; border-radius: 8px; }
+.nav-links { display: flex; gap: 18px; font-size: 14.5px; }
+.nav-links a { text-decoration: none; color: var(--muted); font-weight: 550; }
+.nav-links a:hover { color: var(--ink); }
+.layout {
+  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding: 12px 0 90px;
+}
+.sidebar { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+.sidebar a {
+  display: block; padding: 5px 10px; text-decoration: none; color: var(--muted);
+  border-left: 2px solid transparent; border-radius: 0 6px 6px 0;
+}
+.sidebar a:hover { color: var(--ink); }
+.sidebar a.active { color: var(--green); border-left-color: var(--green); background: var(--green-soft); font-weight: 600; }
+.sidebar .group { margin: 14px 0 4px; padding-left: 10px; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); opacity: 0.75; }
+main { max-width: 760px; min-width: 0; }
+main h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin: 10px 0 6px; }
+.page-desc { color: var(--muted); margin: 0 0 28px; font-size: 17px; }
+main h2 { font-size: 22px; margin: 42px 0 10px; letter-spacing: -0.01em; }
+main h3 { font-size: 17px; margin: 28px 0 8px; }
+main p, main li { color: #2a2722; }
+main hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
+code {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.86em;
+  background: #ece7d9; padding: 2px 6px; border-radius: 5px;
+}
+pre {
+  background: #14120e; color: #e8e2d6; border-radius: 10px;
+  padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.55;
+  border: 1px solid #2a2620;
+}
+pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14.5px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--ink); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:first-child code, td:first-child { white-space: nowrap; }
+td:first-child { font-weight: 600; }
+blockquote {
+  margin: 18px 0; padding: 12px 18px; border-left: 3px solid var(--green);
+  background: var(--green-soft); border-radius: 0 8px 8px 0;
+}
+blockquote p { margin: 0; }
+.md-link { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.md-link a { color: var(--green); }
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; font-size: 14.5px; }
+.pager a { text-decoration: none; color: var(--green); font-weight: 600; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.footer { width: min(1240px, calc(100% - 56px)); margin: 0 auto; display: flex; justify-content: space-between; padding: 26px 0 40px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+.footer a { color: var(--muted); }
+@media (max-width: 880px) {
+  .layout { grid-template-columns: 1fr; gap: 8px; }
+  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .sidebar .group { display: none; }
+  .sidebar a { border-left: 0; border-radius: 6px; }
+}
+</style>
+</head>
+<body>
+<div class="bg-art" aria-hidden="true"></div>
+<nav class="nav" aria-label="Primary">
+  <a class="brand" href="/"><img src="/icon-128.png" alt="" /><span>Chrome Relay</span></a>
+  <div class="nav-links">
+    <a href="/docs/">Docs</a>
+    <a href="https://github.com/kiluazen/chrome-relay">GitHub</a>
+    <a href="https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb">Chrome Web Store</a>
+  </div>
+</nav>
+<div class="layout">
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/" class="active">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Positioning</div><a href="/docs/vs-agent-browser/">vs agent-browser</a></aside>
+  <main>
+    <h1>Snapshots</h1>
+    <p class="page-desc">One command turns a page into ~1–15 KB of text where every actionable element has a handle.</p>
+    <pre><code class="language-sh">chrome-relay snapshot --tab &lt;id&gt; -i
+</code></pre>
+<pre><code>Page: Hacker News
+URL: https://news.ycombinator.com/
+Tab: 460154464
+
+- link &quot;Hacker News&quot; [ref=e4]
+- textbox &quot;Search&quot; [ref=e41]: current value
+- checkbox &quot;Remember me&quot; [checked, ref=e42]
+- cell &quot;1.&quot; [ref=e16]
+  - link &quot;MiMo Code Is Now Released and Open-Source&quot; [ref=e19]
+- clickable &quot;Open card&quot; [ref=e88]
+</code></pre>
+<p>Agents pay context tokens for every byte a tool prints, so the snapshot format exists to be small. Measured: the HN front page is <strong>14 KB</strong> with <code>-i</code> (the DOM is 599 KB; the old JSON reader was 61 KB). A typical app view is 1–5 KB.</p>
+<h2>The grammar</h2>
+<p>One line per node, indented to tree depth:</p>
+<pre><code>- {role} &quot;{name}&quot; [{attrs}]: {value}
+</code></pre>
+<ul>
+<li><code>role</code> — from the accessibility tree: <code>link</code>, <code>button</code>, <code>textbox</code>, <code>heading</code>, <code>cell</code>…</li>
+<li><code>name</code> — what a screen reader would announce. Quoted, escaped.</li>
+<li>attrs, in order: <code>level=N</code>, <code>checked</code>/<code>checked=false</code>/<code>checked=mixed</code>, <code>expanded</code>, <code>selected</code>, <code>disabled</code>, <code>required</code>, <code>readonly</code>, <code>pressed</code>, <code>ref=eN</code>, <code>url=…</code> (with <code>-u</code>)</li>
+<li><code>: value</code> — current input value, only when it differs from the name. A form readback is free with the snapshot; no second round-trip to ask &quot;what does the field say now?&quot;</li>
+</ul>
+<h2>What gets a ref</h2>
+<p>Refs are handles you can <a href="/docs/refs/">act on</a>. Three kinds of node earn one:</p>
+<ol>
+<li><strong>Interactive roles</strong> — button, link, textbox, checkbox, combobox, menuitem, tab, … always, even unnamed.</li>
+<li><strong>Named content roles</strong> — heading, cell, listitem, img, dialog … only when they have a name (an anonymous heading is noise).</li>
+<li><strong>Cursor-interactive sweep finds</strong> — see below.</li>
+</ol>
+<p>Anonymous structural nodes (layout divs, unnamed containers) collapse: their children promote up a level. That&#39;s most of why the output is small.</p>
+<h2>The sweep — catching div-soup</h2>
+<p>The accessibility tree only knows what page authors told it. Modern Tailwind-style SPAs are full of clickable <code>&lt;div&gt;</code>s and <code>&lt;span&gt;</code>s with no role: measured on a real app, one email-list view had <strong>37 clickable elements the AX tree couldn&#39;t see at all</strong> (cursor-pointer rows, dates, sender names). A well-built dashboard (Cloudflare&#39;s, measured) had zero.</p>
+<p>So every snapshot also runs a one-pass sweep for elements that <em>behave</em> clickable — <code>cursor: pointer</code>, <code>onclick</code>, <code>tabindex</code>, <code>contenteditable</code> — deduplicated to the topmost clickable (cursor inherits; you want the row, not its twelve children). They appear as:</p>
+<pre><code>- clickable &quot;sylvain@zerolooplabs.dev&quot; [ref=e704]
+</code></pre>
+<p>Same refs, same actions. Without the sweep, &quot;interactive only&quot; filtering would silently hide real targets — that was the dealbreaker that decided this design.</p>
+<h2>Flags</h2>
+<pre><code class="language-sh">chrome-relay snapshot --tab &lt;id&gt;             # full tree
+chrome-relay snapshot --tab &lt;id&gt; -i          # ref-bearing elements only (use this)
+chrome-relay snapshot --tab &lt;id&gt; -d 3        # cap depth
+chrome-relay snapshot --tab &lt;id&gt; -s &quot;#main&quot;  # scope to a CSS subtree — refs outside it are never issued
+chrome-relay snapshot --tab &lt;id&gt; -u          # include link hrefs as url= attrs
+chrome-relay snapshot --tab &lt;id&gt; --json      # structured envelope: { title, url, tabId, nodes, refs }
+</code></pre>
+<p><code>--json</code> includes the full refs map — each ref&#39;s <code>backendNodeId</code>, role, name — for programmatic callers. The text form is for reading; the JSON form is for building on.</p>
+<h2>Frames and shadow DOM</h2>
+<ul>
+<li><strong>Shadow DOM: pierced.</strong> The accessibility tree sees through shadow roots, so web-component internals get refs that <code>querySelector</code> could never reach. (Pinned by an e2e test: a <code>&lt;input&gt;</code> inside a shadow root gets a ref, and <code>fill @ref</code> writes through the boundary.)</li>
+<li><strong>Same-process iframes: included</strong> — they appear in the tab&#39;s AX tree.</li>
+<li><strong>Cross-origin iframes: not yet.</strong> Snapshot is top-frame scoped for OOPIFs. Coordinate clicks still land in them (input is dispatched at page level); ref/selector addressing doesn&#39;t. Stated limitation, on the roadmap.</li>
+</ul>
+<h2>Deprecated: <code>read</code> and <code>ax</code></h2>
+<p>Earlier versions had two separate readers (<code>read</code> = DOM walk with CSS selectors, <code>ax</code> = accessibility tree with its own id space). Both are now aliases for <code>snapshot</code> and print a deprecation notice; they&#39;ll be removed. If you have scripts parsing the old shapes, switch to <code>snapshot --json</code>.</p>
+
+    <div class="pager"><span><a href="/docs/architecture/">← Architecture</a></span><span><a href="/docs/refs/"> Refs</a>→</span></div>
+    <p class="md-link">Agents: this page as <a href="https://chrome-relay.kushalsm.com/docs/snapshots.md">plain markdown</a> · all docs in <a href="/llms.txt">/llms.txt</a></p>
+  </main>
+</div>
+<footer class="footer">
+  <a href="https://kushalsm.com">kushalsm.com</a>
+  <div><a href="/privacy/">Privacy</a> · <a href="/support/">Support</a></div>
+</footer>
+</body>
+</html>

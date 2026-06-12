@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Architecture | Chrome Relay</title>
+<meta name="description" content="Five hops, each with one job. Why the extension route is the only safe way into a running Chrome." />
+<meta property="og:title" content="Architecture | Chrome Relay" />
+<meta property="og:description" content="Five hops, each with one job. Why the extension route is the only safe way into a running Chrome." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/architecture/" />
+<link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/architecture/" />
+<link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/architecture.md" title="Markdown version" />
+<link rel="icon" type="image/png" href="/icon-128.png" />
+<style>
+:root {
+  color-scheme: light;
+  --paper: #f7f3e8; --ink: #181818; --muted: #58544c; --line: #d6d0c2;
+  --panel: #fffdf6; --green: #1f7a4d; --green-soft: #e6f2eb;
+}
+* { box-sizing: border-box; }
+html { background: var(--paper); }
+body {
+  margin: 0; color: var(--ink); line-height: 1.6; font-size: 16px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.bg-art {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: url('/bg.jpg') center/cover no-repeat;
+  opacity: 0.12; filter: saturate(0.25) contrast(0.4) brightness(1.7);
+}
+a { color: inherit; }
+.nav {
+  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 0;
+}
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; }
+.brand img { width: 32px; height: 32px; border-radius: 8px; }
+.nav-links { display: flex; gap: 18px; font-size: 14.5px; }
+.nav-links a { text-decoration: none; color: var(--muted); font-weight: 550; }
+.nav-links a:hover { color: var(--ink); }
+.layout {
+  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding: 12px 0 90px;
+}
+.sidebar { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+.sidebar a {
+  display: block; padding: 5px 10px; text-decoration: none; color: var(--muted);
+  border-left: 2px solid transparent; border-radius: 0 6px 6px 0;
+}
+.sidebar a:hover { color: var(--ink); }
+.sidebar a.active { color: var(--green); border-left-color: var(--green); background: var(--green-soft); font-weight: 600; }
+.sidebar .group { margin: 14px 0 4px; padding-left: 10px; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); opacity: 0.75; }
+main { max-width: 760px; min-width: 0; }
+main h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin: 10px 0 6px; }
+.page-desc { color: var(--muted); margin: 0 0 28px; font-size: 17px; }
+main h2 { font-size: 22px; margin: 42px 0 10px; letter-spacing: -0.01em; }
+main h3 { font-size: 17px; margin: 28px 0 8px; }
+main p, main li { color: #2a2722; }
+main hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
+code {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.86em;
+  background: #ece7d9; padding: 2px 6px; border-radius: 5px;
+}
+pre {
+  background: #14120e; color: #e8e2d6; border-radius: 10px;
+  padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.55;
+  border: 1px solid #2a2620;
+}
+pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14.5px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--ink); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:first-child code, td:first-child { white-space: nowrap; }
+td:first-child { font-weight: 600; }
+blockquote {
+  margin: 18px 0; padding: 12px 18px; border-left: 3px solid var(--green);
+  background: var(--green-soft); border-radius: 0 8px 8px 0;
+}
+blockquote p { margin: 0; }
+.md-link { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.md-link a { color: var(--green); }
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; font-size: 14.5px; }
+.pager a { text-decoration: none; color: var(--green); font-weight: 600; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.footer { width: min(1240px, calc(100% - 56px)); margin: 0 auto; display: flex; justify-content: space-between; padding: 26px 0 40px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+.footer a { color: var(--muted); }
+@media (max-width: 880px) {
+  .layout { grid-template-columns: 1fr; gap: 8px; }
+  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .sidebar .group { display: none; }
+  .sidebar a { border-left: 0; border-radius: 6px; }
+}
+</style>
+</head>
+<body>
+<div class="bg-art" aria-hidden="true"></div>
+<nav class="nav" aria-label="Primary">
+  <a class="brand" href="/"><img src="/icon-128.png" alt="" /><span>Chrome Relay</span></a>
+  <div class="nav-links">
+    <a href="/docs/">Docs</a>
+    <a href="https://github.com/kiluazen/chrome-relay">GitHub</a>
+    <a href="https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb">Chrome Web Store</a>
+  </div>
+</nav>
+<div class="layout">
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/" class="active">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Positioning</div><a href="/docs/vs-agent-browser/">vs agent-browser</a></aside>
+  <main>
+    <h1>Architecture</h1>
+    <p class="page-desc">Five hops, each with one job. Why the extension route is the only safe way into a running Chrome.</p>
+    <pre><code>agent (any shell)
+  → chrome-relay CLI            parses args, renders output
+  → HTTP, 127.0.0.1:12122       localhost-only bridge (Fastify)
+  → native messaging host       long-lived Node process, spawned by Chrome
+  → extension service worker    tool handlers, ref map, buffers
+  → chrome.debugger (CDP)       trusted input, snapshots, capture
+  → your tabs
+</code></pre>
+<p>Every hop is local. The wire format is one JSON envelope per call: <code>{ name, args }</code> in, <code>{ ok, data } | { ok: false, errorDetails }</code> out.</p>
+<h2>Why not <code>--remote-debugging-port</code>?</h2>
+<p>The standard way tools attach to a real Chrome is launching it with a CDP debug port. Two problems:</p>
+<ol>
+<li><strong>You have to relaunch Chrome.</strong> Your running session — every tab, every WebSocket, every half-written form — dies so the flag can take effect.</li>
+<li><strong>The port is a skeleton key.</strong> Anything on your machine that can reach <code>localhost:9222</code> gets the full protocol: read any cookie, open any URL, in every profile window. No permission prompt, no scoping.</li>
+</ol>
+<p>The extension + native-messaging route inverts both. It attaches to the <em>already running</em> browser, and the only process that can talk to the extension is the one binary whitelisted in the native-messaging manifest — a file Chrome itself verifies. The browser&#39;s own permission model is the gate.</p>
+<p>The cost is more moving parts (install registers the host; the extension must be present). <code>chrome-relay doctor</code> exists because of that cost.</p>
+<h2>What lives where</h2>
+<table>
+<thead>
+<tr>
+<th>Piece</th>
+<th>Owns</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>CLI</strong> (<code>chrome-relay</code>, npm)</td>
+<td>argument parsing, output rendering (snapshot text, JSON), exit codes. Stateless — every invocation is one HTTP call.</td>
+</tr>
+<tr>
+<td><strong>Protocol</strong> (bundled into the CLI)</td>
+<td>tool names, argument schemas, error codes, the snapshot renderer. One source of truth both ends import.</td>
+</tr>
+<tr>
+<td><strong>Native host</strong></td>
+<td>spawned by Chrome on the extension&#39;s <code>connectNative()</code>; runs the localhost HTTP server; relays frames. No logic.</td>
+</tr>
+<tr>
+<td><strong>Extension</strong></td>
+<td>everything that touches the browser: the <a href="/docs/refs/">ref map</a>, the <a href="/docs/snapshots/">snapshot builder</a>, per-tab console/network ring buffers, CDP sessions, trusted input dispatch.</td>
+</tr>
+</tbody></table>
+<h2>Security model</h2>
+<ul>
+<li><strong>Localhost only.</strong> The bridge binds <code>127.0.0.1</code>. It also rejects requests carrying a browser <code>Origin</code> header, so a web page you visit can&#39;t script your own bridge.</li>
+<li><strong>No cloud, no account, no telemetry.</strong> There is nothing to sign into and nowhere for your data to go. The extension&#39;s only outbound channel is native messaging to your own machine.</li>
+<li><strong>Chrome-verified pairing.</strong> The native-messaging manifest whitelists exact extension IDs; Chrome enforces it in both directions.</li>
+<li><strong>One trust decision.</strong> Installing Chrome Relay means: processes on my machine that can run <code>chrome-relay</code> may drive my browser. That&#39;s the honest statement of the model — the same trust you extend to anything you <code>npm i -g</code>. If your threat model can&#39;t accept it, use a sandboxed browser instead (<a href="/docs/why-your-real-chrome/">when not to use this</a>).</li>
+</ul>
+<h2>Trusted input, specifically</h2>
+<p>Clicks and keys go through CDP <code>Input.dispatchMouseEvent</code> / <code>dispatchKeyEvent</code>, so the page receives <code>isTrusted: true</code> events with <code>pointerType: &quot;mouse&quot;</code> — indistinguishable from a human. This matters on real apps: React-Aria/Radix widgets listen for pointer events and ignore synthetic <code>.click()</code>; login and payment flows gate on trusted events. JS-side <code>.click()</code> is available via <code>chrome-relay js</code> when you want it, but it&#39;s the fallback, not the path.</p>
+<h2>Background tabs that act foregrounded</h2>
+<p>Chrome throttles and hides backgrounded tabs (<code>document.hidden</code>, paused rAF, visibility events). The extension patches visibility APIs on relay-driven tabs so pages behave normally while the agent works and you keep your focus elsewhere. The one hard limit: Chrome doesn&#39;t <em>paint</em> background tabs, so <code>screencast</code> (video capture) needs the tab active — screenshots don&#39;t.</p>
+
+    <div class="pager"><span><a href="/docs/why-your-real-chrome/">← Why your real Chrome</a></span><span><a href="/docs/snapshots/"> Snapshots</a>→</span></div>
+    <p class="md-link">Agents: this page as <a href="https://chrome-relay.kushalsm.com/docs/architecture.md">plain markdown</a> · all docs in <a href="/llms.txt">/llms.txt</a></p>
+  </main>
+</div>
+<footer class="footer">
+  <a href="https://kushalsm.com">kushalsm.com</a>
+  <div><a href="/privacy/">Privacy</a> · <a href="/support/">Support</a></div>
+</footer>
+</body>
+</html>

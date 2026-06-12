@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Command reference | Chrome Relay</title>
+<meta name="description" content="Every command, its flags, and an example. `--help` on any command is always authoritative." />
+<meta property="og:title" content="Command reference | Chrome Relay" />
+<meta property="og:description" content="Every command, its flags, and an example. `--help` on any command is always authoritative." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/commands/" />
+<link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/commands/" />
+<link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/commands.md" title="Markdown version" />
+<link rel="icon" type="image/png" href="/icon-128.png" />
+<style>
+:root {
+  color-scheme: light;
+  --paper: #f7f3e8; --ink: #181818; --muted: #58544c; --line: #d6d0c2;
+  --panel: #fffdf6; --green: #1f7a4d; --green-soft: #e6f2eb;
+}
+* { box-sizing: border-box; }
+html { background: var(--paper); }
+body {
+  margin: 0; color: var(--ink); line-height: 1.6; font-size: 16px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.bg-art {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: url('/bg.jpg') center/cover no-repeat;
+  opacity: 0.12; filter: saturate(0.25) contrast(0.4) brightness(1.7);
+}
+a { color: inherit; }
+.nav {
+  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 0;
+}
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; }
+.brand img { width: 32px; height: 32px; border-radius: 8px; }
+.nav-links { display: flex; gap: 18px; font-size: 14.5px; }
+.nav-links a { text-decoration: none; color: var(--muted); font-weight: 550; }
+.nav-links a:hover { color: var(--ink); }
+.layout {
+  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding: 12px 0 90px;
+}
+.sidebar { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+.sidebar a {
+  display: block; padding: 5px 10px; text-decoration: none; color: var(--muted);
+  border-left: 2px solid transparent; border-radius: 0 6px 6px 0;
+}
+.sidebar a:hover { color: var(--ink); }
+.sidebar a.active { color: var(--green); border-left-color: var(--green); background: var(--green-soft); font-weight: 600; }
+.sidebar .group { margin: 14px 0 4px; padding-left: 10px; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); opacity: 0.75; }
+main { max-width: 760px; min-width: 0; }
+main h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin: 10px 0 6px; }
+.page-desc { color: var(--muted); margin: 0 0 28px; font-size: 17px; }
+main h2 { font-size: 22px; margin: 42px 0 10px; letter-spacing: -0.01em; }
+main h3 { font-size: 17px; margin: 28px 0 8px; }
+main p, main li { color: #2a2722; }
+main hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
+code {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.86em;
+  background: #ece7d9; padding: 2px 6px; border-radius: 5px;
+}
+pre {
+  background: #14120e; color: #e8e2d6; border-radius: 10px;
+  padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.55;
+  border: 1px solid #2a2620;
+}
+pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14.5px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--ink); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:first-child code, td:first-child { white-space: nowrap; }
+td:first-child { font-weight: 600; }
+blockquote {
+  margin: 18px 0; padding: 12px 18px; border-left: 3px solid var(--green);
+  background: var(--green-soft); border-radius: 0 8px 8px 0;
+}
+blockquote p { margin: 0; }
+.md-link { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.md-link a { color: var(--green); }
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; font-size: 14.5px; }
+.pager a { text-decoration: none; color: var(--green); font-weight: 600; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.footer { width: min(1240px, calc(100% - 56px)); margin: 0 auto; display: flex; justify-content: space-between; padding: 26px 0 40px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+.footer a { color: var(--muted); }
+@media (max-width: 880px) {
+  .layout { grid-template-columns: 1fr; gap: 8px; }
+  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .sidebar .group { display: none; }
+  .sidebar a { border-left: 0; border-radius: 6px; }
+}
+</style>
+</head>
+<body>
+<div class="bg-art" aria-hidden="true"></div>
+<nav class="nav" aria-label="Primary">
+  <a class="brand" href="/"><img src="/icon-128.png" alt="" /><span>Chrome Relay</span></a>
+  <div class="nav-links">
+    <a href="/docs/">Docs</a>
+    <a href="https://github.com/kiluazen/chrome-relay">GitHub</a>
+    <a href="https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb">Chrome Web Store</a>
+  </div>
+</nav>
+<div class="layout">
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/" class="active">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Positioning</div><a href="/docs/vs-agent-browser/">vs agent-browser</a></aside>
+  <main>
+    <h1>Command reference</h1>
+    <p class="page-desc">Every command, its flags, and an example. `--help` on any command is always authoritative.</p>
+    <p>Global targeting: most commands accept <code>-t/--tab &lt;id&gt;</code>, <code>--workspace &lt;name&gt;</code>, or <code>--group &lt;name&gt;</code> (exactly one). With none, the active tab is used — except ref actions, which target the ref&#39;s own tab.</p>
+<h2>See the browser</h2>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>tabs</code></td>
+<td>List all windows and tabs with ids, titles, URLs</td>
+</tr>
+<tr>
+<td><code>switch &lt;tabId&gt;</code></td>
+<td>Activate a tab (steals focus — that&#39;s its job)</td>
+</tr>
+<tr>
+<td><code>close &lt;tabIds...&gt;</code></td>
+<td>Close tabs</td>
+</tr>
+</tbody></table>
+<h2>Navigate</h2>
+<pre><code class="language-sh">chrome-relay navigate &quot;https://example.com&quot; --new        # background tab (default for --new)
+chrome-relay navigate &quot;https://example.com&quot; --new --active  # foreground
+chrome-relay navigate &quot;https://example.com&quot; --tab 42     # retarget an existing tab
+</code></pre>
+<h2>Read the page</h2>
+<pre><code class="language-sh">chrome-relay snapshot --tab 42 -i        # the way — see /docs/snapshots/
+chrome-relay snapshot --tab 42 -i -s &quot;#main&quot; -d 3 -u --json
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>-i, --interactive</code></td>
+<td>only ref-bearing elements</td>
+</tr>
+<tr>
+<td><code>-d, --depth &lt;n&gt;</code></td>
+<td>truncate tree depth</td>
+</tr>
+<tr>
+<td><code>-s, --scope &lt;css&gt;</code></td>
+<td>subtree of the first match; refs outside it are never issued</td>
+</tr>
+<tr>
+<td><code>-u, --urls</code></td>
+<td>include link hrefs</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>structured <code>{ title, url, tabId, nodes, refs }</code></td>
+</tr>
+</tbody></table>
+<p><code>read</code> / <code>ax</code> are deprecated aliases for <code>snapshot</code>.</p>
+<h2>Act</h2>
+<pre><code class="language-sh">chrome-relay click @e12                          # ref (preferred)
+chrome-relay click &#39;button.save&#39; --tab 42        # CSS selector
+chrome-relay click --x 540 --y 320 --tab 42      # coordinates
+chrome-relay fill @e14 &quot;value&quot;                   # input/textarea/select — atomic write
+chrome-relay type &quot;text&quot; -s @e7                  # contenteditable/Lexical — trusted insertText
+chrome-relay keys &quot;Cmd+K&quot; --tab 42               # single key or chord
+chrome-relay hover @e3                           # pointer move only; fires :hover
+chrome-relay click-ax --node 4837 --tab 42       # deprecated — raw backendNodeId
+</code></pre>
+<h2>Evaluate JavaScript</h2>
+<pre><code class="language-sh">chrome-relay js --tab 42 &quot;return document.title&quot;
+chrome-relay js --tab 42 &quot;const r = await fetch(&#39;/api/me&#39;); return await r.json()&quot;
+</code></pre>
+<p>MAIN world, async IIFE, top-level <code>await</code> works, <code>return</code> sends the value back. Page globals and framework internals are reachable.</p>
+<h2>Capture</h2>
+<pre><code class="language-sh">chrome-relay screenshot --tab 42 -o out.png            # works on background tabs
+chrome-relay screenshot --tab 42 --full -o page.png    # beyond the viewport
+chrome-relay screenshot --tab 42 --selector &quot;header&quot; --padding 8 -o hdr.png
+chrome-relay screenshot --tab 42 --bbox 0,0,1280,80 -o region.png
+chrome-relay screenshot --tab 42 --max-edge 800 -o small.png
+</code></pre>
+<p>Region screenshots are ~10× cheaper in tokens than full-tab when you only need one component.</p>
+<pre><code class="language-sh">chrome-relay screencast start --tab 42 --quality 80 --max-width 900
+# ...drive the interaction...
+chrome-relay screencast stop --tab 42 --out /tmp/rec --gif
+</code></pre>
+<p>Paint-driven recording (catches CSS transitions and hover states). Requires the tab to be <strong>active</strong> — Chrome doesn&#39;t paint background tabs. With <code>--gif</code>/<code>--mp4</code> and ffmpeg on PATH, frames get stitched; consecutive identical frames are deduped.</p>
+<h2>Observe</h2>
+<pre><code class="language-sh">chrome-relay console read --tab 42 --level error,warn
+chrome-relay network read --tab 42 --status failed
+chrome-relay network body --tab 42 --request-id &lt;id&gt;
+chrome-relay network har --tab 42 -o session.har
+</code></pre>
+<p>Per-tab ring buffers, last 200 entries each. Details: <a href="/docs/observability/">Observability</a>.</p>
+<h2>Emulate</h2>
+<pre><code class="language-sh">chrome-relay viewport preset iphone-14 --tab 42
+chrome-relay viewport set --width 390 --height 844 --dpr 3 --mobile --touch --tab 42
+chrome-relay viewport clear --tab 42
+chrome-relay viewport list
+</code></pre>
+<h2>Multi-agent</h2>
+<pre><code class="language-sh">chrome-relay workspace create hypothesis-1     # a named Chrome window
+chrome-relay --workspace hypothesis-1 navigate &quot;https://example.com&quot; --new
+chrome-relay group create research --color blue --tab 42   # native tab groups
+</code></pre>
+<p>Details: <a href="/docs/workspaces/">Workspaces</a>.</p>
+<h2>Maintain</h2>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Does</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>install</code></td>
+<td>register the native host for every detected browser</td>
+</tr>
+<tr>
+<td><code>doctor</code></td>
+<td>validate the whole chain end to end</td>
+</tr>
+<tr>
+<td><code>update</code></td>
+<td>update the CLI, print what changed (JSON)</td>
+</tr>
+<tr>
+<td><code>release-notes --since &lt;ver&gt;</code></td>
+<td>the changelog, agent-readable</td>
+</tr>
+<tr>
+<td><code>self-reload</code></td>
+<td>restart the extension service worker (dev loop)</td>
+</tr>
+<tr>
+<td><code>call &lt;tool&gt; [json]</code></td>
+<td>raw pass-through to any internal tool</td>
+</tr>
+</tbody></table>
+<h2>Output contract</h2>
+<p>Success prints JSON (or snapshot text) on stdout. Failure prints a human line plus a machine block on stderr and exits 1:</p>
+<pre><code class="language-json">{ &quot;relayError&quot;: { &quot;code&quot;: &quot;stale_ref&quot;, &quot;message&quot;: &quot;...&quot;, &quot;tool&quot;: &quot;chrome_click_element&quot;, &quot;details&quot;: {} } }
+</code></pre>
+<p>Branch on <code>code</code>. The full list: <a href="/docs/errors/">Errors</a>.</p>
+
+    <div class="pager"><span><a href="/docs/clicking/">← Clicking</a></span><span><a href="/docs/observability/"> Observability</a>→</span></div>
+    <p class="md-link">Agents: this page as <a href="https://chrome-relay.kushalsm.com/docs/commands.md">plain markdown</a> · all docs in <a href="/llms.txt">/llms.txt</a></p>
+  </main>
+</div>
+<footer class="footer">
+  <a href="https://kushalsm.com">kushalsm.com</a>
+  <div><a href="/privacy/">Privacy</a> · <a href="/support/">Support</a></div>
+</footer>
+</body>
+</html>

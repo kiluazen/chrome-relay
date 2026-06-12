@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Refs | Chrome Relay</title>
+<meta name="description" content=""@eN handles that carry their own tab, heal across DOM churn, and refuse to click through overlays."" />
+<meta property="og:title" content="Refs | Chrome Relay" />
+<meta property="og:description" content=""@eN handles that carry their own tab, heal across DOM churn, and refuse to click through overlays."" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/refs/" />
+<link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/refs/" />
+<link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/refs.md" title="Markdown version" />
+<link rel="icon" type="image/png" href="/icon-128.png" />
+<style>
+:root {
+  color-scheme: light;
+  --paper: #f7f3e8; --ink: #181818; --muted: #58544c; --line: #d6d0c2;
+  --panel: #fffdf6; --green: #1f7a4d; --green-soft: #e6f2eb;
+}
+* { box-sizing: border-box; }
+html { background: var(--paper); }
+body {
+  margin: 0; color: var(--ink); line-height: 1.6; font-size: 16px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.bg-art {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: url('/bg.jpg') center/cover no-repeat;
+  opacity: 0.12; filter: saturate(0.25) contrast(0.4) brightness(1.7);
+}
+a { color: inherit; }
+.nav {
+  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 0;
+}
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; }
+.brand img { width: 32px; height: 32px; border-radius: 8px; }
+.nav-links { display: flex; gap: 18px; font-size: 14.5px; }
+.nav-links a { text-decoration: none; color: var(--muted); font-weight: 550; }
+.nav-links a:hover { color: var(--ink); }
+.layout {
+  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding: 12px 0 90px;
+}
+.sidebar { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+.sidebar a {
+  display: block; padding: 5px 10px; text-decoration: none; color: var(--muted);
+  border-left: 2px solid transparent; border-radius: 0 6px 6px 0;
+}
+.sidebar a:hover { color: var(--ink); }
+.sidebar a.active { color: var(--green); border-left-color: var(--green); background: var(--green-soft); font-weight: 600; }
+.sidebar .group { margin: 14px 0 4px; padding-left: 10px; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); opacity: 0.75; }
+main { max-width: 760px; min-width: 0; }
+main h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin: 10px 0 6px; }
+.page-desc { color: var(--muted); margin: 0 0 28px; font-size: 17px; }
+main h2 { font-size: 22px; margin: 42px 0 10px; letter-spacing: -0.01em; }
+main h3 { font-size: 17px; margin: 28px 0 8px; }
+main p, main li { color: #2a2722; }
+main hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
+code {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.86em;
+  background: #ece7d9; padding: 2px 6px; border-radius: 5px;
+}
+pre {
+  background: #14120e; color: #e8e2d6; border-radius: 10px;
+  padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.55;
+  border: 1px solid #2a2620;
+}
+pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14.5px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--ink); }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:first-child code, td:first-child { white-space: nowrap; }
+td:first-child { font-weight: 600; }
+blockquote {
+  margin: 18px 0; padding: 12px 18px; border-left: 3px solid var(--green);
+  background: var(--green-soft); border-radius: 0 8px 8px 0;
+}
+blockquote p { margin: 0; }
+.md-link { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.md-link a { color: var(--green); }
+.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; font-size: 14.5px; }
+.pager a { text-decoration: none; color: var(--green); font-weight: 600; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.footer { width: min(1240px, calc(100% - 56px)); margin: 0 auto; display: flex; justify-content: space-between; padding: 26px 0 40px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
+.footer a { color: var(--muted); }
+@media (max-width: 880px) {
+  .layout { grid-template-columns: 1fr; gap: 8px; }
+  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .sidebar .group { display: none; }
+  .sidebar a { border-left: 0; border-radius: 6px; }
+}
+</style>
+</head>
+<body>
+<div class="bg-art" aria-hidden="true"></div>
+<nav class="nav" aria-label="Primary">
+  <a class="brand" href="/"><img src="/icon-128.png" alt="" /><span>Chrome Relay</span></a>
+  <div class="nav-links">
+    <a href="/docs/">Docs</a>
+    <a href="https://github.com/kiluazen/chrome-relay">GitHub</a>
+    <a href="https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb">Chrome Web Store</a>
+  </div>
+</nav>
+<div class="layout">
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/" class="active">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Positioning</div><a href="/docs/vs-agent-browser/">vs agent-browser</a></aside>
+  <main>
+    <h1>Refs</h1>
+    <p class="page-desc">"@eN handles that carry their own tab, heal across DOM churn, and refuse to click through overlays."</p>
+    <p>Every actionable element in a <a href="/docs/snapshots/">snapshot</a> gets a ref — <code>@e12</code> — and every element-addressed command accepts one:</p>
+<pre><code class="language-sh">chrome-relay click @e12
+chrome-relay fill @e14 &quot;value&quot;
+chrome-relay hover @e3
+chrome-relay type &quot;text&quot; -s @e7
+</code></pre>
+<p>A ref is not a CSS selector and not a coordinate. Under the hood it&#39;s the element&#39;s Chrome-internal node id (<code>backendDOMNodeId</code>) plus enough semantics (<code>role</code>, <code>name</code>, position-among-twins) to find the element again if the id goes stale.</p>
+<h2>Refs carry their own tab</h2>
+<p>This is the rule that makes refs safe in a browser a <em>human</em> is also using. <code>click @e12</code> acts on the tab that produced <code>e12</code> — never &quot;the active tab&quot;, which is whatever you happen to be reading right now. Concretely:</p>
+<ul>
+<li>No <code>--tab</code> needed on ref actions.</li>
+<li>Ref numbers are unique across the whole browser (the counter never resets), so <code>@e12</code> can&#39;t mean two things.</li>
+<li>A contradicting <code>--tab</code> is an error, not a guess:</li>
+</ul>
+<pre><code class="language-json">{ &quot;relayError&quot;: { &quot;code&quot;: &quot;target_conflict&quot;,
+  &quot;message&quot;: &quot;@e16 belongs to tab 460154464 but --tab 99999 was passed. Refs carry their own tab — drop --tab or use a ref from that tab&#39;s snapshot.&quot; } }
+</code></pre>
+<h2>Lifetime: churn heals, navigation kills</h2>
+<p><strong>Same-page DOM churn: refs survive.</strong> Pages re-render constantly — a toast appears, a list reorders, React swaps a subtree. The resolver tries the cached node id first (one CDP call verifies it&#39;s live), and if the node was replaced, re-finds it by role + name + position and <em>heals</em> the ref in place. Healed actions report it:</p>
+<pre><code class="language-json">{ &quot;clicked&quot;: true, &quot;ref&quot;: &quot;e16&quot;, &quot;healed&quot;: true }
+</code></pre>
+<p><strong>Real navigation: refs die, on purpose.</strong> Chrome reuses node-id integers in a new document — a ref from the old page could silently resolve to an unrelated element on the new one. (We caught this live: a stale ref &quot;successfully&quot; clicked a random link on the page that replaced it.) So navigation invalidates the tab&#39;s refs, and acting on one fails loud:</p>
+<pre><code class="language-json">{ &quot;relayError&quot;: { &quot;code&quot;: &quot;stale_ref&quot;,
+  &quot;message&quot;: &quot;@e19 is not a known ref (no snapshot produced it, or its tab was re-snapshotted). Re-run `chrome-relay snapshot` and use a fresh ref.&quot; } }
+</code></pre>
+<p>SPA route changes (pushState — the document persists) keep refs alive; the heal step covers the re-render.</p>
+<p>The agent rule is one line: <strong><code>stale_ref</code> → snapshot again.</strong> Never retry the same ref; it isn&#39;t coming back.</p>
+<h2>Interception: no clicking through overlays</h2>
+<p>Before dispatching, a ref click hit-tests its target point. If an unrelated element owns it — a modal, cookie banner, sticky header — the click is refused, naming the interceptor:</p>
+<pre><code class="language-json">{ &quot;relayError&quot;: { &quot;code&quot;: &quot;click_intercepted&quot;,
+  &quot;message&quot;: &quot;@e8 resolved, but an unrelated &lt;div&gt; owns the click point (412, 96) — an overlay, sticky header, or modal is covering it. Dismiss it or scroll, then retry.&quot;,
+  &quot;details&quot;: { &quot;interceptor&quot;: { &quot;nodeName&quot;: &quot;DIV&quot;, &quot;backendNodeId&quot;: 1042 } } } }
+</code></pre>
+<p>Without this check, the click &quot;succeeds&quot;, the overlay eats it, and the agent&#39;s next snapshot makes no sense. The check allows same-lineage hits (a button&#39;s inner text, a label wrapping its input) and is best-effort — if the hit-test itself can&#39;t run, the click proceeds rather than false-positive.</p>
+<p><code>fill</code> and <code>type</code> skip the check deliberately: they write via the node, not the pointer, and writing into a visually covered input is legitimate.</p>
+<h2>Service-worker restarts</h2>
+<p>Chrome kills idle extension service workers whenever it likes. The ref map persists across restarts (and is re-verified through CDP before any action — persistence restores ids, not trust), so an agent&#39;s refs don&#39;t vanish mid-task because Chrome got tidy.</p>
+<h2>When refs aren&#39;t the tool</h2>
+<p>Refs cover the DOM. Two things aren&#39;t in the DOM in any useful way:</p>
+<ul>
+<li><strong>Canvas internals</strong> (Figma-style UIs) — nothing to reference.</li>
+<li><strong>SVG chart segments</strong> — anonymous <code>&lt;path&gt;</code> elements; no role, no name, no sane selector either.</li>
+</ul>
+<p>For those, get coordinates from a <code>js</code> probe or a screenshot and use <code>click --x N --y N</code>. The full decision tree is in <a href="/docs/clicking/">Clicking strategies</a>.</p>
+
+    <div class="pager"><span><a href="/docs/snapshots/">← Snapshots</a></span><span><a href="/docs/clicking/"> Clicking</a>→</span></div>
+    <p class="md-link">Agents: this page as <a href="https://chrome-relay.kushalsm.com/docs/refs.md">plain markdown</a> · all docs in <a href="/llms.txt">/llms.txt</a></p>
+  </main>
+</div>
+<footer class="footer">
+  <a href="https://kushalsm.com">kushalsm.com</a>
+  <div><a href="/privacy/">Privacy</a> · <a href="/support/">Support</a></div>
+</footer>
+</body>
+</html>
