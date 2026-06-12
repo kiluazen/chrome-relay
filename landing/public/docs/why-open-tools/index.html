@@ -3,18 +3,18 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Workspaces & tab groups | Chrome Relay</title>
-<meta name="description" content="Named Chrome windows so multiple agents work in parallel without colliding — or with you." />
-<meta property="og:title" content="Workspaces & tab groups | Chrome Relay" />
-<meta property="og:description" content="Named Chrome windows so multiple agents work in parallel without colliding — or with you." />
+<title>Swap the model, keep everything | Chrome Relay</title>
+<meta name="description" content="Why the tools around AI need to be open — and why chrome-relay is a CLI instead of someone's plugin." />
+<meta property="og:title" content="Swap the model, keep everything | Chrome Relay" />
+<meta property="og:description" content="Why the tools around AI need to be open — and why chrome-relay is a CLI instead of someone's plugin." />
 <meta property="og:type" content="article" />
-<meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/workspaces/" />
+<meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/why-open-tools/" />
 <meta property="og:image" content="https://chrome-relay.kushalsm.com/ext-index.png" />
 <meta name="twitter:card" content="summary_large_image" />
-<link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/workspaces/" />
-<link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/workspaces.md" title="Markdown version" />
+<link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/why-open-tools/" />
+<link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/why-open-tools.md" title="Markdown version" />
 <link rel="icon" type="image/png" href="/icon-128.png" />
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Workspaces & tab groups","description":"Named Chrome windows so multiple agents work in parallel without colliding — or with you.","url":"https://chrome-relay.kushalsm.com/docs/workspaces/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Swap the model, keep everything","description":"Why the tools around AI need to be open — and why chrome-relay is a CLI instead of someone's plugin.","url":"https://chrome-relay.kushalsm.com/docs/why-open-tools/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
 <style>
 :root {
   color-scheme: light;
@@ -141,52 +141,30 @@ blockquote p { margin: 0; }
   </div>
 </nav>
 <div class="layout">
-  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/" class="active">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Evaluate</div><a href="/docs/vs-agent-browser/">vs agent-browser</a><a href="/docs/vs-claude-codex/">vs Claude / Codex</a><a href="/docs/why-open-tools/">Why open tools</a></aside>
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Evaluate</div><a href="/docs/vs-agent-browser/">vs agent-browser</a><a href="/docs/vs-claude-codex/">vs Claude / Codex</a><a href="/docs/why-open-tools/" class="active">Why open tools</a></aside>
   <main>
-    <h1>Workspaces & tab groups</h1>
-    <p class="page-desc">Named Chrome windows so multiple agents work in parallel without colliding — or with you.</p>
-    <p>One browser, several actors: you, and however many agents you&#39;ve got running. Workspaces keep them out of each other&#39;s way.</p>
-<h2 id="workspaces-named-windows">Workspaces — named windows<a class="anchor" href="#workspaces-named-windows" aria-hidden="true">#</a></h2>
-<pre><code class="language-sh">chrome-relay workspace create research          # opens a new Chrome window, names it
-chrome-relay workspace list                     # name, windowId, tabCount, alive
-chrome-relay workspace close research
-</code></pre>
-<p>Every command accepts <code>--workspace &lt;name&gt;</code> to target the active tab <em>in that window</em>:</p>
-<pre><code class="language-sh">chrome-relay --workspace research navigate &quot;https://chrome-relay.kushalsm.com&quot; --new
-chrome-relay snapshot --workspace research -i
-chrome-relay screenshot --workspace research -o out.png
-</code></pre>
-<p>The pattern this enables: give each agent its own workspace. Agent A drives the <code>research</code> window, agent B drives <code>checkout-flow</code>, and your own window is never touched. Since everything runs on background tabs anyway, none of them steals your focus.</p>
-<h2 id="tab-groups-folders-inside-a-window">Tab groups — folders inside a window<a class="anchor" href="#tab-groups-folders-inside-a-window" aria-hidden="true">#</a></h2>
-<pre><code class="language-sh">chrome-relay group create sources --color blue --tab 42   # Chrome&#39;s native colored groups
-chrome-relay group add sources --tab 43 --tab 44
-chrome-relay group list
-chrome-relay group remove sources --tab 43
-chrome-relay group close sources                          # closes the group&#39;s tabs
-</code></pre>
-<p>And <code>--group &lt;name&gt;</code> targets the active tab inside a group, same as <code>--workspace</code>.</p>
-<p>Groups are lighter than workspaces — same window, visual organization, one collapse-click for the human watching. Use workspaces for isolation between agents; use groups for organizing one agent&#39;s working set.</p>
-<h2 id="targeting-rules-strict-on-purpose">Targeting rules (strict on purpose)<a class="anchor" href="#targeting-rules-strict-on-purpose" aria-hidden="true">#</a></h2>
-<ul>
-<li>Exactly <strong>one</strong> of <code>--tab</code> / <code>--workspace</code> / <code>--group</code> per command. Two at once is <code>target_conflict</code>, not a guess.</li>
-<li>Subcommand-level flags override program-level ones, and the override is announced on stderr (<code>target_overridden</code>) so it&#39;s never silent.</li>
-<li><a href="/docs/refs/">Ref</a> actions ignore all of this — a ref carries its own tab, and combining it with <code>--workspace</code>/<code>--group</code> is <code>target_conflict</code>.</li>
-</ul>
-<h2 id="viewport-per-tab">Viewport per tab<a class="anchor" href="#viewport-per-tab" aria-hidden="true">#</a></h2>
-<p>Emulation composes with all of it — each tab can hold its own device profile:</p>
-<pre><code class="language-sh">chrome-relay viewport preset iphone-14 --workspace research
-chrome-relay viewport set --width 390 --height 844 --dpr 3 --mobile --touch --tab 42
-chrome-relay viewport clear --tab 42
-</code></pre>
-<p>Survives navigation, cleared when the tab closes. Useful for checking responsive layouts in one window while desktop work continues in another.</p>
+    <h1>Swap the model, keep everything</h1>
+    <p class="page-desc">Why the tools around AI need to be open — and why chrome-relay is a CLI instead of someone's plugin.</p>
+    <p>Models leapfrog each other every few months. Whatever you&#39;re using today won&#39;t be the best one a year from now. That fact should shape every tool decision you make around AI — and it&#39;s the reason chrome-relay exists in the shape it does.</p>
+<h2 id="1-the-lock-in-that-matters-isnt-the-model">1. The lock-in that matters isn&#39;t the model<a class="anchor" href="#1-the-lock-in-that-matters-isnt-the-model" aria-hidden="true">#</a></h2>
+<p>The model is the most replaceable part of your setup. What accumulates is everything around it: your memory, your workflows, your scripts, your browser access, the muscle memory of how you work. If all of that lives inside one vendor&#39;s harness, then today&#39;s best model quietly decides your stack forever.</p>
+<h2 id="2-the-trap-best-model-and-your-context">2. The trap: best model AND your context<a class="anchor" href="#2-the-trap-best-model-and-your-context" aria-hidden="true">#</a></h2>
+<p>The worst outcome isn&#39;t one company having the best model — you just use it. The worst outcome is one company having the best model <em>and</em> your memory, workflows, and tooling locked inside their harness. The day someone else ships a better model, you&#39;re choosing between the better model and everything you&#39;ve accumulated. Most people will choose the accumulation. That&#39;s not a choice, that&#39;s a moat — and you&#39;re the one inside it.</p>
+<p>The time to design this out is now, while switching is still cheap.</p>
+<h2 id="3-vendor-browser-extensions-are-this-trap-in-miniature">3. Vendor browser extensions are this trap in miniature<a class="anchor" href="#3-vendor-browser-extensions-are-this-trap-in-miniature" aria-hidden="true">#</a></h2>
+<p>Claude in Chrome and the Codex Chrome extension are both good — <a href="/docs/vs-claude-codex/">both drive your real logged-in Chrome</a>, same as chrome-relay. But each works only inside its vendor&#39;s runtime. Build your browser workflows on one and they become Claude-shaped or Codex-shaped: switch models and you rebuild everything, or you don&#39;t switch.</p>
+<h2 id="4-the-test-change-one-line-everything-else-keeps-working">4. The test: change one line, everything else keeps working<a class="anchor" href="#4-the-test-change-one-line-everything-else-keeps-working" aria-hidden="true">#</a></h2>
+<p>Workflows should be written against surfaces no vendor owns — the shell, files, open protocols. Then the model is a config value. A CLI passes this test for free: anything that can run shell commands can run <code>chrome-relay snapshot -i</code> and <code>click @e12</code> — Claude Code today, Codex tomorrow, a cron script with no model at all, whatever&#39;s best in 2027. Same commands, same <a href="/docs/skill/">skill</a>, same scripts. The system stays infinitely switchable.</p>
+<h2 id="5-so-open-source-local-a-cli">5. So: open source, local, a CLI<a class="anchor" href="#5-so-open-source-local-a-cli" aria-hidden="true">#</a></h2>
+<p>chrome-relay is MIT-licensed, runs entirely on your machine, and speaks the most boring interface that exists. Not because vendor extensions can&#39;t control your browser — they can — but because the browser-control layer belongs <em>below</em> the model layer, with your editor and your shell, where no model vendor can hold it. The browser is yours. The agent driving it is your choice. Those two facts should stay independent — and they should <em>keep</em> being independent every time you change your mind about the agent.</p>
 
-    <div class="pager"><a class="prev" href="/docs/observability/"><span class="dir">← Previous</span><span class="t">Observability</span></a><a class="next" href="/docs/errors/"><span class="dir">Next →</span><span class="t">Errors</span></a></div>
+    <div class="pager"><a class="prev" href="/docs/vs-claude-codex/"><span class="dir">← Previous</span><span class="t">vs Claude / Codex</span></a></div>
   </main>
 </div>
 <footer class="footer">
   <a href="https://kushalsm.com">kushalsm.com</a>
   <div class="flinks">
-    <a href="https://chrome-relay.kushalsm.com/docs/workspaces.md">this page as markdown</a>
+    <a href="https://chrome-relay.kushalsm.com/docs/why-open-tools.md">this page as markdown</a>
     <a href="/llms.txt">llms.txt</a>
     <a href="/skill.md">skill.md</a>
     <a href="/privacy/">Privacy</a>

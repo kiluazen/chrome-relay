@@ -16,7 +16,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
-  "description": "Your agent drives the Chrome you're signed into — read pages, click buttons, fill forms from any shell. No robot browser, no cookie export, no focus stealing.",
+  "description": "Your agent drives the Chrome you're signed into \u2014 read pages, click buttons, fill forms from any shell. No robot browser, no cookie export, no focus stealing.",
   "keywords": [
     "chrome",
     "browser",

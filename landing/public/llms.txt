@@ -18,6 +18,7 @@
 - [The agent skill](https://chrome-relay.kushalsm.com/docs/skill.md): A playbook your agent loads once, so it drives Chrome Relay well from the first command.
 - [vs agent-browser](https://chrome-relay.kushalsm.com/docs/vs-agent-browser.md): Different products that look alike. Measured, with respect — and a clear rule for which to pick.
 - [vs Claude in Chrome & Codex](https://chrome-relay.kushalsm.com/docs/vs-claude-codex.md): All three drive your real logged-in Chrome. The genuine difference is one thing — who can invoke it.
+- [Swap the model, keep everything](https://chrome-relay.kushalsm.com/docs/why-open-tools.md): Why the tools around AI need to be open — and why chrome-relay is a CLI instead of someone's plugin.
 
 ## Install
 - [Agent skill](https://chrome-relay.kushalsm.com/skill.md): the playbook agents load to drive Chrome Relay
