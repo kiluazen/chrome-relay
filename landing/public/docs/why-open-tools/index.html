@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Swap the model, keep everything | Chrome Relay</title>
-<meta name="description" content="Why the tools around AI need to be open — and why chrome-relay is a CLI instead of someone's plugin." />
-<meta property="og:title" content="Swap the model, keep everything | Chrome Relay" />
-<meta property="og:description" content="Why the tools around AI need to be open — and why chrome-relay is a CLI instead of someone's plugin." />
+<title>The model should be the replaceable part | Chrome Relay</title>
+<meta name="description" content="Don't let the model vendor own the accumulated work around the model." />
+<meta property="og:title" content="The model should be the replaceable part | Chrome Relay" />
+<meta property="og:description" content="Don't let the model vendor own the accumulated work around the model." />
 <meta property="og:type" content="article" />
 <meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/why-open-tools/" />
 <meta property="og:image" content="https://chrome-relay.kushalsm.com/ext-index.png" />
@@ -14,7 +14,7 @@
 <link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/why-open-tools/" />
 <link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/why-open-tools.md" title="Markdown version" />
 <link rel="icon" type="image/png" href="/icon-128.png" />
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Swap the model, keep everything","description":"Why the tools around AI need to be open — and why chrome-relay is a CLI instead of someone's plugin.","url":"https://chrome-relay.kushalsm.com/docs/why-open-tools/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"The model should be the replaceable part","description":"Don't let the model vendor own the accumulated work around the model.","url":"https://chrome-relay.kushalsm.com/docs/why-open-tools/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
 <style>
 :root {
   color-scheme: light;
@@ -141,22 +141,29 @@ blockquote p { margin: 0; }
   </div>
 </nav>
 <div class="layout">
-  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Evaluate</div><a href="/docs/vs-agent-browser/">vs agent-browser</a><a href="/docs/vs-claude-codex/">vs Claude / Codex</a><a href="/docs/why-open-tools/" class="active">Why open tools</a></aside>
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Evaluate</div><a href="/docs/vs-agent-browser/">vs agent-browser</a><a href="/docs/vs-claude-codex/">vs Claude / Codex</a><a href="/docs/why-open-tools/" class="active">The replaceable part</a></aside>
   <main>
-    <h1>Swap the model, keep everything</h1>
-    <p class="page-desc">Why the tools around AI need to be open — and why chrome-relay is a CLI instead of someone's plugin.</p>
-    <p>Models leapfrog each other every few months. Whatever you&#39;re using today won&#39;t be the best one a year from now. That fact should shape every tool decision you make around AI — and it&#39;s the reason chrome-relay exists in the shape it does.</p>
-<h2 id="1-the-lock-in-that-matters-isnt-the-model">1. The lock-in that matters isn&#39;t the model<a class="anchor" href="#1-the-lock-in-that-matters-isnt-the-model" aria-hidden="true">#</a></h2>
-<p>The model is the most replaceable part of your setup. What accumulates is everything around it: your memory, your workflows, your scripts, your browser access, the muscle memory of how you work. If all of that lives inside one vendor&#39;s harness, then today&#39;s best model quietly decides your stack forever.</p>
-<h2 id="2-the-trap-best-model-and-your-context">2. The trap: best model AND your context<a class="anchor" href="#2-the-trap-best-model-and-your-context" aria-hidden="true">#</a></h2>
-<p>The worst outcome isn&#39;t one company having the best model — you just use it. The worst outcome is one company having the best model <em>and</em> your memory, workflows, and tooling locked inside their harness. The day someone else ships a better model, you&#39;re choosing between the better model and everything you&#39;ve accumulated. Most people will choose the accumulation. That&#39;s not a choice, that&#39;s a moat — and you&#39;re the one inside it.</p>
-<p>The time to design this out is now, while switching is still cheap.</p>
-<h2 id="3-vendor-browser-extensions-are-this-trap-in-miniature">3. Vendor browser extensions are this trap in miniature<a class="anchor" href="#3-vendor-browser-extensions-are-this-trap-in-miniature" aria-hidden="true">#</a></h2>
-<p>Claude in Chrome and the Codex Chrome extension are both good — <a href="/docs/vs-claude-codex/">both drive your real logged-in Chrome</a>, same as chrome-relay. But each works only inside its vendor&#39;s runtime. Build your browser workflows on one and they become Claude-shaped or Codex-shaped: switch models and you rebuild everything, or you don&#39;t switch.</p>
-<h2 id="4-the-test-change-one-line-everything-else-keeps-working">4. The test: change one line, everything else keeps working<a class="anchor" href="#4-the-test-change-one-line-everything-else-keeps-working" aria-hidden="true">#</a></h2>
-<p>Workflows should be written against surfaces no vendor owns — the shell, files, open protocols. Then the model is a config value. A CLI passes this test for free: anything that can run shell commands can run <code>chrome-relay snapshot -i</code> and <code>click @e12</code> — Claude Code today, Codex tomorrow, a cron script with no model at all, whatever&#39;s best in 2027. Same commands, same <a href="/docs/skill/">skill</a>, same scripts. The system stays infinitely switchable.</p>
-<h2 id="5-so-open-source-local-a-cli">5. So: open source, local, a CLI<a class="anchor" href="#5-so-open-source-local-a-cli" aria-hidden="true">#</a></h2>
-<p>chrome-relay is MIT-licensed, runs entirely on your machine, and speaks the most boring interface that exists. Not because vendor extensions can&#39;t control your browser — they can — but because the browser-control layer belongs <em>below</em> the model layer, with your editor and your shell, where no model vendor can hold it. The browser is yours. The agent driving it is your choice. Those two facts should stay independent — and they should <em>keep</em> being independent every time you change your mind about the agent.</p>
+    <h1>The model should be the replaceable part</h1>
+    <p class="page-desc">Don't let the model vendor own the accumulated work around the model.</p>
+    <p>The model is not the thing you should be loyal to.</p>
+<p>The model will change. Today it&#39;s Claude, tomorrow Codex, next year something else. That part is obvious.</p>
+<p>The thing that actually compounds is everything around the model: your scripts, your memory, your browser workflows, your weird local setup, the way your agent uses your machine.</p>
+<p>If that lives inside one vendor&#39;s runtime, you&#39;re not choosing the best model anymore. You&#39;re choosing the model that owns your setup.</p>
+<p>That&#39;s the trap with browser extensions from model companies.</p>
+<p>Claude in Chrome and Codex Chrome are good. They <a href="/docs/vs-claude-codex/">both drive your real logged-in Chrome</a>. That&#39;s not the issue.</p>
+<p>The issue is that workflows built there become Claude-shaped or Codex-shaped. When the better model changes, you either rebuild the workflow or stay stuck.</p>
+<p>chrome-relay is built against the opposite bet.</p>
+<p>Browser control should sit below the model layer. Same place as your shell, files, editor, git repo. Boring tools. Tools no model vendor owns.</p>
+<p>Then the model becomes a config value.</p>
+<p>Claude Code can run:</p>
+<pre><code class="language-sh">chrome-relay snapshot -i
+chrome-relay click @e12
+</code></pre>
+<p>Codex can run the same thing. A cron script can run the same thing. Some agent in 2027 can run the same thing.</p>
+<p>That&#39;s why chrome-relay is open source, local, and a CLI.</p>
+<p>Not because vendor extensions can&#39;t control Chrome. They can.</p>
+<p>Because your browser workflows should survive the model changing.</p>
+<p>The browser is yours. The agent is replaceable.</p>
 
     <div class="pager"><a class="prev" href="/docs/vs-claude-codex/"><span class="dir">← Previous</span><span class="t">vs Claude / Codex</span></a></div>
   </main>

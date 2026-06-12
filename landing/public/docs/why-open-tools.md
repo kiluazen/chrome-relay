@@ -1,28 +1,41 @@
-# Swap the model, keep everything
+# The model should be the replaceable part
 
-> Why the tools around AI need to be open — and why chrome-relay is a CLI instead of someone's plugin.
+> Don't let the model vendor own the accumulated work around the model.
 
 
-Models leapfrog each other every few months. Whatever you're using today won't be the best one a year from now. That fact should shape every tool decision you make around AI — and it's the reason chrome-relay exists in the shape it does.
+The model is not the thing you should be loyal to.
 
-## 1. The lock-in that matters isn't the model
+The model will change. Today it's Claude, tomorrow Codex, next year something else. That part is obvious.
 
-The model is the most replaceable part of your setup. What accumulates is everything around it: your memory, your workflows, your scripts, your browser access, the muscle memory of how you work. If all of that lives inside one vendor's harness, then today's best model quietly decides your stack forever.
+The thing that actually compounds is everything around the model: your scripts, your memory, your browser workflows, your weird local setup, the way your agent uses your machine.
 
-## 2. The trap: best model AND your context
+If that lives inside one vendor's runtime, you're not choosing the best model anymore. You're choosing the model that owns your setup.
 
-The worst outcome isn't one company having the best model — you just use it. The worst outcome is one company having the best model *and* your memory, workflows, and tooling locked inside their harness. The day someone else ships a better model, you're choosing between the better model and everything you've accumulated. Most people will choose the accumulation. That's not a choice, that's a moat — and you're the one inside it.
+That's the trap with browser extensions from model companies.
 
-The time to design this out is now, while switching is still cheap.
+Claude in Chrome and Codex Chrome are good. They [both drive your real logged-in Chrome](/docs/vs-claude-codex/). That's not the issue.
 
-## 3. Vendor browser extensions are this trap in miniature
+The issue is that workflows built there become Claude-shaped or Codex-shaped. When the better model changes, you either rebuild the workflow or stay stuck.
 
-Claude in Chrome and the Codex Chrome extension are both good — [both drive your real logged-in Chrome](/docs/vs-claude-codex/), same as chrome-relay. But each works only inside its vendor's runtime. Build your browser workflows on one and they become Claude-shaped or Codex-shaped: switch models and you rebuild everything, or you don't switch.
+chrome-relay is built against the opposite bet.
 
-## 4. The test: change one line, everything else keeps working
+Browser control should sit below the model layer. Same place as your shell, files, editor, git repo. Boring tools. Tools no model vendor owns.
 
-Workflows should be written against surfaces no vendor owns — the shell, files, open protocols. Then the model is a config value. A CLI passes this test for free: anything that can run shell commands can run `chrome-relay snapshot -i` and `click @e12` — Claude Code today, Codex tomorrow, a cron script with no model at all, whatever's best in 2027. Same commands, same [skill](/docs/skill/), same scripts. The system stays infinitely switchable.
+Then the model becomes a config value.
 
-## 5. So: open source, local, a CLI
+Claude Code can run:
 
-chrome-relay is MIT-licensed, runs entirely on your machine, and speaks the most boring interface that exists. Not because vendor extensions can't control your browser — they can — but because the browser-control layer belongs *below* the model layer, with your editor and your shell, where no model vendor can hold it. The browser is yours. The agent driving it is your choice. Those two facts should stay independent — and they should *keep* being independent every time you change your mind about the agent.
+```sh
+chrome-relay snapshot -i
+chrome-relay click @e12
+```
+
+Codex can run the same thing. A cron script can run the same thing. Some agent in 2027 can run the same thing.
+
+That's why chrome-relay is open source, local, and a CLI.
+
+Not because vendor extensions can't control Chrome. They can.
+
+Because your browser workflows should survive the model changing.
+
+The browser is yours. The agent is replaceable.
