@@ -121,8 +121,15 @@ function emitTargetOverride(kind: string, from: string, to: string): void {
 // agents can parse `{relayError: {...}}` mechanically without a separate flag.
 async function runToolImpl(name: string, args: Record<string, unknown>): Promise<void> {
   try {
-    const parsedArgs = isToolName(name) ? parseToolArgs(name, args) : args;
-    const result = await callTool(name, parsedArgs as Record<string, unknown>);
+    // Validate locally so bad input fails fast with the same structured
+    // RelayError the extension would produce — but transmit the RAW args.
+    // Parsers run at BOTH ends on the same raw shape; some (chrome_wait)
+    // transform their output, so sending parse output would make the
+    // extension re-parse a shape it doesn't accept. Caught live in 0.7.0:
+    // `wait .sel` validated fine here, then died extension-side with
+    // "got 0 conditions" because the wire carried {condition} not {selector}.
+    if (isToolName(name)) parseToolArgs(name, args);
+    const result = await callTool(name, args);
     if (typeof result === "string") {
       process.stdout.write(result + "\n");
     } else {

@@ -121,19 +121,19 @@ describe("CLI argument parsing", () => {
   describe("network (§2.7a)", () => {
     it("default (read) posts chrome_network with just tabId", async () => {
       await runArgs("network", "--tab", "42");
-      expect(lastBody()).toEqual({ name: "chrome_network", args: { tabId: 42, action: "read" } });
+      expect(lastBody()).toEqual({ name: "chrome_network", args: { tabId: 42 } });
     });
     it("filter + status + method + limit are forwarded (Issue #6: parent-level flags)", async () => {
       // These flags now live on the parent `network` command, so `chrome-relay network --filter X`
       // works without spelling out `read`.
       await runArgs("network", "--tab", "42", "--filter", "api.", "--status", "ok", "--method", "POST", "--limit", "10");
       expect(lastBody().args).toEqual({
-        tabId: 42, action: "read", filter: "api.", status: "ok", method: "POST", limit: 10
+        tabId: 42, filter: "api.", status: "ok", method: "POST", limit: 10
       });
     });
     it("network read alias still works with the same flags", async () => {
       await runArgs("network", "read", "--tab", "42", "--filter", "api.");
-      expect(lastBody().args).toEqual({ tabId: 42, action: "read", filter: "api." });
+      expect(lastBody().args).toEqual({ tabId: 42, filter: "api." });
     });
     it("body subcommand sets action=body + requestId (default 8KB truncation server-side)", async () => {
       await runArgs("network", "body", "req-123", "--tab", "42");
@@ -245,7 +245,7 @@ describe("CLI argument parsing", () => {
 
     it("click routes a @ref positional to the ref arg", async () => {
       await runArgs("click", "@e3");
-      expect(lastBody()).toEqual({ name: "chrome_click_element", args: { kind: "ref", ref: "e3" } });
+      expect(lastBody()).toEqual({ name: "chrome_click_element", args: { ref: "e3" } });
     });
 
     it("read/ax aliases print a deprecation notice on stderr", async () => {
@@ -277,17 +277,17 @@ describe("CLI argument parsing", () => {
       await runArgs("wait", ".results", "--tab", "42");
       expect(lastBody()).toEqual({
         name: "chrome_wait",
-        args: { tabId: 42, condition: { kind: "selector", selector: ".results" }, timeoutMs: 10_000 }
+        args: { tabId: 42, selector: ".results" }
       });
     });
 
     it("wait @ref and --text/--url/--load route to the right condition", async () => {
       await runArgs("wait", "@e3");
-      expect(lastBody().args).toMatchObject({ condition: { kind: "ref", ref: "e3" } });
+      expect(lastBody().args).toMatchObject({ ref: "e3" });
       await runArgs("wait", "--text", "Welcome", "--tab", "1");
-      expect(lastBody().args).toMatchObject({ condition: { kind: "text", text: "Welcome" } });
+      expect(lastBody().args).toMatchObject({ text: "Welcome" });
       await runArgs("wait", "--load", "networkidle", "--tab", "1");
-      expect(lastBody().args).toMatchObject({ condition: { kind: "load", state: "networkidle" } });
+      expect(lastBody().args).toMatchObject({ load: "networkidle" });
     });
 
     it("wait <ms> sleeps locally without a tool call", async () => {
@@ -381,7 +381,7 @@ describe("CLI argument parsing", () => {
       await runArgs("group", "create", "research", "--tabs", "123,456,789", "--color", "cyan");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "create", name: "research", tabIds: [123, 456, 789], color: "cyan" }
+        args: { action: "create", name: "research", tabIds: "123,456,789", color: "cyan" }
       });
     });
 
@@ -389,7 +389,7 @@ describe("CLI argument parsing", () => {
       await runArgs("group", "create", "later", "--tabs", "1", "--collapsed");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "create", name: "later", tabIds: [1], collapsed: true }
+        args: { action: "create", name: "later", tabIds: "1", collapsed: true }
       });
     });
 
@@ -407,7 +407,7 @@ describe("CLI argument parsing", () => {
       await runArgs("group", "add", "research", "--tabs", "1011");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "add", name: "research", tabIds: [1011] }
+        args: { action: "add", name: "research", tabIds: "1011" }
       });
     });
 
@@ -415,7 +415,7 @@ describe("CLI argument parsing", () => {
       await runArgs("group", "remove", "--tabs", "456,789");
       expect(lastBody()).toEqual({
         name: "chrome_group",
-        args: { action: "remove", tabIds: [456, 789] }
+        args: { action: "remove", tabIds: "456,789" }
       });
     });
 
@@ -496,20 +496,21 @@ describe("CLI argument parsing", () => {
       expect(lastBody()).toEqual({
         name: "chrome_click_element",
         // 0.5.19: protocol parser runs CLI-side and tags the discriminated
-        // union; selector mode comes through as { kind: "selector", selector }.
-        args: { kind: "selector", selector: "button.submit" }
+        // raw wire: the discriminated kind is computed by the parser at each
+        // boundary, not carried on the wire.
+        args: { selector: "button.submit" }
       });
     });
 
     it("forwards --tab", async () => {
       await runArgs("click", "--tab", "9", "#go");
-      expect(lastBody().args).toEqual({ kind: "selector", selector: "#go", tabId: 9 });
+      expect(lastBody().args).toEqual({ selector: "#go", tabId: 9 });
     });
 
     // 0.5.19 — coordinate click. No selector positional; --x and --y both required.
     it("posts coords-mode click when --x and --y are passed", async () => {
       await runArgs("click", "--tab", "42", "--x", "540", "--y", "320");
-      expect(lastBody().args).toEqual({ kind: "coords", x: 540, y: 320, tabId: 42 });
+      expect(lastBody().args).toEqual({ x: 540, y: 320, tabId: 42 });
     });
 
     it("rejects --x without --y (and vice versa)", async () => {
@@ -530,15 +531,13 @@ describe("CLI argument parsing", () => {
       await runArgs("fill", "input[name=q]", "hello");
       expect(lastBody()).toEqual({
         name: "chrome_fill_or_select",
-        // kind comes from the CLI-side parseToolArgs pass (discriminated union)
-        args: { kind: "selector", selector: "input[name=q]", value: "hello" }
+        args: { selector: "input[name=q]", value: "hello" }
       });
     });
 
     it("forwards --tab", async () => {
       await runArgs("fill", "--tab", "10", "select#country", "IN");
       expect(lastBody().args).toEqual({
-        kind: "selector",
         selector: "select#country",
         value: "IN",
         tabId: 10
@@ -547,7 +546,7 @@ describe("CLI argument parsing", () => {
 
     it("routes a @ref positional to the ref arg", async () => {
       await runArgs("fill", "@e7", "hello");
-      expect(lastBody().args).toEqual({ kind: "ref", ref: "e7", value: "hello" });
+      expect(lastBody().args).toEqual({ ref: "e7", value: "hello" });
     });
   });
 

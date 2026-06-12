@@ -9,6 +9,9 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.7.1": [
+    "Fix: `wait` failed with `invalid_arguments: got 0 conditions` when invoked through the CLI. Root cause: the CLI transmitted the PARSED tool args over the bridge, and chrome_wait's parser transforms its shape ({selector} -> {condition}), so the extension re-parsed a shape it doesn't accept. The CLI now validates locally but transmits raw args — parsers run on the same raw shape at both ends, as designed. No extension change needed; 0.7.0 extensions work."
+  ],
   "0.7.0": [
     "`wait` — block until a condition holds: `wait <css|@ref>` (exists and visible), `wait --text <s>`, `wait --url <glob>`, `wait --load load|domcontentloaded|networkidle`, `wait --fn <js>`, or `wait <ms>` for a plain sleep. One condition per call; default 10s, capped 25s (under the transport timeout, so waits always resolve in their own round-trip). Timeout errors include the page's current state so no follow-up probe is needed.",
     "`snapshot --diff` — print only what changed since this tab's previous snapshot (unified hunks + an additions/removals count; ~100 tokens instead of a full re-read). The full snapshot is still taken and the ref map still refreshes — refs in the diff are current and clickable.",
