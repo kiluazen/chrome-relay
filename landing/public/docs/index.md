@@ -1,6 +1,6 @@
 # Chrome Relay docs
 
-> A local bridge between your coding agent and the Chrome you already have open. Nothing leaves the machine.
+> Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms. Nothing leaves the machine.
 
 
 Chrome Relay lets a terminal agent — Claude Code, Codex, anything that runs shell commands — operate your real Chrome. Not a headless automation browser with an empty profile: the actual browser you're signed into, with your cookies, SSO sessions, extensions, and localhost tabs. It works on background tabs without stealing focus, so you keep browsing while the agent works.

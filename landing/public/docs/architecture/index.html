@@ -9,9 +9,12 @@
 <meta property="og:description" content="Five hops, each with one job. Why the extension route is the only safe way into a running Chrome." />
 <meta property="og:type" content="article" />
 <meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/architecture/" />
+<meta property="og:image" content="https://chrome-relay.kushalsm.com/ext-index.png" />
+<meta name="twitter:card" content="summary_large_image" />
 <link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/architecture/" />
 <link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/architecture.md" title="Markdown version" />
 <link rel="icon" type="image/png" href="/icon-128.png" />
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Architecture","description":"Five hops, each with one job. Why the extension route is the only safe way into a running Chrome.","url":"https://chrome-relay.kushalsm.com/docs/architecture/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
 <style>
 :root {
   color-scheme: light;
@@ -19,76 +22,111 @@
   --panel: #fffdf6; --green: #1f7a4d; --green-soft: #e6f2eb;
 }
 * { box-sizing: border-box; }
-html { background: var(--paper); }
+html { background: var(--paper); scroll-behavior: smooth; }
 body {
-  margin: 0; color: var(--ink); line-height: 1.6; font-size: 16px;
+  margin: 0; color: var(--ink); line-height: 1.65; font-size: 15.5px;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
 }
 .bg-art {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background: url('/bg.jpg') center/cover no-repeat;
-  opacity: 0.12; filter: saturate(0.25) contrast(0.4) brightness(1.7);
+  opacity: 0.10; filter: saturate(0.25) contrast(0.4) brightness(1.7);
 }
 a { color: inherit; }
 .nav {
-  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 0;
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 0;
 }
-.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; }
-.brand img { width: 32px; height: 32px; border-radius: 8px; }
-.nav-links { display: flex; gap: 18px; font-size: 14.5px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; font-size: 15.5px; }
+.brand img { width: 30px; height: 30px; border-radius: 7px; }
+.nav-links { display: flex; gap: 18px; font-size: 14px; }
 .nav-links a { text-decoration: none; color: var(--muted); font-weight: 550; }
 .nav-links a:hover { color: var(--ink); }
+
 .layout {
-  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
-  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding: 12px 0 90px;
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 56px; padding: 16px 0 80px;
 }
-.sidebar { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+.sidebar { position: sticky; top: 20px; align-self: start; padding-top: 6px; }
+.sidebar .group {
+  margin: 18px 0 5px; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); opacity: 0.7; font-weight: 650;
+}
+.sidebar .group:first-child { margin-top: 0; }
 .sidebar a {
-  display: block; padding: 5px 10px; text-decoration: none; color: var(--muted);
-  border-left: 2px solid transparent; border-radius: 0 6px 6px 0;
+  display: block; padding: 4px 0 4px 12px; text-decoration: none; color: var(--muted);
+  font-size: 13.5px; border-left: 2px solid transparent; line-height: 1.45;
 }
 .sidebar a:hover { color: var(--ink); }
-.sidebar a.active { color: var(--green); border-left-color: var(--green); background: var(--green-soft); font-weight: 600; }
-.sidebar .group { margin: 14px 0 4px; padding-left: 10px; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); opacity: 0.75; }
-main { max-width: 760px; min-width: 0; }
-main h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin: 10px 0 6px; }
-.page-desc { color: var(--muted); margin: 0 0 28px; font-size: 17px; }
-main h2 { font-size: 22px; margin: 42px 0 10px; letter-spacing: -0.01em; }
-main h3 { font-size: 17px; margin: 28px 0 8px; }
+.sidebar a.active { color: var(--green); border-left-color: var(--green); font-weight: 650; }
+
+main { max-width: 700px; min-width: 0; }
+main h1 { font-size: 30px; line-height: 1.15; letter-spacing: -0.022em; margin: 14px 0 8px; }
+.page-desc { color: var(--muted); margin: 0 0 30px; font-size: 16.5px; line-height: 1.5; }
+main h2 {
+  font-size: 20px; margin: 46px 0 12px; letter-spacing: -0.012em;
+  padding-bottom: 8px; border-bottom: 1px solid var(--line);
+}
+main h3 { font-size: 16px; margin: 30px 0 8px; }
+.anchor {
+  margin-left: 8px; text-decoration: none; color: var(--green);
+  opacity: 0; font-weight: 400; transition: opacity 0.1s;
+}
+h2:hover .anchor, h3:hover .anchor { opacity: 0.7; }
 main p, main li { color: #2a2722; }
+main li { margin-bottom: 5px; }
 main hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
 code {
-  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.86em;
-  background: #ece7d9; padding: 2px 6px; border-radius: 5px;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.85em;
+  background: #ece7d9; padding: 2px 5px; border-radius: 5px;
 }
 pre {
   background: #14120e; color: #e8e2d6; border-radius: 10px;
-  padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.55;
-  border: 1px solid #2a2620;
+  padding: 15px 18px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+  margin: 16px 0;
 }
 pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14.5px; }
-th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--ink); }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
+th {
+  text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--muted); padding: 7px 10px; border-bottom: 2px solid var(--ink); font-weight: 650;
+}
 td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-td:first-child code, td:first-child { white-space: nowrap; }
 td:first-child { font-weight: 600; }
 blockquote {
   margin: 18px 0; padding: 12px 18px; border-left: 3px solid var(--green);
   background: var(--green-soft); border-radius: 0 8px 8px 0;
 }
 blockquote p { margin: 0; }
-.md-link { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
-.md-link a { color: var(--green); }
-.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; font-size: 14.5px; }
-.pager a { text-decoration: none; color: var(--green); font-weight: 600; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
-.footer { width: min(1240px, calc(100% - 56px)); margin: 0 auto; display: flex; justify-content: space-between; padding: 26px 0 40px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
-.footer a { color: var(--muted); }
+
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 52px; }
+.pager a {
+  display: block; text-decoration: none; padding: 12px 16px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+}
+.pager a:hover { border-color: var(--green); }
+.pager .dir { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+.pager .t { display: block; font-size: 14.5px; font-weight: 650; color: var(--green); }
+.pager .next { text-align: right; grid-column: 2; }
+
+.footer {
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+  padding: 22px 0 36px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line);
+}
+.footer a { color: var(--muted); text-decoration: none; }
+.footer a:hover { color: var(--ink); text-decoration: underline; }
+.footer .flinks { display: flex; gap: 14px; flex-wrap: wrap; }
+
 @media (max-width: 880px) {
-  .layout { grid-template-columns: 1fr; gap: 8px; }
-  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .layout { grid-template-columns: 1fr; gap: 10px; }
+  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 4px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
   .sidebar .group { display: none; }
-  .sidebar a { border-left: 0; border-radius: 6px; }
+  .sidebar a { border-left: 0; padding: 4px 9px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
+  .sidebar a.active { border-color: var(--green); background: var(--green-soft); }
+  .pager { grid-template-columns: 1fr; }
+  .pager .next { grid-column: 1; text-align: left; }
 }
 </style>
 </head>
@@ -103,7 +141,7 @@ blockquote p { margin: 0; }
   </div>
 </nav>
 <div class="layout">
-  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/" class="active">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Positioning</div><a href="/docs/vs-agent-browser/">vs agent-browser</a></aside>
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/" class="active">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Evaluate</div><a href="/docs/vs-agent-browser/">vs agent-browser</a><a href="/docs/vs-claude-codex/">vs Claude / Codex</a></aside>
   <main>
     <h1>Architecture</h1>
     <p class="page-desc">Five hops, each with one job. Why the extension route is the only safe way into a running Chrome.</p>
@@ -116,7 +154,7 @@ blockquote p { margin: 0; }
   → your tabs
 </code></pre>
 <p>Every hop is local. The wire format is one JSON envelope per call: <code>{ name, args }</code> in, <code>{ ok, data } | { ok: false, errorDetails }</code> out.</p>
-<h2>Why not <code>--remote-debugging-port</code>?</h2>
+<h2 id="why-not---remote-debugging-port">Why not <code>--remote-debugging-port</code>?<a class="anchor" href="#why-not---remote-debugging-port" aria-hidden="true">#</a></h2>
 <p>The standard way tools attach to a real Chrome is launching it with a CDP debug port. Two problems:</p>
 <ol>
 <li><strong>You have to relaunch Chrome.</strong> Your running session — every tab, every WebSocket, every half-written form — dies so the flag can take effect.</li>
@@ -124,7 +162,7 @@ blockquote p { margin: 0; }
 </ol>
 <p>The extension + native-messaging route inverts both. It attaches to the <em>already running</em> browser, and the only process that can talk to the extension is the one binary whitelisted in the native-messaging manifest — a file Chrome itself verifies. The browser&#39;s own permission model is the gate.</p>
 <p>The cost is more moving parts (install registers the host; the extension must be present). <code>chrome-relay doctor</code> exists because of that cost.</p>
-<h2>What lives where</h2>
+<h2 id="what-lives-where">What lives where<a class="anchor" href="#what-lives-where" aria-hidden="true">#</a></h2>
 <table>
 <thead>
 <tr>
@@ -149,25 +187,30 @@ blockquote p { margin: 0; }
 <td>everything that touches the browser: the <a href="/docs/refs/">ref map</a>, the <a href="/docs/snapshots/">snapshot builder</a>, per-tab console/network ring buffers, CDP sessions, trusted input dispatch.</td>
 </tr>
 </tbody></table>
-<h2>Security model</h2>
+<h2 id="security-model">Security model<a class="anchor" href="#security-model" aria-hidden="true">#</a></h2>
 <ul>
 <li><strong>Localhost only.</strong> The bridge binds <code>127.0.0.1</code>. It also rejects requests carrying a browser <code>Origin</code> header, so a web page you visit can&#39;t script your own bridge.</li>
 <li><strong>No cloud, no account, no telemetry.</strong> There is nothing to sign into and nowhere for your data to go. The extension&#39;s only outbound channel is native messaging to your own machine.</li>
 <li><strong>Chrome-verified pairing.</strong> The native-messaging manifest whitelists exact extension IDs; Chrome enforces it in both directions.</li>
 <li><strong>One trust decision.</strong> Installing Chrome Relay means: processes on my machine that can run <code>chrome-relay</code> may drive my browser. That&#39;s the honest statement of the model — the same trust you extend to anything you <code>npm i -g</code>. If your threat model can&#39;t accept it, use a sandboxed browser instead (<a href="/docs/why-your-real-chrome/">when not to use this</a>).</li>
 </ul>
-<h2>Trusted input, specifically</h2>
+<h2 id="trusted-input-specifically">Trusted input, specifically<a class="anchor" href="#trusted-input-specifically" aria-hidden="true">#</a></h2>
 <p>Clicks and keys go through CDP <code>Input.dispatchMouseEvent</code> / <code>dispatchKeyEvent</code>, so the page receives <code>isTrusted: true</code> events with <code>pointerType: &quot;mouse&quot;</code> — indistinguishable from a human. This matters on real apps: React-Aria/Radix widgets listen for pointer events and ignore synthetic <code>.click()</code>; login and payment flows gate on trusted events. JS-side <code>.click()</code> is available via <code>chrome-relay js</code> when you want it, but it&#39;s the fallback, not the path.</p>
-<h2>Background tabs that act foregrounded</h2>
+<h2 id="background-tabs-that-act-foregrounded">Background tabs that act foregrounded<a class="anchor" href="#background-tabs-that-act-foregrounded" aria-hidden="true">#</a></h2>
 <p>Chrome throttles and hides backgrounded tabs (<code>document.hidden</code>, paused rAF, visibility events). The extension patches visibility APIs on relay-driven tabs so pages behave normally while the agent works and you keep your focus elsewhere. The one hard limit: Chrome doesn&#39;t <em>paint</em> background tabs, so <code>screencast</code> (video capture) needs the tab active — screenshots don&#39;t.</p>
 
-    <div class="pager"><span><a href="/docs/why-your-real-chrome/">← Why your real Chrome</a></span><span><a href="/docs/snapshots/"> Snapshots</a>→</span></div>
-    <p class="md-link">Agents: this page as <a href="https://chrome-relay.kushalsm.com/docs/architecture.md">plain markdown</a> · all docs in <a href="/llms.txt">/llms.txt</a></p>
+    <div class="pager"><a class="prev" href="/docs/why-your-real-chrome/"><span class="dir">← Previous</span><span class="t">Why your real Chrome</span></a><a class="next" href="/docs/snapshots/"><span class="dir">Next →</span><span class="t">Snapshots</span></a></div>
   </main>
 </div>
 <footer class="footer">
   <a href="https://kushalsm.com">kushalsm.com</a>
-  <div><a href="/privacy/">Privacy</a> · <a href="/support/">Support</a></div>
+  <div class="flinks">
+    <a href="https://chrome-relay.kushalsm.com/docs/architecture.md">this page as markdown</a>
+    <a href="/llms.txt">llms.txt</a>
+    <a href="/skill.md">skill.md</a>
+    <a href="/privacy/">Privacy</a>
+    <a href="/support/">Support</a>
+  </div>
 </footer>
 </body>
 </html>

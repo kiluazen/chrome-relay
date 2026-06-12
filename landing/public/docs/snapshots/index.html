@@ -9,9 +9,12 @@
 <meta property="og:description" content="One command turns a page into ~1–15 KB of text where every actionable element has a handle." />
 <meta property="og:type" content="article" />
 <meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/snapshots/" />
+<meta property="og:image" content="https://chrome-relay.kushalsm.com/ext-index.png" />
+<meta name="twitter:card" content="summary_large_image" />
 <link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/snapshots/" />
 <link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/snapshots.md" title="Markdown version" />
 <link rel="icon" type="image/png" href="/icon-128.png" />
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Snapshots","description":"One command turns a page into ~1–15 KB of text where every actionable element has a handle.","url":"https://chrome-relay.kushalsm.com/docs/snapshots/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
 <style>
 :root {
   color-scheme: light;
@@ -19,76 +22,111 @@
   --panel: #fffdf6; --green: #1f7a4d; --green-soft: #e6f2eb;
 }
 * { box-sizing: border-box; }
-html { background: var(--paper); }
+html { background: var(--paper); scroll-behavior: smooth; }
 body {
-  margin: 0; color: var(--ink); line-height: 1.6; font-size: 16px;
+  margin: 0; color: var(--ink); line-height: 1.65; font-size: 15.5px;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
 }
 .bg-art {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background: url('/bg.jpg') center/cover no-repeat;
-  opacity: 0.12; filter: saturate(0.25) contrast(0.4) brightness(1.7);
+  opacity: 0.10; filter: saturate(0.25) contrast(0.4) brightness(1.7);
 }
 a { color: inherit; }
 .nav {
-  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 0;
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 0;
 }
-.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; }
-.brand img { width: 32px; height: 32px; border-radius: 8px; }
-.nav-links { display: flex; gap: 18px; font-size: 14.5px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; font-size: 15.5px; }
+.brand img { width: 30px; height: 30px; border-radius: 7px; }
+.nav-links { display: flex; gap: 18px; font-size: 14px; }
 .nav-links a { text-decoration: none; color: var(--muted); font-weight: 550; }
 .nav-links a:hover { color: var(--ink); }
+
 .layout {
-  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
-  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding: 12px 0 90px;
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 56px; padding: 16px 0 80px;
 }
-.sidebar { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+.sidebar { position: sticky; top: 20px; align-self: start; padding-top: 6px; }
+.sidebar .group {
+  margin: 18px 0 5px; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); opacity: 0.7; font-weight: 650;
+}
+.sidebar .group:first-child { margin-top: 0; }
 .sidebar a {
-  display: block; padding: 5px 10px; text-decoration: none; color: var(--muted);
-  border-left: 2px solid transparent; border-radius: 0 6px 6px 0;
+  display: block; padding: 4px 0 4px 12px; text-decoration: none; color: var(--muted);
+  font-size: 13.5px; border-left: 2px solid transparent; line-height: 1.45;
 }
 .sidebar a:hover { color: var(--ink); }
-.sidebar a.active { color: var(--green); border-left-color: var(--green); background: var(--green-soft); font-weight: 600; }
-.sidebar .group { margin: 14px 0 4px; padding-left: 10px; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); opacity: 0.75; }
-main { max-width: 760px; min-width: 0; }
-main h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin: 10px 0 6px; }
-.page-desc { color: var(--muted); margin: 0 0 28px; font-size: 17px; }
-main h2 { font-size: 22px; margin: 42px 0 10px; letter-spacing: -0.01em; }
-main h3 { font-size: 17px; margin: 28px 0 8px; }
+.sidebar a.active { color: var(--green); border-left-color: var(--green); font-weight: 650; }
+
+main { max-width: 700px; min-width: 0; }
+main h1 { font-size: 30px; line-height: 1.15; letter-spacing: -0.022em; margin: 14px 0 8px; }
+.page-desc { color: var(--muted); margin: 0 0 30px; font-size: 16.5px; line-height: 1.5; }
+main h2 {
+  font-size: 20px; margin: 46px 0 12px; letter-spacing: -0.012em;
+  padding-bottom: 8px; border-bottom: 1px solid var(--line);
+}
+main h3 { font-size: 16px; margin: 30px 0 8px; }
+.anchor {
+  margin-left: 8px; text-decoration: none; color: var(--green);
+  opacity: 0; font-weight: 400; transition: opacity 0.1s;
+}
+h2:hover .anchor, h3:hover .anchor { opacity: 0.7; }
 main p, main li { color: #2a2722; }
+main li { margin-bottom: 5px; }
 main hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
 code {
-  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.86em;
-  background: #ece7d9; padding: 2px 6px; border-radius: 5px;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.85em;
+  background: #ece7d9; padding: 2px 5px; border-radius: 5px;
 }
 pre {
   background: #14120e; color: #e8e2d6; border-radius: 10px;
-  padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.55;
-  border: 1px solid #2a2620;
+  padding: 15px 18px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+  margin: 16px 0;
 }
 pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14.5px; }
-th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--ink); }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
+th {
+  text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--muted); padding: 7px 10px; border-bottom: 2px solid var(--ink); font-weight: 650;
+}
 td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-td:first-child code, td:first-child { white-space: nowrap; }
 td:first-child { font-weight: 600; }
 blockquote {
   margin: 18px 0; padding: 12px 18px; border-left: 3px solid var(--green);
   background: var(--green-soft); border-radius: 0 8px 8px 0;
 }
 blockquote p { margin: 0; }
-.md-link { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
-.md-link a { color: var(--green); }
-.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; font-size: 14.5px; }
-.pager a { text-decoration: none; color: var(--green); font-weight: 600; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
-.footer { width: min(1240px, calc(100% - 56px)); margin: 0 auto; display: flex; justify-content: space-between; padding: 26px 0 40px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
-.footer a { color: var(--muted); }
+
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 52px; }
+.pager a {
+  display: block; text-decoration: none; padding: 12px 16px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+}
+.pager a:hover { border-color: var(--green); }
+.pager .dir { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+.pager .t { display: block; font-size: 14.5px; font-weight: 650; color: var(--green); }
+.pager .next { text-align: right; grid-column: 2; }
+
+.footer {
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+  padding: 22px 0 36px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line);
+}
+.footer a { color: var(--muted); text-decoration: none; }
+.footer a:hover { color: var(--ink); text-decoration: underline; }
+.footer .flinks { display: flex; gap: 14px; flex-wrap: wrap; }
+
 @media (max-width: 880px) {
-  .layout { grid-template-columns: 1fr; gap: 8px; }
-  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .layout { grid-template-columns: 1fr; gap: 10px; }
+  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 4px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
   .sidebar .group { display: none; }
-  .sidebar a { border-left: 0; border-radius: 6px; }
+  .sidebar a { border-left: 0; padding: 4px 9px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
+  .sidebar a.active { border-color: var(--green); background: var(--green-soft); }
+  .pager { grid-template-columns: 1fr; }
+  .pager .next { grid-column: 1; text-align: left; }
 }
 </style>
 </head>
@@ -103,7 +141,7 @@ blockquote p { margin: 0; }
   </div>
 </nav>
 <div class="layout">
-  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/" class="active">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Positioning</div><a href="/docs/vs-agent-browser/">vs agent-browser</a></aside>
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/" class="active">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Evaluate</div><a href="/docs/vs-agent-browser/">vs agent-browser</a><a href="/docs/vs-claude-codex/">vs Claude / Codex</a></aside>
   <main>
     <h1>Snapshots</h1>
     <p class="page-desc">One command turns a page into ~1–15 KB of text where every actionable element has a handle.</p>
@@ -121,7 +159,7 @@ Tab: 460154464
 - clickable &quot;Open card&quot; [ref=e88]
 </code></pre>
 <p>Agents pay context tokens for every byte a tool prints, so the snapshot format exists to be small. Measured: the HN front page is <strong>14 KB</strong> with <code>-i</code> (the DOM is 599 KB; the old JSON reader was 61 KB). A typical app view is 1–5 KB.</p>
-<h2>The grammar</h2>
+<h2 id="the-grammar">The grammar<a class="anchor" href="#the-grammar" aria-hidden="true">#</a></h2>
 <p>One line per node, indented to tree depth:</p>
 <pre><code>- {role} &quot;{name}&quot; [{attrs}]: {value}
 </code></pre>
@@ -131,7 +169,7 @@ Tab: 460154464
 <li>attrs, in order: <code>level=N</code>, <code>checked</code>/<code>checked=false</code>/<code>checked=mixed</code>, <code>expanded</code>, <code>selected</code>, <code>disabled</code>, <code>required</code>, <code>readonly</code>, <code>pressed</code>, <code>ref=eN</code>, <code>url=…</code> (with <code>-u</code>)</li>
 <li><code>: value</code> — current input value, only when it differs from the name. A form readback is free with the snapshot; no second round-trip to ask &quot;what does the field say now?&quot;</li>
 </ul>
-<h2>What gets a ref</h2>
+<h2 id="what-gets-a-ref">What gets a ref<a class="anchor" href="#what-gets-a-ref" aria-hidden="true">#</a></h2>
 <p>Refs are handles you can <a href="/docs/refs/">act on</a>. Three kinds of node earn one:</p>
 <ol>
 <li><strong>Interactive roles</strong> — button, link, textbox, checkbox, combobox, menuitem, tab, … always, even unnamed.</li>
@@ -139,13 +177,13 @@ Tab: 460154464
 <li><strong>Cursor-interactive sweep finds</strong> — see below.</li>
 </ol>
 <p>Anonymous structural nodes (layout divs, unnamed containers) collapse: their children promote up a level. That&#39;s most of why the output is small.</p>
-<h2>The sweep — catching div-soup</h2>
+<h2 id="the-sweep-catching-div-soup">The sweep — catching div-soup<a class="anchor" href="#the-sweep-catching-div-soup" aria-hidden="true">#</a></h2>
 <p>The accessibility tree only knows what page authors told it. Modern Tailwind-style SPAs are full of clickable <code>&lt;div&gt;</code>s and <code>&lt;span&gt;</code>s with no role: measured on a real app, one email-list view had <strong>37 clickable elements the AX tree couldn&#39;t see at all</strong> (cursor-pointer rows, dates, sender names). A well-built dashboard (Cloudflare&#39;s, measured) had zero.</p>
 <p>So every snapshot also runs a one-pass sweep for elements that <em>behave</em> clickable — <code>cursor: pointer</code>, <code>onclick</code>, <code>tabindex</code>, <code>contenteditable</code> — deduplicated to the topmost clickable (cursor inherits; you want the row, not its twelve children). They appear as:</p>
 <pre><code>- clickable &quot;sylvain@zerolooplabs.dev&quot; [ref=e704]
 </code></pre>
 <p>Same refs, same actions. Without the sweep, &quot;interactive only&quot; filtering would silently hide real targets — that was the dealbreaker that decided this design.</p>
-<h2>Flags</h2>
+<h2 id="flags">Flags<a class="anchor" href="#flags" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay snapshot --tab &lt;id&gt;             # full tree
 chrome-relay snapshot --tab &lt;id&gt; -i          # ref-bearing elements only (use this)
 chrome-relay snapshot --tab &lt;id&gt; -d 3        # cap depth
@@ -154,22 +192,27 @@ chrome-relay snapshot --tab &lt;id&gt; -u          # include link hrefs as url= 
 chrome-relay snapshot --tab &lt;id&gt; --json      # structured envelope: { title, url, tabId, nodes, refs }
 </code></pre>
 <p><code>--json</code> includes the full refs map — each ref&#39;s <code>backendNodeId</code>, role, name — for programmatic callers. The text form is for reading; the JSON form is for building on.</p>
-<h2>Frames and shadow DOM</h2>
+<h2 id="frames-and-shadow-dom">Frames and shadow DOM<a class="anchor" href="#frames-and-shadow-dom" aria-hidden="true">#</a></h2>
 <ul>
 <li><strong>Shadow DOM: pierced.</strong> The accessibility tree sees through shadow roots, so web-component internals get refs that <code>querySelector</code> could never reach. (Pinned by an e2e test: a <code>&lt;input&gt;</code> inside a shadow root gets a ref, and <code>fill @ref</code> writes through the boundary.)</li>
 <li><strong>Same-process iframes: included</strong> — they appear in the tab&#39;s AX tree.</li>
 <li><strong>Cross-origin iframes: not yet.</strong> Snapshot is top-frame scoped for OOPIFs. Coordinate clicks still land in them (input is dispatched at page level); ref/selector addressing doesn&#39;t. Stated limitation, on the roadmap.</li>
 </ul>
-<h2>Deprecated: <code>read</code> and <code>ax</code></h2>
+<h2 id="deprecated-read-and-ax">Deprecated: <code>read</code> and <code>ax</code><a class="anchor" href="#deprecated-read-and-ax" aria-hidden="true">#</a></h2>
 <p>Earlier versions had two separate readers (<code>read</code> = DOM walk with CSS selectors, <code>ax</code> = accessibility tree with its own id space). Both are now aliases for <code>snapshot</code> and print a deprecation notice; they&#39;ll be removed. If you have scripts parsing the old shapes, switch to <code>snapshot --json</code>.</p>
 
-    <div class="pager"><span><a href="/docs/architecture/">← Architecture</a></span><span><a href="/docs/refs/"> Refs</a>→</span></div>
-    <p class="md-link">Agents: this page as <a href="https://chrome-relay.kushalsm.com/docs/snapshots.md">plain markdown</a> · all docs in <a href="/llms.txt">/llms.txt</a></p>
+    <div class="pager"><a class="prev" href="/docs/architecture/"><span class="dir">← Previous</span><span class="t">Architecture</span></a><a class="next" href="/docs/refs/"><span class="dir">Next →</span><span class="t">Refs</span></a></div>
   </main>
 </div>
 <footer class="footer">
   <a href="https://kushalsm.com">kushalsm.com</a>
-  <div><a href="/privacy/">Privacy</a> · <a href="/support/">Support</a></div>
+  <div class="flinks">
+    <a href="https://chrome-relay.kushalsm.com/docs/snapshots.md">this page as markdown</a>
+    <a href="/llms.txt">llms.txt</a>
+    <a href="/skill.md">skill.md</a>
+    <a href="/privacy/">Privacy</a>
+    <a href="/support/">Support</a>
+  </div>
 </footer>
 </body>
 </html>

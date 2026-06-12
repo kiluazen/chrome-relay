@@ -9,9 +9,12 @@
 <meta property="og:description" content="Automation browsers give your agent a browser. Chrome Relay gives it yours — and that difference is the whole product." />
 <meta property="og:type" content="article" />
 <meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/why-your-real-chrome/" />
+<meta property="og:image" content="https://chrome-relay.kushalsm.com/ext-index.png" />
+<meta name="twitter:card" content="summary_large_image" />
 <link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/why-your-real-chrome/" />
 <link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/why-your-real-chrome.md" title="Markdown version" />
 <link rel="icon" type="image/png" href="/icon-128.png" />
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Why your real Chrome","description":"Automation browsers give your agent a browser. Chrome Relay gives it yours — and that difference is the whole product.","url":"https://chrome-relay.kushalsm.com/docs/why-your-real-chrome/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
 <style>
 :root {
   color-scheme: light;
@@ -19,76 +22,111 @@
   --panel: #fffdf6; --green: #1f7a4d; --green-soft: #e6f2eb;
 }
 * { box-sizing: border-box; }
-html { background: var(--paper); }
+html { background: var(--paper); scroll-behavior: smooth; }
 body {
-  margin: 0; color: var(--ink); line-height: 1.6; font-size: 16px;
+  margin: 0; color: var(--ink); line-height: 1.65; font-size: 15.5px;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
 }
 .bg-art {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background: url('/bg.jpg') center/cover no-repeat;
-  opacity: 0.12; filter: saturate(0.25) contrast(0.4) brightness(1.7);
+  opacity: 0.10; filter: saturate(0.25) contrast(0.4) brightness(1.7);
 }
 a { color: inherit; }
 .nav {
-  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 0;
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 0;
 }
-.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; }
-.brand img { width: 32px; height: 32px; border-radius: 8px; }
-.nav-links { display: flex; gap: 18px; font-size: 14.5px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; font-size: 15.5px; }
+.brand img { width: 30px; height: 30px; border-radius: 7px; }
+.nav-links { display: flex; gap: 18px; font-size: 14px; }
 .nav-links a { text-decoration: none; color: var(--muted); font-weight: 550; }
 .nav-links a:hover { color: var(--ink); }
+
 .layout {
-  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
-  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding: 12px 0 90px;
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 56px; padding: 16px 0 80px;
 }
-.sidebar { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+.sidebar { position: sticky; top: 20px; align-self: start; padding-top: 6px; }
+.sidebar .group {
+  margin: 18px 0 5px; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); opacity: 0.7; font-weight: 650;
+}
+.sidebar .group:first-child { margin-top: 0; }
 .sidebar a {
-  display: block; padding: 5px 10px; text-decoration: none; color: var(--muted);
-  border-left: 2px solid transparent; border-radius: 0 6px 6px 0;
+  display: block; padding: 4px 0 4px 12px; text-decoration: none; color: var(--muted);
+  font-size: 13.5px; border-left: 2px solid transparent; line-height: 1.45;
 }
 .sidebar a:hover { color: var(--ink); }
-.sidebar a.active { color: var(--green); border-left-color: var(--green); background: var(--green-soft); font-weight: 600; }
-.sidebar .group { margin: 14px 0 4px; padding-left: 10px; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); opacity: 0.75; }
-main { max-width: 760px; min-width: 0; }
-main h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin: 10px 0 6px; }
-.page-desc { color: var(--muted); margin: 0 0 28px; font-size: 17px; }
-main h2 { font-size: 22px; margin: 42px 0 10px; letter-spacing: -0.01em; }
-main h3 { font-size: 17px; margin: 28px 0 8px; }
+.sidebar a.active { color: var(--green); border-left-color: var(--green); font-weight: 650; }
+
+main { max-width: 700px; min-width: 0; }
+main h1 { font-size: 30px; line-height: 1.15; letter-spacing: -0.022em; margin: 14px 0 8px; }
+.page-desc { color: var(--muted); margin: 0 0 30px; font-size: 16.5px; line-height: 1.5; }
+main h2 {
+  font-size: 20px; margin: 46px 0 12px; letter-spacing: -0.012em;
+  padding-bottom: 8px; border-bottom: 1px solid var(--line);
+}
+main h3 { font-size: 16px; margin: 30px 0 8px; }
+.anchor {
+  margin-left: 8px; text-decoration: none; color: var(--green);
+  opacity: 0; font-weight: 400; transition: opacity 0.1s;
+}
+h2:hover .anchor, h3:hover .anchor { opacity: 0.7; }
 main p, main li { color: #2a2722; }
+main li { margin-bottom: 5px; }
 main hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
 code {
-  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.86em;
-  background: #ece7d9; padding: 2px 6px; border-radius: 5px;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.85em;
+  background: #ece7d9; padding: 2px 5px; border-radius: 5px;
 }
 pre {
   background: #14120e; color: #e8e2d6; border-radius: 10px;
-  padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.55;
-  border: 1px solid #2a2620;
+  padding: 15px 18px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+  margin: 16px 0;
 }
 pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14.5px; }
-th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--ink); }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
+th {
+  text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--muted); padding: 7px 10px; border-bottom: 2px solid var(--ink); font-weight: 650;
+}
 td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-td:first-child code, td:first-child { white-space: nowrap; }
 td:first-child { font-weight: 600; }
 blockquote {
   margin: 18px 0; padding: 12px 18px; border-left: 3px solid var(--green);
   background: var(--green-soft); border-radius: 0 8px 8px 0;
 }
 blockquote p { margin: 0; }
-.md-link { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
-.md-link a { color: var(--green); }
-.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; font-size: 14.5px; }
-.pager a { text-decoration: none; color: var(--green); font-weight: 600; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
-.footer { width: min(1240px, calc(100% - 56px)); margin: 0 auto; display: flex; justify-content: space-between; padding: 26px 0 40px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
-.footer a { color: var(--muted); }
+
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 52px; }
+.pager a {
+  display: block; text-decoration: none; padding: 12px 16px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+}
+.pager a:hover { border-color: var(--green); }
+.pager .dir { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+.pager .t { display: block; font-size: 14.5px; font-weight: 650; color: var(--green); }
+.pager .next { text-align: right; grid-column: 2; }
+
+.footer {
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+  padding: 22px 0 36px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line);
+}
+.footer a { color: var(--muted); text-decoration: none; }
+.footer a:hover { color: var(--ink); text-decoration: underline; }
+.footer .flinks { display: flex; gap: 14px; flex-wrap: wrap; }
+
 @media (max-width: 880px) {
-  .layout { grid-template-columns: 1fr; gap: 8px; }
-  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .layout { grid-template-columns: 1fr; gap: 10px; }
+  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 4px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
   .sidebar .group { display: none; }
-  .sidebar a { border-left: 0; border-radius: 6px; }
+  .sidebar a { border-left: 0; padding: 4px 9px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
+  .sidebar a.active { border-color: var(--green); background: var(--green-soft); }
+  .pager { grid-template-columns: 1fr; }
+  .pager .next { grid-column: 1; text-align: left; }
 }
 </style>
 </head>
@@ -103,7 +141,7 @@ blockquote p { margin: 0; }
   </div>
 </nav>
 <div class="layout">
-  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/" class="active">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Positioning</div><a href="/docs/vs-agent-browser/">vs agent-browser</a></aside>
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/" class="active">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Evaluate</div><a href="/docs/vs-agent-browser/">vs agent-browser</a><a href="/docs/vs-claude-codex/">vs Claude / Codex</a></aside>
   <main>
     <h1>Why your real Chrome</h1>
     <p class="page-desc">Automation browsers give your agent a browser. Chrome Relay gives it yours — and that difference is the whole product.</p>
@@ -113,13 +151,13 @@ blockquote p { margin: 0; }
 <li><strong>Attach to the browser you already use.</strong> That&#39;s Chrome Relay.</li>
 </ol>
 <p>Neither is wrong. They&#39;re different products. The sandbox is right for e2e tests, scraping, CI. But the moment the task involves <em>your</em> accounts, the sandbox has nothing to offer:</p>
-<h2>What only exists in your real browser</h2>
+<h2 id="what-only-exists-in-your-real-browser">What only exists in your real browser<a class="anchor" href="#what-only-exists-in-your-real-browser" aria-hidden="true">#</a></h2>
 <p><strong>Your logins.</strong> Here&#39;s a live test from our own benchmarking: we opened <code>news.ycombinator.com</code> in an automation browser and through Chrome Relay, same machine, same minute. The automation browser saw the logged-out page — a <code>login</code> link. Chrome Relay saw a logged-in session: username in the header, no login link anywhere. Same URL, two different realities. Every dashboard, admin panel, inbox, and internal tool your agent might operate lives exclusively in the second one.</p>
 <p><strong>Cloudflare and friends.</strong> Chrome for Testing is fingerprinted by anti-bot systems and routinely blocked or challenged. Your real Chrome is indistinguishable from you, because it <em>is</em> you. There&#39;s no stealth plugin arms race when there&#39;s nothing to disguise.</p>
 <p><strong>Your extensions.</strong> Password manager, ad blocker, that internal company extension — present and working.</p>
 <p><strong>localhost.</strong> The dev server you&#39;re running, with whatever auth state your browser already negotiated with it.</p>
 <p><strong>No credential handoff.</strong> The alternative way to get an agent &quot;logged in&quot; is exporting cookies or storing credentials in a vault it can replay. With Chrome Relay there&#39;s nothing to export — the session never leaves the browser it lives in.</p>
-<h2>The objections, honestly</h2>
+<h2 id="the-objections-honestly">The objections, honestly<a class="anchor" href="#the-objections-honestly" aria-hidden="true">#</a></h2>
 <p><strong>&quot;Isn&#39;t attaching to my real browser dangerous?&quot;</strong> It&#39;s a real trade and you should make it consciously. Two things bound the risk:</p>
 <ul>
 <li><em>Scope.</em> Everything is local: CLI → <code>127.0.0.1</code> → native messaging → extension. The bridge binds to localhost only and rejects browser-origin requests, so a web page can&#39;t call it. There&#39;s no cloud relay that could be compromised, no account that could leak.</li>
@@ -128,7 +166,7 @@ blockquote p { margin: 0; }
 <p>What it doesn&#39;t bound: an agent with your sessions can do what you can do. That&#39;s the point, and it&#39;s why Chrome Relay favors strict, loud failure over silent cleverness — structured error codes, no auto-fallbacks, refusal to click through overlays (<code>click_intercepted</code>). You should know what your agent did and why.</p>
 <p><strong>&quot;Why not just launch Chrome with <code>--remote-debugging-port</code>?&quot;</strong> Because that requires <em>relaunching</em> Chrome (killing your session), and it exposes the raw debugging protocol — every tab, every cookie — to any process on the machine that can reach the port. The extension + native-messaging route attaches to the already-running browser, with Chrome&#39;s own permission model in front of it, scoped to one whitelisted local binary. <a href="/docs/architecture/">Architecture</a> covers this in detail.</p>
 <p><strong>&quot;Won&#39;t the agent steal my focus while I work?&quot;</strong> No — that constraint shaped the whole design. Commands run on background tabs via CDP; the extension even patches <code>document.visibilityState</code> so pages keep behaving normally while backgrounded. You browse in one tab while the agent works in another. Multiple agents can drive separate named windows (<a href="/docs/workspaces/">workspaces</a>).</p>
-<h2>When you should NOT use Chrome Relay</h2>
+<h2 id="when-you-should-not-use-chrome-relay">When you should NOT use Chrome Relay<a class="anchor" href="#when-you-should-not-use-chrome-relay" aria-hidden="true">#</a></h2>
 <p>Honesty section. Use a sandbox browser instead when:</p>
 <ul>
 <li>You&#39;re running <strong>CI or e2e tests</strong> — you want determinism and a clean profile, not your cookies.</li>
@@ -142,13 +180,18 @@ blockquote p { margin: 0; }
 Chrome Relay is what your agent uses to operate <em>your</em> web — logged-in, real-profile, without taking the browser away from you.</p>
 </blockquote>
 
-    <div class="pager"><span><a href="/docs/quickstart/">← Quickstart</a></span><span><a href="/docs/architecture/"> Architecture</a>→</span></div>
-    <p class="md-link">Agents: this page as <a href="https://chrome-relay.kushalsm.com/docs/why-your-real-chrome.md">plain markdown</a> · all docs in <a href="/llms.txt">/llms.txt</a></p>
+    <div class="pager"><a class="prev" href="/docs/quickstart/"><span class="dir">← Previous</span><span class="t">Quickstart</span></a><a class="next" href="/docs/architecture/"><span class="dir">Next →</span><span class="t">Architecture</span></a></div>
   </main>
 </div>
 <footer class="footer">
   <a href="https://kushalsm.com">kushalsm.com</a>
-  <div><a href="/privacy/">Privacy</a> · <a href="/support/">Support</a></div>
+  <div class="flinks">
+    <a href="https://chrome-relay.kushalsm.com/docs/why-your-real-chrome.md">this page as markdown</a>
+    <a href="/llms.txt">llms.txt</a>
+    <a href="/skill.md">skill.md</a>
+    <a href="/privacy/">Privacy</a>
+    <a href="/support/">Support</a>
+  </div>
 </footer>
 </body>
 </html>

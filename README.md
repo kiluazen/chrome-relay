@@ -1,82 +1,52 @@
 # Chrome Relay
 
-Chrome Relay exposes your existing browser profile to coding agents through a local bridge and a Chrome extension. The developer CLI is `chrome-relay`.
+Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms from any shell. No robot browser, no cookie export, no focus stealing.
 
-## What Exists Now
+```sh
+pnpm add -g chrome-relay && chrome-relay install     # plus the Chrome extension
+chrome-relay navigate "https://x.com" --new          # background tab
+chrome-relay snapshot --tab 1234 -i                  # actionable elements get @refs
+chrome-relay click @e12                              # act — no selectors, no --tab
+```
 
-- Minimal Chrome extension with a status popup
-- Local native host + local bridge server
-- `chrome-relay install` and `chrome-relay doctor`
-- Core browser tools only:
-  - `get_windows_and_tabs`
-  - `chrome_navigate`
-  - `chrome_switch_tab`
-  - `chrome_close_tabs`
-  - `chrome_screenshot`
-  - `chrome_read_page`
-  - `chrome_click_element`
-  - `chrome_fill_or_select`
-  - `chrome_keyboard`
+**Docs: [chrome-relay.kushalsm.com/docs](https://chrome-relay.kushalsm.com/docs/)** · [Quickstart](https://chrome-relay.kushalsm.com/docs/quickstart/) · [Why your real Chrome](https://chrome-relay.kushalsm.com/docs/why-your-real-chrome/) · [Command reference](https://chrome-relay.kushalsm.com/docs/commands/) · agent surface: [llms.txt](https://chrome-relay.kushalsm.com/llms.txt) / [skill.md](https://chrome-relay.kushalsm.com/skill.md)
+
+Extension: [Chrome Web Store](https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb) · CLI: [npm](https://www.npmjs.com/package/chrome-relay)
+
+## How it works
+
+```
+agent (any shell)
+  → chrome-relay CLI
+  → localhost HTTP (127.0.0.1:12122)
+  → native messaging host
+  → Chrome extension (service worker)
+  → CDP (chrome.debugger)
+  → your real tabs
+```
+
+Everything is local — no cloud relay, no account, no telemetry. The extension attaches to the *already running* Chrome through native messaging, so there's no `--remote-debugging-port` relaunch and no open debug port. Details: [architecture](https://chrome-relay.kushalsm.com/docs/architecture/).
+
+## Surface
+
+Snapshots with actionable `@refs` (accessibility tree + cursor-interactive sweep, ~14 KB for the HN front page), trusted clicks and typing (`isTrusted: true`, works on React-Aria/Radix), per-tab console + network buffers with HAR export, screenshots of background tabs, screencast, device emulation, named workspaces for multi-agent work, and structured error codes agents branch on. Full list: [commands](https://chrome-relay.kushalsm.com/docs/commands/).
 
 ## Workspace
 
-- `apps/extension`: Chrome extension runtime and popup
-- `packages/cli`: native host, local bridge server, install flow, CLI
-- `packages/protocol`: shared tool schemas and bridge message contracts
+- `apps/extension` — Chrome extension: tool handlers, ref map, snapshot builder, CDP
+- `packages/cli` — CLI, native host, localhost bridge, install flow
+- `packages/protocol` — shared tool schemas, error codes, snapshot renderer
+- `landing` — chrome-relay.kushalsm.com, including the docs pipeline (`docs-src/` → `build-docs.mjs`)
+- `skills/chrome-relay` — the agent skill (mirror; canonical in [kstack](https://github.com/kiluazen/kstack))
 
-## Quick Start
+## Develop
 
-1. Install dependencies and build:
-
-```bash
+```sh
 pnpm install
 pnpm build
+pnpm -r test                               # protocol + cli + extension unit suites
+cd apps/extension && npx playwright test   # e2e against a real Chromium
+chrome-relay self-reload                   # reload the extension after a rebuild
 ```
 
-2. Register the native host:
-
-```bash
-node packages/cli/dist/cli.js install
-```
-
-3. Load the unpacked extension from:
-
-```text
-apps/extension/build/chrome-mv3
-```
-
-4. Run the CLI against your live browser:
-
-```bash
-node packages/cli/dist/cli.js tabs
-node packages/cli/dist/cli.js read -i
-node packages/cli/dist/cli.js screenshot --tab <tabId> -o evidence.png
-```
-
-## Store Release
-
-Build the extension zip for Chrome Web Store upload:
-
-```bash
-pnpm store:zip
-```
-
-The uploadable archive is written under `apps/extension/build/`, for example:
-
-```text
-apps/extension/build/chrome-relay-extension-0.2.3-chrome.zip
-```
-
-Review the store checklist and permission copy in:
-
-```text
-docs/chrome-web-store.md
-docs/privacy-policy.md
-```
-
-## Current Notes
-
-- The install flow currently targets Chrome on macOS and Linux.
-- The Chrome Web Store extension ID is pinned to `cpdiapbifblhlcpnmlmfpgfjlacebokb` so native messaging registration is deterministic.
-- The local bridge rejects browser-origin requests. Use the CLI, not arbitrary webpages, to drive it.
-- This is intentionally a thin browser-control core, not a workflow builder or embedded chat product.
+Load the unpacked extension from `apps/extension/build/chrome-mv3` for development. Store zips: `pnpm store:zip` → `apps/extension/build/`.

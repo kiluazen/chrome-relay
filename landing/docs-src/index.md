@@ -1,6 +1,6 @@
 ---
 title: Chrome Relay docs
-description: A local bridge between your coding agent and the Chrome you already have open. Nothing leaves the machine.
+description: Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms. Nothing leaves the machine.
 nav: Overview
 order: 0
 ---

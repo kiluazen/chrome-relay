@@ -1,6 +1,6 @@
 # Refs
 
-> "@eN handles that carry their own tab, heal across DOM churn, and refuse to click through overlays."
+> @eN handles that carry their own tab, heal across DOM churn, and refuse to click through overlays.
 
 
 Every actionable element in a [snapshot](/docs/snapshots/) gets a ref — `@e12` — and every element-addressed command accepts one:

@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>vs Claude in Chrome & Codex | Chrome Relay</title>
+<meta name="description" content="All three drive your real logged-in Chrome. The genuine difference is one thing — who can invoke it." />
+<meta property="og:title" content="vs Claude in Chrome & Codex | Chrome Relay" />
+<meta property="og:description" content="All three drive your real logged-in Chrome. The genuine difference is one thing — who can invoke it." />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/vs-claude-codex/" />
+<meta property="og:image" content="https://chrome-relay.kushalsm.com/ext-index.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/vs-claude-codex/" />
+<link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/vs-claude-codex.md" title="Markdown version" />
+<link rel="icon" type="image/png" href="/icon-128.png" />
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"vs Claude in Chrome & Codex","description":"All three drive your real logged-in Chrome. The genuine difference is one thing — who can invoke it.","url":"https://chrome-relay.kushalsm.com/docs/vs-claude-codex/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
+<style>
+:root {
+  color-scheme: light;
+  --paper: #f7f3e8; --ink: #181818; --muted: #58544c; --line: #d6d0c2;
+  --panel: #fffdf6; --green: #1f7a4d; --green-soft: #e6f2eb;
+}
+* { box-sizing: border-box; }
+html { background: var(--paper); scroll-behavior: smooth; }
+body {
+  margin: 0; color: var(--ink); line-height: 1.65; font-size: 15.5px;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+}
+.bg-art {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: url('/bg.jpg') center/cover no-repeat;
+  opacity: 0.10; filter: saturate(0.25) contrast(0.4) brightness(1.7);
+}
+a { color: inherit; }
+.nav {
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 0;
+}
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; font-size: 15.5px; }
+.brand img { width: 30px; height: 30px; border-radius: 7px; }
+.nav-links { display: flex; gap: 18px; font-size: 14px; }
+.nav-links a { text-decoration: none; color: var(--muted); font-weight: 550; }
+.nav-links a:hover { color: var(--ink); }
+
+.layout {
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 56px; padding: 16px 0 80px;
+}
+.sidebar { position: sticky; top: 20px; align-self: start; padding-top: 6px; }
+.sidebar .group {
+  margin: 18px 0 5px; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); opacity: 0.7; font-weight: 650;
+}
+.sidebar .group:first-child { margin-top: 0; }
+.sidebar a {
+  display: block; padding: 4px 0 4px 12px; text-decoration: none; color: var(--muted);
+  font-size: 13.5px; border-left: 2px solid transparent; line-height: 1.45;
+}
+.sidebar a:hover { color: var(--ink); }
+.sidebar a.active { color: var(--green); border-left-color: var(--green); font-weight: 650; }
+
+main { max-width: 700px; min-width: 0; }
+main h1 { font-size: 30px; line-height: 1.15; letter-spacing: -0.022em; margin: 14px 0 8px; }
+.page-desc { color: var(--muted); margin: 0 0 30px; font-size: 16.5px; line-height: 1.5; }
+main h2 {
+  font-size: 20px; margin: 46px 0 12px; letter-spacing: -0.012em;
+  padding-bottom: 8px; border-bottom: 1px solid var(--line);
+}
+main h3 { font-size: 16px; margin: 30px 0 8px; }
+.anchor {
+  margin-left: 8px; text-decoration: none; color: var(--green);
+  opacity: 0; font-weight: 400; transition: opacity 0.1s;
+}
+h2:hover .anchor, h3:hover .anchor { opacity: 0.7; }
+main p, main li { color: #2a2722; }
+main li { margin-bottom: 5px; }
+main hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
+code {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.85em;
+  background: #ece7d9; padding: 2px 5px; border-radius: 5px;
+}
+pre {
+  background: #14120e; color: #e8e2d6; border-radius: 10px;
+  padding: 15px 18px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+  margin: 16px 0;
+}
+pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
+th {
+  text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--muted); padding: 7px 10px; border-bottom: 2px solid var(--ink); font-weight: 650;
+}
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td:first-child { font-weight: 600; }
+blockquote {
+  margin: 18px 0; padding: 12px 18px; border-left: 3px solid var(--green);
+  background: var(--green-soft); border-radius: 0 8px 8px 0;
+}
+blockquote p { margin: 0; }
+
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 52px; }
+.pager a {
+  display: block; text-decoration: none; padding: 12px 16px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+}
+.pager a:hover { border-color: var(--green); }
+.pager .dir { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+.pager .t { display: block; font-size: 14.5px; font-weight: 650; color: var(--green); }
+.pager .next { text-align: right; grid-column: 2; }
+
+.footer {
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+  padding: 22px 0 36px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line);
+}
+.footer a { color: var(--muted); text-decoration: none; }
+.footer a:hover { color: var(--ink); text-decoration: underline; }
+.footer .flinks { display: flex; gap: 14px; flex-wrap: wrap; }
+
+@media (max-width: 880px) {
+  .layout { grid-template-columns: 1fr; gap: 10px; }
+  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 4px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .sidebar .group { display: none; }
+  .sidebar a { border-left: 0; padding: 4px 9px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
+  .sidebar a.active { border-color: var(--green); background: var(--green-soft); }
+  .pager { grid-template-columns: 1fr; }
+  .pager .next { grid-column: 1; text-align: left; }
+}
+</style>
+</head>
+<body>
+<div class="bg-art" aria-hidden="true"></div>
+<nav class="nav" aria-label="Primary">
+  <a class="brand" href="/"><img src="/icon-128.png" alt="" /><span>Chrome Relay</span></a>
+  <div class="nav-links">
+    <a href="/docs/">Docs</a>
+    <a href="https://github.com/kiluazen/chrome-relay">GitHub</a>
+    <a href="https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb">Chrome Web Store</a>
+  </div>
+</nav>
+<div class="layout">
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Evaluate</div><a href="/docs/vs-agent-browser/">vs agent-browser</a><a href="/docs/vs-claude-codex/" class="active">vs Claude / Codex</a></aside>
+  <main>
+    <h1>vs Claude in Chrome & Codex</h1>
+    <p class="page-desc">All three drive your real logged-in Chrome. The genuine difference is one thing — who can invoke it.</p>
+    <p>Anthropic ships <a href="https://claude.com/blog/claude-for-chrome">Claude in Chrome</a>. OpenAI ships a <a href="https://developers.openai.com/codex/app/chrome-extension">Codex Chrome extension</a>. Both do what Chrome Relay does at the core: let an agent act in the browser you&#39;re actually signed into — clicks, forms, page reads, console, network, screenshots. If you expected a capability war here, there isn&#39;t one.</p>
+<p>The genuine difference is <strong>who can invoke it</strong>:</p>
+<ul>
+<li><strong>Claude in Chrome</strong> is invoked by Claude — the claude.ai side panel or Claude Code&#39;s <code>--chrome</code>. Paid plans only (Pro/Max/Team/Enterprise, beta), Chrome and Edge.</li>
+<li><strong>Codex&#39;s extension</strong> is invoked by the Codex desktop app (<code>@Chrome</code> mentions). It isn&#39;t even available from the Codex <em>CLI</em> — that&#39;s an <a href="https://github.com/openai/codex/issues/22164">open feature request</a>.</li>
+<li><strong>Chrome Relay</strong> is a CLI. Anything that runs shell commands can invoke it — Claude Code, Codex CLI, a cron job, a CI-triggered script on your machine, the next agent that doesn&#39;t exist yet. Free, open source, no plan gating.</li>
+</ul>
+<p>So the choice is mostly already made by your setup:</p>
+<table>
+<thead>
+<tr>
+<th>Your situation</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>You live in Claude (claude.ai or Claude Code) and its built-in browser control covers you</td>
+<td>Claude in Chrome — it&#39;s right there</td>
+</tr>
+<tr>
+<td>You live in the Codex desktop app</td>
+<td>Codex&#39;s extension — same</td>
+</tr>
+<tr>
+<td>You run more than one agent, or want scripts/automation to drive the browser, or your agent has no vendor extension</td>
+<td>Chrome Relay</td>
+</tr>
+</tbody></table>
+<h2 id="the-secondary-differences-honestly">The secondary differences, honestly<a class="anchor" href="#the-secondary-differences-honestly" aria-hidden="true">#</a></h2>
+<p><strong>Safety posture.</strong> The vendor extensions ship supervised-mode machinery Chrome Relay doesn&#39;t: per-site permission prompts, &quot;ask before acting&quot;, confirmation gates on risky actions, default-blocked site categories. Chrome Relay&#39;s model is one trust decision at install — local processes that can run the CLI can drive the browser — with strict, loud failures rather than per-action prompts (<a href="/docs/architecture/">architecture</a>). If you want a permission prompt before every click, the vendor extensions do that and we don&#39;t.</p>
+<p><strong>Focus model.</strong> Claude in Chrome runs &quot;in a visible Chrome window in real time.&quot; Codex works in its own tab groups alongside yours. Chrome Relay runs on background tabs without activating them (and keeps pages behaving as if visible), which is what makes <a href="/docs/workspaces/">parallel agents in named windows</a> practical.</p>
+<p><strong>Scriptability.</strong> Vendor extensions are reachable only from inside their vendor&#39;s product session. Chrome Relay is a binary: pipe it, cron it, call it from any harness.</p>
+<p><strong>Cost coupling.</strong> Browser actions through vendor extensions consume your plan&#39;s usage limits. Chrome Relay costs whatever your agent&#39;s tokens cost — the tool itself adds nothing.</p>
+<h2 id="adjacent-vendor-neutral-mcp-bridges">Adjacent: vendor-neutral MCP bridges<a class="anchor" href="#adjacent-vendor-neutral-mcp-bridges" aria-hidden="true">#</a></h2>
+<p>Playwright MCP&#39;s extension mode, Chrome DevTools MCP, and Browser MCP also connect agents to a real Chrome, vendor-neutrally, over MCP. The honest difference there is interface economics: MCP tool schemas occupy context on every turn, a CLI occupies none until used — plus Chrome Relay&#39;s <a href="/docs/refs/">snapshot/ref loop</a> and <a href="/docs/errors/">structured errors</a> are built for agent loops specifically. Same family, different interface bet.</p>
+<p>And if you don&#39;t need <em>your</em> browser at all — fresh-profile scraping, e2e tests, CI fleets — none of the above is the right tool: see <a href="/docs/vs-agent-browser/">vs agent-browser</a>.</p>
+
+    <div class="pager"><a class="prev" href="/docs/vs-agent-browser/"><span class="dir">← Previous</span><span class="t">vs agent-browser</span></a></div>
+  </main>
+</div>
+<footer class="footer">
+  <a href="https://kushalsm.com">kushalsm.com</a>
+  <div class="flinks">
+    <a href="https://chrome-relay.kushalsm.com/docs/vs-claude-codex.md">this page as markdown</a>
+    <a href="/llms.txt">llms.txt</a>
+    <a href="/skill.md">skill.md</a>
+    <a href="/privacy/">Privacy</a>
+    <a href="/support/">Support</a>
+  </div>
+</footer>
+</body>
+</html>

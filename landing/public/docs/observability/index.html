@@ -9,9 +9,12 @@
 <meta property="og:description" content="Console, network, screenshots, screencast — what the page did, not just what it looks like." />
 <meta property="og:type" content="article" />
 <meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/observability/" />
+<meta property="og:image" content="https://chrome-relay.kushalsm.com/ext-index.png" />
+<meta name="twitter:card" content="summary_large_image" />
 <link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/observability/" />
 <link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/observability.md" title="Markdown version" />
 <link rel="icon" type="image/png" href="/icon-128.png" />
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Observability","description":"Console, network, screenshots, screencast — what the page did, not just what it looks like.","url":"https://chrome-relay.kushalsm.com/docs/observability/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
 <style>
 :root {
   color-scheme: light;
@@ -19,76 +22,111 @@
   --panel: #fffdf6; --green: #1f7a4d; --green-soft: #e6f2eb;
 }
 * { box-sizing: border-box; }
-html { background: var(--paper); }
+html { background: var(--paper); scroll-behavior: smooth; }
 body {
-  margin: 0; color: var(--ink); line-height: 1.6; font-size: 16px;
+  margin: 0; color: var(--ink); line-height: 1.65; font-size: 15.5px;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
 }
 .bg-art {
   position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background: url('/bg.jpg') center/cover no-repeat;
-  opacity: 0.12; filter: saturate(0.25) contrast(0.4) brightness(1.7);
+  opacity: 0.10; filter: saturate(0.25) contrast(0.4) brightness(1.7);
 }
 a { color: inherit; }
 .nav {
-  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
-  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 0;
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 0;
 }
-.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; }
-.brand img { width: 32px; height: 32px; border-radius: 8px; }
-.nav-links { display: flex; gap: 18px; font-size: 14.5px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 750; font-size: 15.5px; }
+.brand img { width: 30px; height: 30px; border-radius: 7px; }
+.nav-links { display: flex; gap: 18px; font-size: 14px; }
 .nav-links a { text-decoration: none; color: var(--muted); font-weight: 550; }
 .nav-links a:hover { color: var(--ink); }
+
 .layout {
-  width: min(1240px, calc(100% - 56px)); margin: 0 auto;
-  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 48px; padding: 12px 0 90px;
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 56px; padding: 16px 0 80px;
 }
-.sidebar { position: sticky; top: 24px; align-self: start; font-size: 14px; }
+.sidebar { position: sticky; top: 20px; align-self: start; padding-top: 6px; }
+.sidebar .group {
+  margin: 18px 0 5px; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); opacity: 0.7; font-weight: 650;
+}
+.sidebar .group:first-child { margin-top: 0; }
 .sidebar a {
-  display: block; padding: 5px 10px; text-decoration: none; color: var(--muted);
-  border-left: 2px solid transparent; border-radius: 0 6px 6px 0;
+  display: block; padding: 4px 0 4px 12px; text-decoration: none; color: var(--muted);
+  font-size: 13.5px; border-left: 2px solid transparent; line-height: 1.45;
 }
 .sidebar a:hover { color: var(--ink); }
-.sidebar a.active { color: var(--green); border-left-color: var(--green); background: var(--green-soft); font-weight: 600; }
-.sidebar .group { margin: 14px 0 4px; padding-left: 10px; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); opacity: 0.75; }
-main { max-width: 760px; min-width: 0; }
-main h1 { font-size: 34px; line-height: 1.15; letter-spacing: -0.02em; margin: 10px 0 6px; }
-.page-desc { color: var(--muted); margin: 0 0 28px; font-size: 17px; }
-main h2 { font-size: 22px; margin: 42px 0 10px; letter-spacing: -0.01em; }
-main h3 { font-size: 17px; margin: 28px 0 8px; }
+.sidebar a.active { color: var(--green); border-left-color: var(--green); font-weight: 650; }
+
+main { max-width: 700px; min-width: 0; }
+main h1 { font-size: 30px; line-height: 1.15; letter-spacing: -0.022em; margin: 14px 0 8px; }
+.page-desc { color: var(--muted); margin: 0 0 30px; font-size: 16.5px; line-height: 1.5; }
+main h2 {
+  font-size: 20px; margin: 46px 0 12px; letter-spacing: -0.012em;
+  padding-bottom: 8px; border-bottom: 1px solid var(--line);
+}
+main h3 { font-size: 16px; margin: 30px 0 8px; }
+.anchor {
+  margin-left: 8px; text-decoration: none; color: var(--green);
+  opacity: 0; font-weight: 400; transition: opacity 0.1s;
+}
+h2:hover .anchor, h3:hover .anchor { opacity: 0.7; }
 main p, main li { color: #2a2722; }
+main li { margin-bottom: 5px; }
 main hr { border: 0; border-top: 1px solid var(--line); margin: 36px 0; }
 code {
-  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.86em;
-  background: #ece7d9; padding: 2px 6px; border-radius: 5px;
+  font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 0.85em;
+  background: #ece7d9; padding: 2px 5px; border-radius: 5px;
 }
 pre {
   background: #14120e; color: #e8e2d6; border-radius: 10px;
-  padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.55;
-  border: 1px solid #2a2620;
+  padding: 15px 18px; overflow-x: auto; font-size: 13px; line-height: 1.6;
+  margin: 16px 0;
 }
 pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
-table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14.5px; }
-th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 8px 10px; border-bottom: 2px solid var(--ink); }
+table { width: 100%; border-collapse: collapse; margin: 18px 0; font-size: 14px; }
+th {
+  text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em;
+  color: var(--muted); padding: 7px 10px; border-bottom: 2px solid var(--ink); font-weight: 650;
+}
 td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-td:first-child code, td:first-child { white-space: nowrap; }
 td:first-child { font-weight: 600; }
 blockquote {
   margin: 18px 0; padding: 12px 18px; border-left: 3px solid var(--green);
   background: var(--green-soft); border-radius: 0 8px 8px 0;
 }
 blockquote p { margin: 0; }
-.md-link { margin-top: 56px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
-.md-link a { color: var(--green); }
-.pager { display: flex; justify-content: space-between; gap: 16px; margin-top: 40px; font-size: 14.5px; }
-.pager a { text-decoration: none; color: var(--green); font-weight: 600; padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
-.footer { width: min(1240px, calc(100% - 56px)); margin: 0 auto; display: flex; justify-content: space-between; padding: 26px 0 40px; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); }
-.footer a { color: var(--muted); }
+
+.pager { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 52px; }
+.pager a {
+  display: block; text-decoration: none; padding: 12px 16px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+}
+.pager a:hover { border-color: var(--green); }
+.pager .dir { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 2px; }
+.pager .t { display: block; font-size: 14.5px; font-weight: 650; color: var(--green); }
+.pager .next { text-align: right; grid-column: 2; }
+
+.footer {
+  width: min(1180px, calc(100% - 48px)); margin: 0 auto;
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+  padding: 22px 0 36px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line);
+}
+.footer a { color: var(--muted); text-decoration: none; }
+.footer a:hover { color: var(--ink); text-decoration: underline; }
+.footer .flinks { display: flex; gap: 14px; flex-wrap: wrap; }
+
 @media (max-width: 880px) {
-  .layout { grid-template-columns: 1fr; gap: 8px; }
-  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 6px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  .layout { grid-template-columns: 1fr; gap: 10px; }
+  .sidebar { position: static; display: flex; flex-wrap: wrap; gap: 2px 4px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
   .sidebar .group { display: none; }
-  .sidebar a { border-left: 0; border-radius: 6px; }
+  .sidebar a { border-left: 0; padding: 4px 9px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
+  .sidebar a.active { border-color: var(--green); background: var(--green-soft); }
+  .pager { grid-template-columns: 1fr; }
+  .pager .next { grid-column: 1; text-align: left; }
 }
 </style>
 </head>
@@ -103,12 +141,12 @@ blockquote p { margin: 0; }
   </div>
 </nav>
 <div class="layout">
-  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/" class="active">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Positioning</div><a href="/docs/vs-agent-browser/">vs agent-browser</a></aside>
+  <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/" class="active">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Evaluate</div><a href="/docs/vs-agent-browser/">vs agent-browser</a><a href="/docs/vs-claude-codex/">vs Claude / Codex</a></aside>
   <main>
     <h1>Observability</h1>
     <p class="page-desc">Console, network, screenshots, screencast — what the page did, not just what it looks like.</p>
     <p>Debugging a web app through an agent means the agent needs what <em>you&#39;d</em> open DevTools for. Chrome Relay buffers it per tab and serves it on demand.</p>
-<h2>Console</h2>
+<h2 id="console">Console<a class="anchor" href="#console" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay console read --tab 42
 chrome-relay console read --tab 42 --level error,warn
 chrome-relay console read --tab 42 --since 1718200000000 --limit 50
@@ -124,7 +162,7 @@ chrome-relay click @e12
 chrome-relay console read --tab 42
 </code></pre>
 <p>A click that &quot;succeeded but nothing happened&quot; stops being a mystery.</p>
-<h2>Network</h2>
+<h2 id="network">Network<a class="anchor" href="#network" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay network read --tab 42                       # request/response metadata
 chrome-relay network read --tab 42 --url &quot;/api/&quot; --method POST
 chrome-relay network read --tab 42 --status failed       # buckets: ok|redirect|client_error|server_error|failed
@@ -134,29 +172,34 @@ chrome-relay network clear --tab 42
 </code></pre>
 <p>Per-tab ring buffer (200 entries, 512 KB, metadata only — bodies fetched on demand because they&#39;re big and usually unneeded). Each entry: URL, method, status, mime, headers, timings, sizes, cache/service-worker flags.</p>
 <p>Caveat worth knowing: Chrome evicts response bodies aggressively — <code>network body</code> on a request older than ~30 seconds may fail. Read bodies soon after the request, or capture a HAR while it&#39;s fresh.</p>
-<h2>Screenshots</h2>
+<h2 id="screenshots">Screenshots<a class="anchor" href="#screenshots" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay screenshot --tab 42 -o shot.png                 # background tabs fine
 chrome-relay screenshot --tab 42 --full -o page.png          # beyond the viewport
 chrome-relay screenshot --tab 42 --selector &quot;.card&quot; --padding 8 -o card.png
 chrome-relay screenshot --tab 42 --max-edge 800 -o small.png # downscale for vision models
 </code></pre>
 <p>Use <a href="/docs/snapshots/">snapshots</a> to <em>act</em> and screenshots to <em>verify</em> — text is cheap, pixels are proof. Take one before anything irreversible (form submit, send, delete).</p>
-<h2>Screencast</h2>
+<h2 id="screencast">Screencast<a class="anchor" href="#screencast" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay screencast start --tab 42 --quality 80 --max-width 900
 chrome-relay hover @e12       # the micro-interaction you&#39;re capturing
 chrome-relay screencast stop --tab 42 --out /tmp/rec --gif
 </code></pre>
 <p>Paint-driven frame capture — it sees CSS transitions, fade-ins, and hover states that screenshot polling misses. Two constraints: the tab must be <strong>active</strong> (Chrome doesn&#39;t paint background tabs), and <code>--gif</code>/<code>--mp4</code> stitching needs ffmpeg on PATH (fails with <code>external_dependency_missing</code> if absent, or pass <code>--allow-missing-ffmpeg</code> to keep the raw frames). Consecutive identical frames are deduped by hash before stitching.</p>
-<h2>What stays on your machine</h2>
+<h2 id="what-stays-on-your-machine">What stays on your machine<a class="anchor" href="#what-stays-on-your-machine" aria-hidden="true">#</a></h2>
 <p>All of it. Buffers live in the extension&#39;s memory, capped, per tab, dropped when the tab closes. Nothing is uploaded anywhere — there is nowhere to upload to.</p>
 
-    <div class="pager"><span><a href="/docs/commands/">← Commands</a></span><span><a href="/docs/workspaces/"> Workspaces</a>→</span></div>
-    <p class="md-link">Agents: this page as <a href="https://chrome-relay.kushalsm.com/docs/observability.md">plain markdown</a> · all docs in <a href="/llms.txt">/llms.txt</a></p>
+    <div class="pager"><a class="prev" href="/docs/commands/"><span class="dir">← Previous</span><span class="t">Commands</span></a><a class="next" href="/docs/workspaces/"><span class="dir">Next →</span><span class="t">Workspaces</span></a></div>
   </main>
 </div>
 <footer class="footer">
   <a href="https://kushalsm.com">kushalsm.com</a>
-  <div><a href="/privacy/">Privacy</a> · <a href="/support/">Support</a></div>
+  <div class="flinks">
+    <a href="https://chrome-relay.kushalsm.com/docs/observability.md">this page as markdown</a>
+    <a href="/llms.txt">llms.txt</a>
+    <a href="/skill.md">skill.md</a>
+    <a href="/privacy/">Privacy</a>
+    <a href="/support/">Support</a>
+  </div>
 </footer>
 </body>
 </html>
