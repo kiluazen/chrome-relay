@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Chrome Relay - Terminal to Chrome</title>
-    <meta name="description" content="Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms from the terminal. Cookies, SSO, extensions, localhost. Fully local." />
+    <meta name="description" content="Your agent drives the Chrome you're signed into. It reads pages, clicks buttons, and fills forms from the terminal. Cookies, SSO, extensions, localhost. Fully local." />
     <meta property="og:title" content="Chrome Relay" />
     <meta property="og:description" content="Your agent drives the Chrome you're signed into. Fully local." />
     <meta property="og:type" content="website" />
@@ -43,7 +43,7 @@
         overflow-x: hidden;
       }
 
-      /* Faded engraving wallpaper. Same filter cocktail as autark / plumcake —
+      /* Faded engraving wallpaper. Same filter cocktail as autark / plumcake:
          brightness 1.7 + low contrast/saturate turns Matejko's Battle of
          Grunwald into faint outlines on cream paper. Sits behind everything
          via z-index: -1; never reacts to clicks. */
@@ -150,8 +150,8 @@
 
       /* Inline email + Add-to-Chrome. Button is disabled until the email
          field passes its native + pattern validation (a valid TLD). On
-         submit we sendBeacon the email and navigate to the Web Store —
-         no "Sending…" text-swap, no "Sent ✓" state hang, because the
+         submit we sendBeacon the email and navigate to the Web Store.
+         No "Sending..." text-swap, no "Sent" state hang, because the
          user is leaving the page anyway. */
       .hero-form {
         display: flex;
@@ -213,7 +213,7 @@
 
       .skill-wrap {
         border-top: 1px solid var(--line);
-        /* No solid background — wallpaper shows through, matching the rest
+        /* No solid background. Wallpaper shows through, matching the rest
            of the page. The dark command card stays prominent on its own. */
       }
 
@@ -281,6 +281,64 @@
       }
 
       .copy-button:hover { background: rgba(255, 253, 246, 0.1); }
+
+      .start-wrap { border-top: 1px solid var(--line); }
+      .start-section {
+        width: min(760px, calc(100% - 56px));
+        margin: 0 auto;
+        padding: 48px 0 16px;
+      }
+      .start-title {
+        margin: 0 0 24px;
+        font-size: clamp(24px, 3.4vw, 32px);
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 28px; }
+      .step { display: grid; grid-template-columns: 32px 1fr; gap: 16px; align-items: start; }
+      .step-n {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        background: var(--green-soft);
+        color: var(--green);
+        font-weight: 700;
+        font-size: 15px;
+      }
+      .step-body h3 { margin: 3px 0 6px; font-size: 18px; font-weight: 650; }
+      .step-body p { margin: 0 0 14px; color: #38352f; font-size: 15px; max-width: 60ch; }
+      .prompt-card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #181818;
+        padding: 12px 16px 16px;
+      }
+      .prompt-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .prompt-head span {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: rgba(255, 253, 246, 0.45);
+      }
+      .prompt-card pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #e2ddd0;
+      }
 
       .footer-wrap { border-top: 1px solid var(--line); }
 
@@ -438,8 +496,9 @@
         <div class="hero-copy">
           <h1><span class="line">Terminal to</span> <span class="line">Chrome.</span></h1>
           <p class="lede">
-            Your agent drives the Chrome you're signed into &mdash; reads pages, clicks buttons,
-            fills forms &mdash; while you keep browsing. Nothing leaves the machine.
+            Your agent drives the Chrome you're signed into.<br />
+            It reads pages, clicks buttons, and fills forms while you keep browsing.<br />
+            Nothing leaves the machine.
           </p>
           <form class="hero-form" id="hero-form" novalidate>
             <input
@@ -465,16 +524,45 @@
       </div>
     </header>
 
-    <section class="skill-wrap">
-      <div class="skill-section">
-        <div class="skill-copy">
-          <span class="skill-label">Comes with an agent skill</span>
-          <p class="skill-help">Install the playbook so agents know the Chrome Relay commands.</p>
-        </div>
-        <div class="command-card">
-          <code>npx skills add kiluazen/kstack@chrome-relay</code>
-          <button class="copy-button" type="button" data-copy="npx skills add kiluazen/kstack@chrome-relay">Copy</button>
-        </div>
+    <section class="start-wrap">
+      <div class="start-section">
+        <h2 class="start-title">Two steps to running</h2>
+        <ol class="steps">
+          <li class="step">
+            <span class="step-n">1</span>
+            <div class="step-body">
+              <h3>Add the extension</h3>
+              <p>The button up top. It loads into the Chrome you already use, signed in as you.</p>
+            </div>
+          </li>
+          <li class="step">
+            <span class="step-n">2</span>
+            <div class="step-body">
+              <h3>Paste this into Claude Code or Codex</h3>
+              <p>Your agent installs the bridge, checks the connection, and shows you it works. No npm fumbling on your side.</p>
+              <div class="prompt-card">
+                <div class="prompt-head">
+                  <span>prompt</span>
+                  <button class="copy-button" type="button" data-copy-target="agent-prompt">Copy</button>
+                </div>
+<pre id="agent-prompt">I just added the Chrome Relay extension to Chrome. It's an open-source tool
+(github.com/kiluazen/chrome-relay) that lets you drive my real Chrome from the
+terminal: read pages, click buttons, fill forms.
+
+It's safe and fully local. The extension only talks to a native host on this
+machine (localhost). Nothing is sent to any server, and the source is public.
+
+Set it up for me:
+  npm i -g chrome-relay
+  chrome-relay install      # registers the local bridge
+  chrome-relay doctor       # verify the connection
+  npx skills add kiluazen/kstack@chrome-relay   # learn the commands
+
+Then run chrome-relay tabs and show me my open tabs.</pre>
+              </div>
+            </div>
+          </li>
+        </ol>
       </div>
     </section>
 
@@ -498,12 +586,25 @@
         });
       });
 
+      // Copy the full text of a referenced element (the multi-line agent prompt).
+      document.querySelectorAll("[data-copy-target]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const el = document.getElementById(button.dataset.copyTarget);
+          if (!el) return;
+          await navigator.clipboard.writeText(el.textContent.trim());
+          button.textContent = "Copied";
+          window.setTimeout(() => {
+            button.textContent = "Copy";
+          }, 1400);
+        });
+      });
+
       // Hero email-gate. Button is disabled until the input is a valid
       // email (HTML5 type=email + a pattern that requires a real TLD).
       // On submit we fire-and-forget the email to the audience worker
       // via sendBeacon (persists across navigation) and immediately
-      // redirect to the Chrome Web Store. No "Sending…" text-swap, no
-      // "Sent ✓" state — the user is leaving the page.
+      // redirect to the Chrome Web Store. No "Sending..." text-swap, no
+      // "Sent" state. The user is leaving the page.
       //
       // Worker: solo/audience (Cloudflare Worker + D1). Admin view:
       // https://audience.kushalsm.com/admin?key=<ADMIN_KEY>
@@ -530,7 +631,7 @@
         const blob = new Blob([payload], { type: "text/plain;charset=utf-8" });
         const sent = navigator.sendBeacon && navigator.sendBeacon(ENDPOINT, blob);
         if (!sent) {
-          // sendBeacon unavailable or refused — fall back to keepalive fetch.
+          // sendBeacon unavailable or refused. Fall back to keepalive fetch.
           fetch(ENDPOINT, { method: "POST", body: payload, keepalive: true, headers: { "Content-Type": "text/plain;charset=utf-8" } }).catch(() => {});
         }
         window.location.href = WEB_STORE;
@@ -538,7 +639,7 @@
     </script>
     <!-- Cloudflare Web Analytics. Cookieless, no PII. Site registered as
          chrome-relay.kushalsm.com on the CF account. Stats land at
-         dash.cloudflare.com → Analytics → Web Analytics. -->
+         dash.cloudflare.com > Analytics > Web Analytics. -->
     <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "6b77725eb04b41ea956c0bfb3773ebfa"}'></script>
   </body>
 </html>

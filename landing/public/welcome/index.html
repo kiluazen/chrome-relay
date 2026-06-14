@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chrome Relay added — one step left</title>
+    <meta name="robots" content="noindex" />
+    <link rel="icon" href="/icon-128.png" type="image/png" />
+    <style>
+      :root {
+        --paper: #f7f3e8;
+        --ink: #181818;
+        --muted: #58544c;
+        --line: #d6d0c2;
+        --green: #1f7a4d;
+        --green-soft: #e6f2eb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .card { width: min(640px, 100%); }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--green);
+        background: var(--green-soft);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 5px 11px;
+      }
+      h1 {
+        margin: 18px 0 6px;
+        font-size: clamp(26px, 5vw, 34px);
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      .sub { margin: 0 0 22px; color: var(--muted); font-size: 16px; max-width: 52ch; }
+      .prompt-card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #181818;
+        padding: 12px 16px 16px;
+      }
+      .prompt-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .prompt-head span {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: rgba(255, 253, 246, 0.45);
+      }
+      .copy-button {
+        padding: 5px 12px;
+        border: 1px solid rgba(255, 253, 246, 0.18);
+        border-radius: 6px;
+        background: transparent;
+        color: #f7f3e8;
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .copy-button:hover { background: rgba(255, 253, 246, 0.1); }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #e2ddd0;
+      }
+      .foot { margin-top: 18px; font-size: 14px; color: var(--muted); }
+      .foot a { color: var(--green); text-decoration: none; font-weight: 600; }
+      .foot a:hover { text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <span class="badge">Extension added</span>
+      <h1>One step left.</h1>
+      <p class="sub">Paste this into Claude Code or Codex. Your agent installs the bridge, verifies it, and shows you it works.</p>
+      <div class="prompt-card">
+        <div class="prompt-head">
+          <span>prompt</span>
+          <button class="copy-button" type="button" data-copy-target="agent-prompt">Copy</button>
+        </div>
+<pre id="agent-prompt">I just added the Chrome Relay extension to Chrome. It's an open-source tool
+(github.com/kiluazen/chrome-relay) that lets you drive my real Chrome from the
+terminal: read pages, click buttons, fill forms.
+
+It's safe and fully local. The extension only talks to a native host on this
+machine (localhost). Nothing is sent to any server, and the source is public.
+
+Set it up for me:
+  npm i -g chrome-relay
+  chrome-relay install      # registers the local bridge
+  chrome-relay doctor       # verify the connection
+  npx skills add kiluazen/kstack@chrome-relay   # learn the commands
+
+Then run chrome-relay tabs and show me my open tabs.</pre>
+      </div>
+      <p class="foot">Stuck? <a href="/docs/installation/">Read the install docs</a>.</p>
+    </main>
+    <script>
+      document.querySelectorAll("[data-copy-target]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const el = document.getElementById(button.dataset.copyTarget);
+          if (!el) return;
+          await navigator.clipboard.writeText(el.textContent.trim());
+          button.textContent = "Copied";
+          window.setTimeout(() => { button.textContent = "Copy"; }, 1400);
+        });
+      });
+    </script>
+  </body>
+</html>
