@@ -62,7 +62,7 @@
 
       a { color: inherit; }
 
-      .hero { min-height: min(860px, calc(100svh - 78px)); }
+      .hero { min-height: min(760px, calc(100svh - 78px)); }
 
       .nav, .hero-inner, .footer {
         width: min(1240px, calc(100% - 56px));
@@ -132,11 +132,11 @@
       }
 
       h1 {
-        margin: 0 0 18px;
-        font-size: clamp(68px, 8.2vw, 118px);
-        line-height: 0.9;
+        margin: 0 0 16px;
+        font-size: clamp(54px, 7vw, 96px);
+        line-height: 0.92;
         font-weight: 760;
-        letter-spacing: -0.055em;
+        letter-spacing: -0.05em;
       }
 
       h1 .line { display: inline; }
@@ -155,10 +155,10 @@
          user is leaving the page anyway. */
       .hero-form {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         align-items: stretch;
         gap: 10px;
-        max-width: 560px;
+        max-width: 520px;
       }
 
       .hero-form input {
@@ -294,50 +294,41 @@
         font-weight: 600;
         letter-spacing: -0.01em;
       }
-      .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 28px; }
-      .step { display: grid; grid-template-columns: 32px 1fr; gap: 16px; align-items: start; }
+      .steps { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 18px; }
+      .step { display: grid; grid-template-columns: 30px 1fr; gap: 14px; align-items: start; }
       .step-n {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 32px;
-        height: 32px;
+        width: 30px;
+        height: 30px;
         border-radius: 8px;
         border: 1px solid var(--line);
         background: var(--green-soft);
         color: var(--green);
         font-weight: 700;
-        font-size: 15px;
+        font-size: 14px;
       }
-      .step-body h3 { margin: 3px 0 6px; font-size: 18px; font-weight: 650; }
-      .step-body p { margin: 0 0 14px; color: #38352f; font-size: 15px; max-width: 60ch; }
+      .step-body h3 { margin: 2px 0 9px; font-size: 16px; font-weight: 650; }
       .prompt-card {
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: #181818;
-        padding: 12px 16px 16px;
-      }
-      .prompt-head {
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        margin-bottom: 8px;
+        gap: 8px;
+        max-width: 440px;
+        padding: 7px 8px 7px 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #181818;
       }
-      .prompt-head span {
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: rgba(255, 253, 246, 0.45);
-      }
-      .prompt-card pre {
-        margin: 0;
-        white-space: pre-wrap;
-        word-break: break-word;
+      .prompt-preview {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 13px;
-        line-height: 1.6;
-        color: #e2ddd0;
+        color: #c8f7d4;
       }
 
       .footer-wrap { border-top: 1px solid var(--line); }
@@ -373,7 +364,7 @@
           max-width: 860px;
         }
         h1 {
-          font-size: clamp(64px, 8vw, 92px);
+          font-size: clamp(48px, 7vw, 82px);
         }
         .demo {
           width: 100%;
@@ -432,9 +423,14 @@
           margin: 0 auto 22px;
           font-size: clamp(16px, 4.2vw, 18px);
         }
+        .steps {
+          text-align: left;
+          max-width: 380px;
+          margin: 22px auto 0;
+        }
         .hero-form {
           margin-inline: auto;
-          max-width: 360px;
+          max-width: 100%;
           flex-direction: column;
         }
         .hero-form input,
@@ -445,33 +441,7 @@
         }
         .demo { border-radius: 8px; }
         .demo .demo-caption { display: none; }
-        .skill-section {
-          padding: 30px 0;
-        }
-        .skill-help {
-          max-width: 48ch;
-          margin-inline: auto;
-        }
-        .command-card {
-          display: flex;
-          width: min(100%, 420px);
-          align-items: stretch;
-          flex-direction: column;
-          justify-content: center;
-          min-width: 0;
-          padding: 12px;
-          gap: 12px;
-        }
-        .command-card code {
-          white-space: normal;
-          overflow-wrap: anywhere;
-          font-size: clamp(14px, 4vw, 17px);
-          text-align: center;
-        }
-        .copy-button {
-          padding: 9px 10px;
-          width: 100%;
-        }
+        .prompt-card { max-width: 100%; }
         .footer { flex-direction: column; padding: 22px 0 28px; }
         .footer-links { justify-content: center; }
       }
@@ -496,56 +466,37 @@
         <div class="hero-copy">
           <h1><span class="line">Terminal to</span> <span class="line">Chrome.</span></h1>
           <p class="lede">
-            Your agent drives the Chrome you're signed into.<br />
-            It reads pages, clicks buttons, and fills forms while you keep browsing.<br />
-            Nothing leaves the machine.
+            Your agent drives the Chrome you're already signed into. Nothing leaves the machine.
           </p>
-          <form class="hero-form" id="hero-form" novalidate>
-            <input
-              id="hero-email"
-              name="email"
-              type="email"
-              required
-              pattern="^[^\s@]+@[^\s@]+\.[^\s@]{2,}$"
-              autocomplete="email"
-              placeholder="no-spam@promise.com"
-              aria-label="Your email"
-            />
-            <button id="add-btn" type="submit" disabled>Add to Chrome</button>
-          </form>
-        </div>
-        <div class="demo" id="demo">
-          <video autoplay loop muted playsinline preload="metadata" poster="/ext-index.png">
-            <source src="/chrome-relay-kushalsm-demo.mp4" type="video/mp4" />
-            <img src="/chrome-relay-kushalsm-demo.gif" alt="chrome-relay navigating Kushal's site from a local terminal" />
-          </video>
-          <span class="demo-caption">terminal &rarr; your real Chrome</span>
-        </div>
-      </div>
-    </header>
-
-    <section class="start-wrap">
-      <div class="start-section">
-        <h2 class="start-title">Two steps to running</h2>
-        <ol class="steps">
-          <li class="step">
-            <span class="step-n">1</span>
-            <div class="step-body">
-              <h3>Add the extension</h3>
-              <p>The button up top. It loads into the Chrome you already use, signed in as you.</p>
-            </div>
-          </li>
-          <li class="step">
-            <span class="step-n">2</span>
-            <div class="step-body">
-              <h3>Paste this into Claude Code or Codex</h3>
-              <p>Your agent installs the bridge, checks the connection, and shows you it works. No npm fumbling on your side.</p>
-              <div class="prompt-card">
-                <div class="prompt-head">
-                  <span>prompt</span>
+          <ol class="steps">
+            <li class="step">
+              <span class="step-n">1</span>
+              <div class="step-body">
+                <h3>Add the extension</h3>
+                <form class="hero-form" id="hero-form" novalidate>
+                  <input
+                    id="hero-email"
+                    name="email"
+                    type="email"
+                    required
+                    pattern="^[^\s@]+@[^\s@]+\.[^\s@]{2,}$"
+                    autocomplete="email"
+                    placeholder="no-spam@promise.com"
+                    aria-label="Your email"
+                  />
+                  <button id="add-btn" type="submit" disabled>Add to Chrome</button>
+                </form>
+              </div>
+            </li>
+            <li class="step">
+              <span class="step-n">2</span>
+              <div class="step-body">
+                <h3>Then paste this into Claude Code or Codex</h3>
+                <div class="prompt-card">
+                  <code class="prompt-preview">I just added the Chrome Relay extension…</code>
                   <button class="copy-button" type="button" data-copy-target="agent-prompt">Copy</button>
                 </div>
-<pre id="agent-prompt">I just added the Chrome Relay extension to Chrome. It's an open-source tool
+<pre id="agent-prompt" hidden>I just added the Chrome Relay extension to Chrome. It's an open-source tool
 (github.com/kiluazen/chrome-relay) that lets you drive my real Chrome from the
 terminal: read pages, click buttons, fill forms.
 
@@ -560,11 +511,18 @@ Set it up for me:
 
 Then run chrome-relay tabs and show me my open tabs.</pre>
               </div>
-            </div>
-          </li>
-        </ol>
+            </li>
+          </ol>
+        </div>
+        <div class="demo" id="demo">
+          <video autoplay loop muted playsinline preload="metadata" poster="/ext-index.png">
+            <source src="/chrome-relay-kushalsm-demo.mp4" type="video/mp4" />
+            <img src="/chrome-relay-kushalsm-demo.gif" alt="chrome-relay navigating Kushal's site from a local terminal" />
+          </video>
+          <span class="demo-caption">terminal &rarr; your real Chrome</span>
+        </div>
       </div>
-    </section>
+    </header>
 
     <div class="footer-wrap">
       <footer class="footer">
