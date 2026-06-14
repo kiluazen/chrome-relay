@@ -62,7 +62,13 @@
 
       a { color: inherit; }
 
-      .hero { min-height: min(760px, calc(100svh - 78px)); }
+      .hero { min-height: auto; }
+
+      .hero-top {
+        width: min(1240px, calc(100% - 56px));
+        margin: 0 auto;
+        padding: clamp(28px, 4vw, 56px) 0 clamp(18px, 2.5vw, 30px);
+      }
 
       .nav, .hero-inner, .footer {
         width: min(1240px, calc(100% - 56px));
@@ -88,16 +94,16 @@
       .brand img { width: 36px; height: 36px; border-radius: 8px; }
 
       .hero-inner {
-        padding: clamp(42px, 6vw, 74px) 0 clamp(62px, 8vw, 96px);
+        padding: clamp(16px, 2.5vw, 32px) 0 clamp(48px, 7vw, 88px);
         display: grid;
-        grid-template-columns: minmax(330px, 0.72fr) minmax(520px, 1.18fr);
-        gap: clamp(34px, 5vw, 72px);
+        grid-template-columns: minmax(360px, 0.85fr) minmax(440px, 1.15fr);
+        gap: clamp(32px, 4vw, 64px);
         align-items: center;
       }
 
       .hero-inner > * { min-width: 0; }
 
-      .hero-copy { max-width: 620px; }
+      .hero-copy { max-width: 560px; }
 
       .demo {
         position: relative;
@@ -132,20 +138,22 @@
       }
 
       h1 {
-        margin: 0 0 16px;
-        font-size: clamp(54px, 7vw, 96px);
-        line-height: 0.92;
+        margin: 0;
+        font-size: clamp(44px, 8vw, 100px);
+        line-height: 1;
         font-weight: 760;
-        letter-spacing: -0.05em;
+        letter-spacing: -0.04em;
+        white-space: nowrap;
       }
 
       h1 .line { display: inline; }
 
       .lede {
-        margin: 0 0 28px;
+        margin: 16px 0 0;
+        max-width: 62ch;
         color: #38352f;
-        font-size: clamp(18px, 2vw, 23px);
-        line-height: 1.45;
+        font-size: clamp(18px, 2vw, 22px);
+        line-height: 1.5;
       }
 
       /* Inline email + Add-to-Chrome. Button is disabled until the email
@@ -374,7 +382,7 @@
       }
 
       @media (max-width: 900px) {
-        .nav, .hero-inner, .footer {
+        .nav, .hero-top, .hero-inner, .footer {
           width: min(1120px, calc(100% - 40px));
         }
         .skill-section {
@@ -396,7 +404,7 @@
       }
 
       @media (max-width: 640px) {
-        .nav, .hero-inner, .footer {
+        .nav, .hero-top, .hero-inner, .footer {
           width: min(1120px, calc(100% - 28px));
         }
         .skill-section {
@@ -408,19 +416,24 @@
         }
         .brand img { width: 30px; height: 30px; }
         .brand { font-size: 18px; }
+        .hero-top {
+          text-align: center;
+          padding-top: 14px;
+        }
         .hero-inner {
-          padding-top: 18px;
+          padding-top: 6px;
           text-align: center;
         }
         h1 {
           max-width: none;
           margin-inline: auto;
-          font-size: clamp(46px, 12vw, 66px);
+          font-size: clamp(40px, 11vw, 60px);
+          white-space: normal;
         }
         h1 .line { display: block; }
         .lede {
           max-width: 48ch;
-          margin: 0 auto 22px;
+          margin: 12px auto 0;
           font-size: clamp(16px, 4.2vw, 18px);
         }
         .steps {
@@ -462,12 +475,15 @@
         </div>
       </nav>
 
+      <div class="hero-top">
+        <h1>Terminal to Chrome.</h1>
+        <p class="lede">
+          Your agent drives the Chrome you're already signed into. Nothing leaves the machine.
+        </p>
+      </div>
+
       <div class="hero-inner">
         <div class="hero-copy">
-          <h1><span class="line">Terminal to</span> <span class="line">Chrome.</span></h1>
-          <p class="lede">
-            Your agent drives the Chrome you're already signed into. Nothing leaves the machine.
-          </p>
           <ol class="steps">
             <li class="step">
               <span class="step-n">1</span>
