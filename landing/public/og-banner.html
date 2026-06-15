@@ -18,8 +18,18 @@
         position: absolute;
         inset: 0;
         background: url('/bg.jpg') center / cover no-repeat;
-        opacity: 0.22;
-        filter: saturate(0.25) contrast(0.4) brightness(1.7);
+        opacity: 0.5;
+        filter: grayscale(0.72) sepia(0.16) contrast(1.08) brightness(1.08);
+        mix-blend-mode: multiply;
+      }
+      /* Soft light halo behind the centered text so the ink stays readable
+         now that the engraving is more present. */
+      .center::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        background: radial-gradient(ellipse 56% 46% at 50% 48%, rgba(247, 243, 232, 0.82), rgba(247, 243, 232, 0) 72%);
       }
       .brand {
         position: absolute;
@@ -72,7 +82,7 @@
       <span>Chrome Relay</span>
     </div>
     <div class="center">
-      <h1>Terminal to Chrome.</h1>
+      <h1>Terminal to Chrome</h1>
       <div class="chip"><span class="dim">$</span>&nbsp;chrome-relay click&nbsp;<b>--x 640 --y 312</b></div>
     </div>
   </body>
