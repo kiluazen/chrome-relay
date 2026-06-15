@@ -323,7 +323,7 @@
         align-items: center;
         gap: 8px;
         max-width: 440px;
-        padding: 7px 8px 7px 14px;
+        padding: 7px 10px 7px 14px;
         border: 1px solid var(--line);
         border-radius: 8px;
         background: #181818;
@@ -438,11 +438,25 @@
         }
         .steps {
           text-align: left;
-          max-width: 380px;
-          margin: 22px auto 0;
+          max-width: 100%;
+          margin: 26px 0 0;
+        }
+        .step {
+          grid-template-columns: auto 1fr;
+          column-gap: 12px;
+          row-gap: 0;
+          align-items: center;
+        }
+        .step-n { grid-area: 1 / 1; }
+        .step-body { display: contents; }
+        .step-body h3 { grid-area: 1 / 2; margin: 0; }
+        .step-body .hero-form,
+        .step-body .prompt-card {
+          grid-column: 1 / -1;
+          margin-top: 12px;
         }
         .hero-form {
-          margin-inline: auto;
+          width: 100%;
           max-width: 100%;
           flex-direction: column;
         }
