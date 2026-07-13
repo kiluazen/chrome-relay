@@ -51,6 +51,17 @@ export interface CallOptions {
   profile?: string;
 }
 
+// Program-level --profile fallback. Commands that take target flags thread
+// --profile through baseArgs → __profile, but bare commands (`tabs`,
+// `workspace list`, …) never touch baseArgs — this source covers them.
+// buildProgram() installs it; precedence stays: explicit option > __profile
+// in args > program-level flag.
+let defaultProfileSource: (() => string | undefined) | undefined;
+
+export function setDefaultProfileSource(source: () => string | undefined): void {
+  defaultProfileSource = source;
+}
+
 // Internal: returns both the tool data and any notices. Callers that want
 // to forward the notice into their own JSON output (e.g. agent-facing
 // commands) use this directly. The default `callTool` peels off `data` and
@@ -70,6 +81,7 @@ export async function callToolWithMeta(
     args = { ...args };
     delete args.__profile;
   }
+  profile = profile ?? defaultProfileSource?.();
 
   const route = await resolveRoute(profile, args);
 

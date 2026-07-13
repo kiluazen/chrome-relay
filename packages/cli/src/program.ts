@@ -9,6 +9,7 @@
 import { Command } from "commander";
 import { CHROME_RELAY_VERSION } from "./index.js";
 import { makeBaseArgs, makeWithBase, runTool, type CommandContext } from "./commands/shared.js";
+import { setDefaultProfileSource } from "./client/call.js";
 import { registerInstallUpdate } from "./commands/install-update.js";
 import { registerNavigation } from "./commands/navigation.js";
 import { registerInput } from "./commands/input.js";
@@ -75,6 +76,11 @@ Notes:
   // withBase is a one-call combiner: `withBase(opts, { foo: 1 })` =
   // `{ ...baseArgs(opts), foo: 1 }` so command actions stop repeating
   // the `Object.assign(args, baseArgs(opts))` boilerplate.
+  // Program-level --profile must scope EVERY command, including ones with
+  // no target flags (`tabs`). baseArgs covers the flagged ones; this source
+  // is the fallback the call layer consults for the rest.
+  setDefaultProfileSource(() => (program.opts() as { profile?: string }).profile);
+
   const baseArgs = makeBaseArgs(program);
   const ctx: CommandContext = {
     program,

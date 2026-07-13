@@ -6,7 +6,7 @@ import type {
 } from "@chrome-relay/protocol";
 import { NATIVE_HOST_NAME, toBridgeError } from "@chrome-relay/protocol";
 import { runTool } from "../browser/tools";
-import { getInstanceId, getFileSchemeAccess } from "../browser/identity";
+import { getInstanceId, getFileSchemeAccess, setHostProtocolVersion } from "../browser/identity";
 
 const RECONNECT_DELAY_MS = 1500;
 const RECENT_TOOLS_STORAGE_KEY = "recentToolExecutions";
@@ -142,6 +142,14 @@ function handleMessage(message: BridgeMessage): void {
   if (message.type === "bridge.ping") {
     const ping = message as BridgePingMessage;
     port.postMessage({ type: "bridge.pong", id: ping.id });
+    return;
+  }
+
+  // v2 host announcing itself. Until this arrives (old host: never), wire
+  // refs stay bare so pre-v2 CLIs keep parsing them. Deploy-skew gate.
+  if (message.type === "bridge.hello") {
+    const version = message.payload?.protocolVersion;
+    if (typeof version === "number") setHostProtocolVersion(version);
     return;
   }
 

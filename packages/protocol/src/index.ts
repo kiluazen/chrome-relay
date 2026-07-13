@@ -338,6 +338,18 @@ export interface PingResponse {
   fileSchemeAccess?: boolean | null;
 }
 
+// Host → extension, sent once at startup. This is what lets the extension
+// know it may use v2 wire features (qualified refs): an OLD host never sends
+// it, so a store-updated extension in front of an old CLI keeps minting bare
+// refs the old CLI can parse. Deploy-skew safety, not ceremony.
+export interface BridgeHelloMessage {
+  type: "bridge.hello";
+  payload: {
+    hostVersion: string;
+    protocolVersion: number;
+  };
+}
+
 export interface BridgePingMessage {
   type: "bridge.ping";
   id: string;
@@ -365,6 +377,7 @@ export interface ToolResultMessage {
 
 export type BridgeMessage =
   | BridgeReadyMessage
+  | BridgeHelloMessage
   | BridgePingMessage
   | BridgePongMessage
   | ToolCallMessage

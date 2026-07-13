@@ -41,6 +41,32 @@ export async function getRefPrefix(): Promise<string> {
   return instancePrefix(await getInstanceId());
 }
 
+// ---------------------------------------------------------------------------
+// Deploy-skew gate. The Web Store updates this extension PASSIVELY; the CLI
+// (and with it the native host) updates only when the user runs
+// `chrome-relay update`. A new extension in front of an old CLI must not
+// mint qualified refs the old CLI's `^@(e\d+)$` parser rejects — that would
+// break every ref click for every not-yet-updated user on store-update day.
+//
+// The host announces its protocol via bridge.hello at connect. No hello =
+// old host = bare refs (byte-identical pre-v2 output). In-memory only: an
+// MV3 SW restart drops the port, Chrome respawns the host, a fresh hello
+// arrives. The window between reconnect and hello defaults to bare — the
+// safe direction (every CLI, old or new, parses bare).
+
+let hostProtocolVersion = 0;
+
+export function setHostProtocolVersion(version: number): void {
+  hostProtocolVersion = version;
+}
+
+/** The prefix to qualify WIRE refs with, or null when the connected host
+ *  predates v2 and printed tokens must stay bare. */
+export async function getWireRefPrefix(): Promise<string | null> {
+  if (hostProtocolVersion < 2) return null;
+  return getRefPrefix();
+}
+
 /** Chrome's "Allow access to file URLs" toggle. Gates debugger file
  *  operations (chrome_upload). undefined = API unavailable, unknown. */
 export function getFileSchemeAccess(): Promise<boolean | undefined> {

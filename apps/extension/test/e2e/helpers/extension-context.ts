@@ -59,6 +59,11 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
           if (Date.now() - start > 10_000) throw new Error("__chromeRelay never appeared");
           await new Promise((r) => setTimeout(r, 50));
         }
+        // Act as a v2 host: this harness drives runTool directly (no native
+        // messaging), so the deploy-skew gate would otherwise keep refs bare.
+        (globalThis as {
+          __chromeRelay?: { simulateHello?: (v: number) => void };
+        }).__chromeRelay?.simulateHello?.(2);
       });
       await use(worker);
     },

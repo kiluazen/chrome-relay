@@ -103,13 +103,26 @@ async function writeDescriptorWhenReady(): Promise<void> {
 
 async function main(): Promise<void> {
   await server.start();
-  try {
-    await legacyServer.start();
-    legacyBound = true;
-  } catch {
-    // Port 12122 taken (another profile's host, or an older host). Fine:
-    // v2 clients route via the registry; the port's owner serves old ones.
+  // CHROME_RELAY_NO_LEGACY_PORT: test benches set this so a sandboxed host
+  // never squats the fixed port a production host on the same machine owns
+  // (or would grab on restart).
+  if (!process.env.CHROME_RELAY_NO_LEGACY_PORT) {
+    try {
+      await legacyServer.start();
+      legacyBound = true;
+    } catch {
+      // Port 12122 taken (another profile's host, or an older host). Fine:
+      // v2 clients route via the registry; the port's owner serves old ones.
+    }
   }
+
+  // Announce protocol v2 to the extension. Until an extension hears this it
+  // mints bare (pre-v2) ref tokens — the deploy-skew gate that keeps a
+  // store-updated extension compatible with a not-yet-updated CLI.
+  writeNativeMessage(process.stdout, {
+    type: "bridge.hello",
+    payload: { hostVersion: CHROME_RELAY_VERSION, protocolVersion: PROTOCOL_VERSION }
+  });
 
   readNativeMessages(process.stdin, (message) => {
     bridge.handleMessage(message as BridgeMessage);

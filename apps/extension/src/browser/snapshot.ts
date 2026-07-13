@@ -24,7 +24,7 @@ import { RelayError, renderSnapshot, qualifyRefId, TOOL_NAMES } from "@chrome-re
 import { evalInTab, send } from "./cdp";
 import { markCursorInteractive, unmarkCursorInteractive } from "./page-actions";
 import { assignRef as registerRef, beginTabSnapshot } from "./refs";
-import { getRefPrefix } from "./identity";
+import { getWireRefPrefix } from "./identity";
 
 // Interactive AX roles — always ref-bearing, even unnamed. Same 17-role set
 // the old chrome_ax used.
@@ -322,7 +322,7 @@ function assignRefs(
   nthCounter: Map<string, number>,
   refs: Record<string, SnapshotRefEntry>,
   prior: Map<number, string>,
-  refPrefix: string
+  refPrefix: string | null
 ): void {
   for (const n of nodes) {
     if ((n.refEligible || n.source === "sweep") && n.backendNodeId !== undefined) {
@@ -340,8 +340,11 @@ function assignRefs(
       // qualified (`3f2a:e12`) so the printed token routes across profiles.
       // Qualification always happens, even single-profile — a token whose
       // format depends on connected-profile count would be hidden state.
+      // ONE exception, and it's about the HOST not the profile count:
+      // refPrefix is null when the connected host predates v2 (its CLI
+      // can't parse qualified tokens) — see identity.getWireRefPrefix.
       const ref = registerRef(entry, prior);
-      const wireRef = qualifyRefId(ref, refPrefix);
+      const wireRef = refPrefix === null ? ref : qualifyRefId(ref, refPrefix);
       n.ref = wireRef;
       refs[wireRef] = entry;
     }
@@ -430,7 +433,7 @@ export async function buildSnapshot(
   // @eN (reused via the prior map); new elements get fresh global ids;
   // vanished elements' refs die because they're never re-registered.
   const prior = await beginTabSnapshot(tabId);
-  const refPrefix = await getRefPrefix();
+  const refPrefix = await getWireRefPrefix();
   const refs: Record<string, SnapshotRefEntry> = {};
   const nthCounter = new Map<string, number>();
   assignRefs(tree, tabId, nthCounter, refs, prior, refPrefix);
