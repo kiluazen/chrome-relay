@@ -284,6 +284,8 @@ Revised after implementation review (round 3, 2026-07-14):
 17. **Legacy fixed-port fallback only when ZERO v2 registry evidence exists.** With any descriptor present-but-unreachable, falling back to 12122 could reach a different profile's host — fail `extension_not_connected` (retryable) instead.
 18. **Client-side sweep is generation-guarded too** (re-read + compare before unlink), closing the read → host-restart → delete race that could orphan a freshly restarted host's descriptor.
 19. **Chooser events from child debugger sessions (OOPIFs) are rejected** as `file_chooser_unsupported` rather than driven blind through the root session. Concurrent *human* interaction with the same tab remains out-of-model — as it is for every verb, not just upload.
+20. **Label transactions run under a lock.** Atomic rename only prevents torn files; two concurrent labelers would still both pass the uniqueness check or lose each other's write. The whole read → check → mutate → save sits under an mkdir-based lock (stale-stolen after 10s, structured `timeout` after 5s).
+21. **`profile unlabel <name>` frees aliases without a connected target.** Labels outlive profiles: a profile deleted from Chrome can never reconnect under its old instanceId, so `label_conflict`'s "relabel the holder" remedy would be a dead end. Unlabel edits only the CLI's own registry.
 
 ## Rollout
 

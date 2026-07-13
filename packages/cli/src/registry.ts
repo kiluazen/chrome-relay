@@ -21,11 +21,11 @@
 // mint undetectable duplicates). Live descriptors describe connections; the
 // persistent label registry owns aliases.
 
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { InstanceDescriptor } from "@chrome-relay/protocol";
+import { RelayError, type InstanceDescriptor } from "@chrome-relay/protocol";
 
 export function appDir(): string {
   // CHROME_RELAY_HOME: test/dev override so integration tests never touch
@@ -136,4 +136,46 @@ export function saveLabels(labels: LabelsFile): void {
 
 export function labelFor(instanceId: string, labels = loadLabels()): string | null {
   return labels.instances[instanceId]?.label ?? null;
+}
+
+/** Run a label-registry transaction (read → check → mutate → save) under an
+ *  exclusive lock. Atomic rename alone only prevents torn FILES — two
+ *  concurrent labelers would still both pass the uniqueness check or lose
+ *  each other's write. mkdir is the atomic primitive; a stale lock (holder
+ *  crashed) is stolen after 10s; acquisition gives up after 5s with a
+ *  structured timeout. */
+export async function withLabelsLock<T>(fn: () => Promise<T> | T): Promise<T> {
+  const lockDir = labelsPath() + ".lock";
+  mkdirSync(appDir(), { recursive: true, mode: 0o700 });
+  const deadline = Date.now() + 5_000;
+  for (;;) {
+    try {
+      mkdirSync(lockDir); // atomic-exclusive: fails if it exists
+      break;
+    } catch {
+      try {
+        if (Date.now() - statSync(lockDir).mtimeMs > 10_000) {
+          rmSync(lockDir, { recursive: true, force: true });
+          continue;
+        }
+      } catch {
+        continue; // lock vanished between mkdir and stat — retry now
+      }
+      if (Date.now() > deadline) {
+        throw new RelayError({
+          code: "timeout",
+          message: "labels registry is locked by another chrome-relay process — retry.",
+          phase: "labels_lock",
+          details: { lockDir },
+          retryable: true
+        });
+      }
+      await new Promise((r) => setTimeout(r, 25));
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    rmSync(lockDir, { recursive: true, force: true });
+  }
 }

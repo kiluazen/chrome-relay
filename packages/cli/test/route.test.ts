@@ -320,6 +320,27 @@ describe("program-level --profile reaches flag-less commands (batch, tabs)", () 
   });
 });
 
+describe("profile unlabel frees aliases without a connected target", () => {
+  it("reclaims a label held by a profile that no longer exists", async () => {
+    // A label bound to a long-gone instance — no descriptor, no host.
+    const { saveLabels, loadLabels } = await import("../src/registry");
+    const labels = loadLabels();
+    labels.instances["dead-instance-id"] = { label: "old-work" };
+    saveLabels(labels);
+
+    vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { buildProgram } = await import("../src/program");
+    const { setDefaultProfileSource } = await import("../src/client/call");
+    try {
+      await buildProgram().parseAsync(["node", "chrome-relay", "profile", "unlabel", "old-work"]);
+    } finally {
+      setDefaultProfileSource(() => undefined);
+    }
+    expect(loadLabels().instances["dead-instance-id"]).toBeUndefined();
+  });
+});
+
 describe("end-to-end call over the routed transport", () => {
   it("routes, authenticates with the bearer token, and returns the profile stamp", async () => {
     await bootHost(ID_A);

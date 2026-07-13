@@ -13,7 +13,7 @@
 import type { Command } from "commander";
 import { instancePrefix, RelayError } from "@chrome-relay/protocol";
 import { discoverInstances, type VerifiedInstance } from "../client/route.js";
-import { loadLabels, saveLabels } from "../registry.js";
+import { loadLabels, saveLabels, withLabelsLock } from "../registry.js";
 import type { CommandContext } from "./shared.js";
 
 // Same shape the workspace/group names enforce.
@@ -160,21 +160,26 @@ Notes:
       const { verified } = await discoverInstances();
       const target = pickTarget(verified, parentOpts.profile);
 
-      const labels = loadLabels();
-      const holder = Object.entries(labels.instances).find(([, v]) => v.label === name);
-      if (holder && holder[0] !== target.descriptor.instanceId) {
-        fail(
-          new RelayError({
-            code: "label_conflict",
-            message: `label "${name}" is already bound to instance ${instancePrefix(holder[0])}… — labels are unique. Pick another name, or relabel that instance first.`,
-            phase: "save_label",
-            details: { label: name, boundTo: holder[0] },
-            retryable: false
-          })
-        );
-      }
-      labels.instances[target.descriptor.instanceId] = { label: name };
-      saveLabels(labels);
+      // The whole read → uniqueness-check → mutate → save transaction sits
+      // under the registry lock: without it, two concurrent labelers both
+      // pass the check or silently drop each other's write.
+      await withLabelsLock(async () => {
+        const labels = loadLabels();
+        const holder = Object.entries(labels.instances).find(([, v]) => v.label === name);
+        if (holder && holder[0] !== target.descriptor.instanceId) {
+          fail(
+            new RelayError({
+              code: "label_conflict",
+              message: `label "${name}" is already bound to instance ${instancePrefix(holder[0])}… — labels are unique. Pick another name, or free it with \`chrome-relay profile unlabel ${name}\` (works even if that profile no longer exists).`,
+              phase: "save_label",
+              details: { label: name, boundTo: holder[0] },
+              retryable: false
+            })
+          );
+        }
+        labels.instances[target.descriptor.instanceId] = { label: name };
+        saveLabels(labels);
+      });
       printJson({
         labeled: {
           instanceId: target.descriptor.instanceId,
@@ -182,5 +187,42 @@ Notes:
           label: name
         }
       });
+    });
+
+  profile
+    .command("unlabel <name>")
+    .description("Free an alias from the registry — no connected target needed.")
+    .addHelpText(
+      "after",
+      `
+
+Why this exists: labels outlive profiles. A profile deleted from Chrome can
+never reconnect under its old instanceId, so its alias would be stuck
+forever — label_conflict's remedy ("relabel that instance") needs the
+instance CONNECTED. unlabel edits only the CLI's own registry; it never
+touches a browser.
+`
+    )
+    .action(async (name: string) => {
+      const result = await withLabelsLock(() => {
+        const labels = loadLabels();
+        const holder = Object.entries(labels.instances).find(([, v]) => v.label === name);
+        if (!holder) return null;
+        delete labels.instances[holder[0]];
+        saveLabels(labels);
+        return holder[0];
+      });
+      if (result === null) {
+        fail(
+          new RelayError({
+            code: "profile_not_found",
+            message: `no instance holds the label "${name}" — nothing to free.`,
+            phase: "save_label",
+            details: { label: name },
+            retryable: false
+          })
+        );
+      }
+      printJson({ unlabeled: { label: name, wasBoundTo: result } });
     });
 }

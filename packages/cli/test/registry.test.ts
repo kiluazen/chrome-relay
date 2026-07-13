@@ -12,6 +12,7 @@ import {
   readInstanceDescriptors,
   removeInstanceDescriptor,
   saveLabels,
+  withLabelsLock,
   writeInstanceDescriptor
 } from "../src/registry";
 
@@ -103,5 +104,39 @@ describe("labels", () => {
     mkdirSync(appDir(), { recursive: true });
     writeFileSync(path.join(appDir(), "labels.json"), "not json at all");
     expect(loadLabels()).toEqual({ instances: {} });
+  });
+
+  it("withLabelsLock serializes concurrent read-modify-write transactions", async () => {
+    // Without the lock, both transactions read the same snapshot and the
+    // second save clobbers the first — exactly the lost-update the review
+    // called out. With it, both writes survive.
+    const tx = (id: string) =>
+      withLabelsLock(async () => {
+        const labels = loadLabels();
+        await new Promise((r) => setTimeout(r, 30)); // widen the race window
+        labels.instances[id] = { label: `label-${id}` };
+        saveLabels(labels);
+      });
+    await Promise.all([tx("aaaa"), tx("bbbb")]);
+    const final = loadLabels();
+    expect(Object.keys(final.instances).sort()).toEqual(["aaaa", "bbbb"]);
+  });
+
+  it("withLabelsLock releases on throw and steals a stale lock", async () => {
+    await expect(
+      withLabelsLock(() => {
+        throw new Error("boom");
+      })
+    ).rejects.toThrow("boom");
+    // Lock released by the finally — the next transaction proceeds at once.
+    await withLabelsLock(() => undefined);
+
+    // Stale lock (holder crashed long ago) gets stolen instead of deadlocking.
+    const lockDir = path.join(appDir(), "labels.json.lock");
+    mkdirSync(lockDir, { recursive: true });
+    const old = Date.now() / 1000 - 60;
+    const { utimesSync } = await import("node:fs");
+    utimesSync(lockDir, old, old);
+    await expect(withLabelsLock(() => "ran")).resolves.toBe("ran");
   });
 });
