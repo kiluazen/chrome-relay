@@ -276,6 +276,15 @@ Revised after review (round 2, 2026-07-14):
 12. **File-URL access handled structurally**: doctor check + `file_access_denied` + remediation text. The toggle-off failure mode is otherwise an opaque CDP error on someone else's machine.
 13. **`upload choose` concurrency spec'd**: per-tab serialization (`file_chooser_busy`), session-scoped event matching, `file_chooser_unsupported` as a distinct code from `no_file_chooser` (different agent recovery), OOPIF unsupported in v1, `target_closed` on nav/close while armed.
 
+Revised after implementation review (round 3, 2026-07-14):
+
+14. **`bridge.hello` deploy-skew gate.** The store updates the extension passively; the CLI updates manually — so new-extension + old-CLI is the default post-deploy state, and qualified tokens would break the old ref parser. The host announces `protocolVersion` at connect; the extension mints qualified refs only after hearing v2. No hello = bare refs = byte-identical pre-v2 output.
+15. **Prefix collisions never route.** A ref prefix matching more than one registered instance (verified *or* unreachable) is `profile_ambiguous` even with a disambiguating `--profile`: the token cannot prove which instance minted it, and the receiving extension shares the prefix, so guessing risks resolving an unrelated `eN` in the wrong profile — silent wrong-action, the worst class. Recovery: re-snapshot in the intended profile.
+16. **Discovery has three states, not two**: ping-verified (routable), live-but-unverified (registered pid alive, host not answering — *counts toward ambiguity*, fails retryable when targeted), provably dead (swept). A transient ping failure must never convert an ambiguous command into a single-profile command.
+17. **Legacy fixed-port fallback only when ZERO v2 registry evidence exists.** With any descriptor present-but-unreachable, falling back to 12122 could reach a different profile's host — fail `extension_not_connected` (retryable) instead.
+18. **Client-side sweep is generation-guarded too** (re-read + compare before unlink), closing the read → host-restart → delete race that could orphan a freshly restarted host's descriptor.
+19. **Chooser events from child debugger sessions (OOPIFs) are rejected** as `file_chooser_unsupported` rather than driven blind through the root session. Concurrent *human* interaction with the same tab remains out-of-model — as it is for every verb, not just upload.
+
 ## Rollout
 
 Protocol bump (new tool names `chrome_profile`, `chrome_upload`; envelope `profile` field; qualified ref token format; new error codes). Extension and CLI ship together; `chrome-relay update` release notes carry the new verbs as structured entries per philosophy §7. Multi-profile lands first — upload is per-profile-agnostic and works either side of it, but qualified refs in upload examples assume the ref-format change has landed.

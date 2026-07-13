@@ -243,6 +243,23 @@ function waitForChooser(tabId: number, timeoutMs: number): Promise<FileChooserEv
   return new Promise<FileChooserEvent>((resolve, reject) => {
     const onEvent = (source: chrome.debugger.Debuggee, method: string, params?: object) => {
       if (source.tabId !== tabId || method !== "Page.fileChooserOpened") return;
+      // A sessionId marks a CHILD debugger session (out-of-process iframe).
+      // Our setFileInputFiles would run on the ROOT session and miss or hit
+      // the wrong document — reject explicitly instead of acting blind.
+      if ((source as { sessionId?: string }).sessionId) {
+        cleanup();
+        reject(
+          new RelayError({
+            code: "file_chooser_unsupported",
+            message: `${TOOL}: the file chooser opened inside an out-of-process iframe — v1 drives top-frame choosers only. Try action=set on the frame's input via a selector.`,
+            tool: TOOL,
+            phase: "await_chooser",
+            details: { tabId, childSession: true },
+            retryable: false
+          })
+        );
+        return;
+      }
       cleanup();
       resolve((params ?? {}) as FileChooserEvent);
     };

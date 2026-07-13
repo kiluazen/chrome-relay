@@ -122,9 +122,19 @@ Notes:
     .command("list")
     .description("List connected profiles (ping-verified, present state only).")
     .action(async () => {
-      const verified = await discoverInstances();
+      const { verified, unresolved } = await discoverInstances();
       printJson({
         connected: verified.map(describe),
+        ...(unresolved.length > 0
+          ? {
+              unreachable: unresolved.map((u) => ({
+                instanceId: u.descriptor.instanceId,
+                prefix: instancePrefix(u.descriptor.instanceId),
+                label: u.label,
+                pid: u.descriptor.pid
+              }))
+            }
+          : {}),
         ...(verified.some((v) => v.label === null)
           ? { hint: "unlabeled profiles are addressable by id prefix; give them names with `profile label <name>`" }
           : {})
@@ -147,7 +157,7 @@ Notes:
         );
       }
       const parentOpts = program.opts() as { profile?: string };
-      const verified = await discoverInstances();
+      const { verified } = await discoverInstances();
       const target = pickTarget(verified, parentOpts.profile);
 
       const labels = loadLabels();

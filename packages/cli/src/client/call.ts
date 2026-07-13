@@ -62,6 +62,13 @@ export function setDefaultProfileSource(source: () => string | undefined): void 
   defaultProfileSource = source;
 }
 
+/** Test-only: the notice/stamp lines print once per process, which bleeds
+ *  across tests sharing this module instance. */
+export function __resetOncePerProcessFlagsForTests(): void {
+  noticePrinted = false;
+  profilePrinted = false;
+}
+
 // Internal: returns both the tool data and any notices. Callers that want
 // to forward the notice into their own JSON output (e.g. agent-facing
 // commands) use this directly. The default `callTool` peels off `data` and

@@ -22,10 +22,10 @@ import {
   type PingResponse
 } from "@chrome-relay/protocol";
 import {
-  deleteInstanceDescriptor,
   labelFor,
   loadLabels,
-  readInstanceDescriptors
+  readInstanceDescriptors,
+  removeInstanceDescriptor
 } from "../registry.js";
 
 const PING_TIMEOUT_MS = 1_000;
@@ -80,37 +80,58 @@ async function pingDescriptor(desc: InstanceDescriptor): Promise<PingResponse | 
   }
 }
 
+export interface DiscoveryResult {
+  /** Ping-verified: the process on the port proved it is the descriptor's
+   *  instance + generation. Routable. */
+  verified: VerifiedInstance[];
+  /** Live-but-unverified: the ping failed (or echoed a different identity)
+   *  while the descriptor's pid is still alive — a transiently unreachable
+   *  profile. NOT routable, but routing must not pretend it doesn't exist:
+   *  treating "1 verified + 1 unresolved" as "only one profile" would
+   *  silently convert an ambiguous command into a wrong-profile command. */
+  unresolved: Array<{ descriptor: InstanceDescriptor; label: string | null }>;
+}
+
 /** Discover connected profiles: read descriptors, verify each with a /ping
  *  handshake (THE REGISTRY IS DISCOVERY; THE HANDSHAKE IS THE AUTHORITY),
- *  sweep the provably dead.
+ *  sweep the provably dead, and report the transiently unreachable
+ *  separately.
  *
  *  Sweep rule: delete a descriptor only when the ping failed AND its pid is
- *  gone. A live pid with a failed ping (transient hiccup, mid-start) is
- *  excluded from this call's routing but its file is left alone — deleting
- *  a live host's descriptor would orphan it until Chrome restarts it. */
-export async function discoverInstances(): Promise<VerifiedInstance[]> {
+ *  gone — and even then generation-guarded (re-read + compare before
+ *  unlink), because a restarted host may have replaced the file between our
+ *  read and the failed ping. Deleting the replacement would orphan a live
+ *  host until its next restart. */
+export async function discoverInstances(): Promise<DiscoveryResult> {
   const descriptors = readInstanceDescriptors();
-  if (descriptors.length === 0) return [];
+  const result: DiscoveryResult = { verified: [], unresolved: [] };
+  if (descriptors.length === 0) return result;
   const labels = loadLabels();
-  const results = await Promise.all(
-    descriptors.map(async (desc): Promise<VerifiedInstance | null> => {
+  await Promise.all(
+    descriptors.map(async (desc): Promise<void> => {
       const ping = await pingDescriptor(desc);
-      const verified =
+      const ok =
         ping !== null &&
         ping.instanceId === desc.instanceId &&
         ping.generationId === desc.generationId;
-      if (!verified) {
-        if (!pidAlive(desc.pid)) deleteInstanceDescriptor(desc.instanceId);
-        return null;
+      if (ok) {
+        result.verified.push({
+          descriptor: desc,
+          label: labelFor(desc.instanceId, labels),
+          fileSchemeAccess: ping.fileSchemeAccess ?? null
+        });
+        return;
       }
-      return {
-        descriptor: desc,
-        label: labelFor(desc.instanceId, labels),
-        fileSchemeAccess: ping.fileSchemeAccess ?? null
-      };
+      if (pidAlive(desc.pid)) {
+        result.unresolved.push({ descriptor: desc, label: labelFor(desc.instanceId, labels) });
+        return;
+      }
+      // Provably dead. Generation-guarded delete: only remove the exact
+      // generation that failed verification, never a newer replacement.
+      removeInstanceDescriptor(desc.instanceId, desc.generationId);
     })
   );
-  return results.filter((r): r is VerifiedInstance => r !== null);
+  return result;
 }
 
 function matchByProfileArg(verified: VerifiedInstance[], profileArg: string): VerifiedInstance[] {
@@ -130,6 +151,41 @@ function toRoute(v: VerifiedInstance): ResolvedRoute {
   };
 }
 
+function unresolvedList(unresolved: DiscoveryResult["unresolved"]): Array<Record<string, unknown>> {
+  return unresolved.map((u) => ({
+    instanceId: u.descriptor.instanceId,
+    prefix: instancePrefix(u.descriptor.instanceId),
+    label: u.label,
+    unreachable: true
+  }));
+}
+
+function unreachableError(what: string, unresolved: DiscoveryResult["unresolved"]): RelayError {
+  return new RelayError({
+    code: "extension_not_connected",
+    message: `${what} is registered but its host didn't answer the handshake — transient (mid-restart, hiccup) or the profile's Chrome is wedged. Retry; if it persists, restart that Chrome profile.`,
+    phase: "resolve_profile",
+    details: { unresolved: unresolvedList(unresolved) },
+    retryable: true
+  });
+}
+
+/** How many instances (verified + unresolved) a ref prefix could belong to.
+ *  More than one = the token itself is ambiguous and CANNOT be
+ *  disambiguated by --profile: routing would pick a host, but the receiving
+ *  extension shares the prefix and would happily resolve its own unrelated
+ *  eN — a silent wrong-profile action, the worst failure class. Strict
+ *  fail; the recovery is a fresh snapshot in the intended profile. */
+function prefixSpan(
+  prefix: string,
+  verified: VerifiedInstance[],
+  unresolved: DiscoveryResult["unresolved"]
+): { verified: VerifiedInstance[]; total: number } {
+  const v = verified.filter((x) => normalizeId(x.descriptor.instanceId).startsWith(prefix));
+  const u = unresolved.filter((x) => normalizeId(x.descriptor.instanceId).startsWith(prefix));
+  return { verified: v, total: v.length + u.length };
+}
+
 export async function resolveRoute(
   profileArg: string | undefined,
   args: Record<string, unknown>
@@ -145,17 +201,49 @@ export async function resolveRoute(
     });
   }
 
-  const verified = await discoverInstances();
+  const { verified, unresolved } = await discoverInstances();
+
+  const refPrefixGuard = (selected?: VerifiedInstance): void => {
+    for (const prefix of refPrefixes) {
+      const span = prefixSpan(prefix, verified, unresolved);
+      if (span.total > 1) {
+        throw new RelayError({
+          code: "profile_ambiguous",
+          message: `ref prefix ${prefix} matches ${span.total} registered instances (id-prefix collision) — the token cannot say which profile minted it, and routing will not guess. Re-run snapshot in the intended profile and use the fresh ref.`,
+          phase: "resolve_profile",
+          details: {
+            refPrefix: prefix,
+            candidates: [...candidateList(span.verified), ...unresolvedList(unresolved.filter((x) => normalizeId(x.descriptor.instanceId).startsWith(prefix)))]
+          },
+          retryable: false
+        });
+      }
+      if (selected && !normalizeId(selected.descriptor.instanceId).startsWith(prefix)) {
+        throw new RelayError({
+          code: "target_conflict",
+          message: `--profile ${profileArg} resolves to ${selected.label ?? instancePrefix(selected.descriptor.instanceId)}, but the call carries a ref minted by profile ${prefix}. Drop --profile or use a ref from the right profile's snapshot.`,
+          phase: "resolve_profile",
+          details: { profile: profileArg, refPrefix: prefix, selected: candidateList([selected])[0] },
+          retryable: false
+        });
+      }
+    }
+  };
 
   // Explicit --profile.
   if (profileArg !== undefined) {
     const matches = matchByProfileArg(verified, profileArg);
     if (matches.length === 0) {
+      const needle = normalizeId(profileArg);
+      const unresolvedHit = unresolved.some(
+        (u) => u.label === profileArg || (/^[0-9a-f]+$/.test(needle) && normalizeId(u.descriptor.instanceId).startsWith(needle))
+      );
+      if (unresolvedHit) throw unreachableError(`--profile ${profileArg}`, unresolved);
       throw new RelayError({
         code: "profile_not_found",
         message: `--profile ${profileArg} matches no connected profile. Connected: ${verified.length ? verified.map((v) => v.label ?? instancePrefix(v.descriptor.instanceId)).join(", ") : "(none — is the extension running?)"}.`,
         phase: "resolve_profile",
-        details: { requested: profileArg, connected: candidateList(verified) },
+        details: { requested: profileArg, connected: candidateList(verified), unresolved: unresolvedList(unresolved) },
         retryable: false
       });
     }
@@ -169,61 +257,50 @@ export async function resolveRoute(
       });
     }
     const selected = matches[0];
-    // A qualified ref must AGREE with the explicit profile.
-    for (const prefix of refPrefixes) {
-      if (!normalizeId(selected.descriptor.instanceId).startsWith(prefix)) {
-        throw new RelayError({
-          code: "target_conflict",
-          message: `--profile ${profileArg} resolves to ${selected.label ?? instancePrefix(selected.descriptor.instanceId)}, but the call carries a ref minted by profile ${prefix}. Drop --profile or use a ref from the right profile's snapshot.`,
-          phase: "resolve_profile",
-          details: { profile: profileArg, refPrefix: prefix, selected: candidateList([selected])[0] },
-          retryable: false
-        });
-      }
-    }
+    refPrefixGuard(selected);
     return toRoute(selected);
   }
 
   // Qualified ref prefix routes on its own.
   if (refPrefixes.length === 1) {
     const prefix = refPrefixes[0];
-    const matches = verified.filter((v) => normalizeId(v.descriptor.instanceId).startsWith(prefix));
-    if (matches.length === 0) {
-      throw new RelayError({
-        code: "profile_not_found",
-        message: `ref prefix ${prefix} matches no connected profile — the profile that minted this ref isn't reachable. Connected: ${verified.length ? verified.map((v) => v.label ?? instancePrefix(v.descriptor.instanceId)).join(", ") : "(none)"}.`,
-        phase: "resolve_profile",
-        details: { refPrefix: prefix, connected: candidateList(verified) },
-        retryable: false
-      });
-    }
-    if (matches.length > 1) {
-      // 4-hex-char prefix collision between instanceIds — astronomically
-      // rare, but specified: strict fail, disambiguate with an agreeing
-      // --profile <longer-prefix>.
-      throw new RelayError({
-        code: "profile_ambiguous",
-        message: `ref prefix ${prefix} matches ${matches.length} connected profiles (id-prefix collision). Add --profile <longer-id-prefix> to disambiguate.`,
-        phase: "resolve_profile",
-        details: { refPrefix: prefix, candidates: candidateList(matches) },
-        retryable: false
-      });
-    }
-    return toRoute(matches[0]);
-  }
-
-  // Unscoped.
-  if (verified.length === 1) return toRoute(verified[0]);
-  if (verified.length > 1) {
+    refPrefixGuard(); // collision check across verified + unresolved
+    const span = prefixSpan(prefix, verified, unresolved);
+    if (span.verified.length === 1) return toRoute(span.verified[0]);
+    if (span.total === 1) throw unreachableError(`the profile that minted ref prefix ${prefix}`, unresolved);
     throw new RelayError({
-      code: "profile_ambiguous",
-      message: `${verified.length} profiles connected — pass --profile <label|idprefix>. Connected: ${verified.map((v) => `${v.label ?? "(unlabeled)"} [${instancePrefix(v.descriptor.instanceId)}]`).join(", ")}.`,
+      code: "profile_not_found",
+      message: `ref prefix ${prefix} matches no registered profile — the profile that minted this ref isn't reachable. Connected: ${verified.length ? verified.map((v) => v.label ?? instancePrefix(v.descriptor.instanceId)).join(", ") : "(none)"}.`,
       phase: "resolve_profile",
-      details: { candidates: candidateList(verified) },
+      details: { refPrefix: prefix, connected: candidateList(verified), unresolved: unresolvedList(unresolved) },
       retryable: false
     });
   }
-  // Zero v2 hosts discovered: legacy fixed-port fallback. Pre-v2 behavior
-  // and pre-v2 errors (extension_not_connected) apply beyond this point.
+
+  // Unscoped. Strictness spans BOTH pools: an unreachable profile still
+  // counts toward ambiguity — a transient ping failure must never convert
+  // an ambiguous command into a single-profile command.
+  const total = verified.length + unresolved.length;
+  if (verified.length === 1 && unresolved.length === 0) return toRoute(verified[0]);
+  if (total > 1) {
+    throw new RelayError({
+      code: "profile_ambiguous",
+      message: `${total} profiles registered (${verified.length} reachable) — pass --profile <label|idprefix>. ${[
+        ...verified.map((v) => `${v.label ?? "(unlabeled)"} [${instancePrefix(v.descriptor.instanceId)}]`),
+        ...unresolved.map((u) => `${u.label ?? "(unlabeled)"} [${instancePrefix(u.descriptor.instanceId)}] (unreachable)`)
+      ].join(", ")}.`,
+      phase: "resolve_profile",
+      details: { candidates: [...candidateList(verified), ...unresolvedList(unresolved)] },
+      retryable: false
+    });
+  }
+  if (unresolved.length === 1) {
+    // v2 evidence exists but the host didn't answer. Falling back to the
+    // legacy fixed port here could reach a DIFFERENT profile's host —
+    // silent misroute. Fail loud and retryable instead.
+    throw unreachableError("the only registered profile", unresolved);
+  }
+  // Zero v2 evidence of any kind: legacy fixed-port fallback. Pre-v2
+  // behavior and pre-v2 errors (extension_not_connected) apply from here.
   return { baseUrl: `http://127.0.0.1:${DEFAULT_HTTP_PORT}` };
 }

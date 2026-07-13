@@ -86,12 +86,13 @@ describe("discovery (registry = discovery, handshake = authority)", () => {
   it("verifies a live host via ping and reports its identity", async () => {
     await bootHost(ID_A);
     const found = await discoverInstances();
-    expect(found).toHaveLength(1);
-    expect(found[0].descriptor.instanceId).toBe(ID_A);
-    expect(found[0].fileSchemeAccess).toBe(true);
+    expect(found.verified).toHaveLength(1);
+    expect(found.unresolved).toHaveLength(0);
+    expect(found.verified[0].descriptor.instanceId).toBe(ID_A);
+    expect(found.verified[0].fileSchemeAccess).toBe(true);
   });
 
-  it("excludes and sweeps a descriptor whose process is dead", async () => {
+  it("sweeps a descriptor whose process is dead — generation-guarded", async () => {
     await bootHost(ID_A);
     // A descriptor pointing at a port nobody serves, from a dead pid.
     writeInstanceDescriptor({
@@ -108,27 +109,99 @@ describe("discovery (registry = discovery, handshake = authority)", () => {
       startedAt: new Date().toISOString()
     });
     const found = await discoverInstances();
-    expect(found.map((f) => f.descriptor.instanceId)).toEqual([ID_A]);
+    expect(found.verified.map((f) => f.descriptor.instanceId)).toEqual([ID_A]);
     // Swept: dead pid + failed ping = provably stale.
     expect(readInstanceDescriptors().map((d) => d.instanceId)).toEqual([ID_A]);
   });
 
-  it("excludes but does NOT sweep when the ping fails while the pid is alive", async () => {
+  // The restart race (discovery reads gen A; a restarted host writes gen B;
+  // the sweep must not delete B) can't be interleaved from out here — the
+  // sweep now goes through removeInstanceDescriptor, whose re-read +
+  // generation-compare semantics are covered directly in registry.test.ts.
+
+  it("reports live-but-unverified as UNRESOLVED (not swept, not routable)", async () => {
     const desc = await bootHost(ID_A);
     // Stop the server: ping now fails, but the pid (this test process) lives.
     await servers.pop()!.stop();
     const found = await discoverInstances();
-    expect(found).toHaveLength(0);
+    expect(found.verified).toHaveLength(0);
+    expect(found.unresolved.map((u) => u.descriptor.instanceId)).toEqual([desc.instanceId]);
     expect(readInstanceDescriptors().map((d) => d.instanceId)).toEqual([desc.instanceId]);
   });
 
-  it("rejects a port whose ping echoes a different generation (descriptor superseded)", async () => {
+  it("treats a port whose ping echoes a different generation as unresolved (descriptor superseded)", async () => {
     const desc = await bootHost(ID_A);
     // Rewrite the descriptor with a stale generation — as if we read the
     // old host's file while a new-generation host owns the port.
     writeInstanceDescriptor({ ...desc, generationId: "gen-older" });
     const found = await discoverInstances();
-    expect(found).toHaveLength(0);
+    expect(found.verified).toHaveLength(0);
+    expect(found.unresolved).toHaveLength(1);
+  });
+});
+
+describe("unresolved profiles block silent misroutes", () => {
+  it("unscoped with 1 verified + 1 unresolved → profile_ambiguous, NOT implicit", async () => {
+    await bootHost(ID_A);
+    await bootHost(ID_B);
+    await servers.pop()!.stop(); // B alive-but-unreachable
+    expect(await relayCode(() => resolveRoute(undefined, {}))).toBe("profile_ambiguous");
+  });
+
+  it("explicit --profile at a verified instance still routes past unresolved noise", async () => {
+    await bootHost(ID_A);
+    await bootHost(ID_B);
+    await servers.pop()!.stop();
+    const route = await resolveRoute("aaaa", {});
+    expect(route.instanceId).toBe(ID_A);
+  });
+
+  it("--profile at the UNRESOLVED instance fails retryable, not not_found", async () => {
+    await bootHost(ID_A);
+    await bootHost(ID_B);
+    await servers.pop()!.stop();
+    expect(await relayCode(() => resolveRoute("bbbb", {}))).toBe("extension_not_connected");
+  });
+
+  it("only-registered-profile unreachable → NO legacy fallback (v2 evidence exists)", async () => {
+    await bootHost(ID_A);
+    await servers.pop()!.stop();
+    expect(await relayCode(() => resolveRoute(undefined, {}))).toBe("extension_not_connected");
+  });
+});
+
+describe("prefix collisions never route to the wrong profile", () => {
+  const ID_C1 = "aaaa1111-0000-4000-8000-00000000c001"; // prefix aaaa
+  const ID_C2 = "aaaa2222-0000-4000-8000-00000000c002"; // prefix aaaa — collides
+
+  it("a colliding ref prefix is ambiguous even WITH a disambiguating --profile", async () => {
+    await bootHost(ID_C1);
+    await bootHost(ID_C2);
+    // --profile with a longer prefix uniquely selects C1, but the ref token
+    // itself could have been minted by either instance — the receiving
+    // extension shares the prefix and would resolve its own unrelated eN.
+    // Must fail, never guess.
+    expect(await relayCode(() => resolveRoute("aaaa1111", { ref: "aaaa:e12" }))).toBe("profile_ambiguous");
+  });
+
+  it("a colliding ref prefix alone is ambiguous", async () => {
+    await bootHost(ID_C1);
+    await bootHost(ID_C2);
+    expect(await relayCode(() => resolveRoute(undefined, { ref: "aaaa:e12" }))).toBe("profile_ambiguous");
+  });
+
+  it("collision counting includes unresolved instances", async () => {
+    await bootHost(ID_C1);
+    await bootHost(ID_C2);
+    await servers.pop()!.stop(); // C2 unreachable but still registered
+    expect(await relayCode(() => resolveRoute(undefined, { ref: "aaaa:e12" }))).toBe("profile_ambiguous");
+  });
+
+  it("--profile without refs is immune: longer prefix disambiguates normally", async () => {
+    await bootHost(ID_C1);
+    await bootHost(ID_C2);
+    const route = await resolveRoute("aaaa1111", {});
+    expect(route.instanceId).toBe(ID_C1);
   });
 });
 
@@ -212,9 +285,46 @@ describe("routing rules", () => {
   });
 });
 
+describe("program-level --profile reaches flag-less commands (batch, tabs)", () => {
+  it("batch routes by the global --profile", async () => {
+    await bootHost(ID_A);
+    await bootHost(ID_B);
+    const { saveLabels, loadLabels } = await import("../src/registry");
+    const labels = loadLabels();
+    labels.instances[ID_A] = { label: "alpha" };
+    saveLabels(labels);
+
+    const outChunks: string[] = [];
+    const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(((chunk: unknown) => {
+      outChunks.push(String(chunk));
+      return true;
+    }) as never);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const { buildProgram } = await import("../src/program");
+    const { setDefaultProfileSource } = await import("../src/client/call");
+    try {
+      await buildProgram().parseAsync([
+        "node", "chrome-relay",
+        "--profile", "alpha",
+        "batch", JSON.stringify([{ name: "get_windows_and_tabs", args: {} }])
+      ]);
+    } finally {
+      // buildProgram installs a process-wide default-profile source bound to
+      // THIS program's opts — reset so later tests don't inherit "alpha".
+      setDefaultProfileSource(() => undefined);
+      stdoutSpy.mockRestore();
+    }
+    // The stub bridge echoes which instance served the call.
+    expect(outChunks.join("")).toContain(ID_A);
+    expect(outChunks.join("")).not.toContain(ID_B);
+  });
+});
+
 describe("end-to-end call over the routed transport", () => {
   it("routes, authenticates with the bearer token, and returns the profile stamp", async () => {
     await bootHost(ID_A);
+    const { __resetOncePerProcessFlagsForTests } = await import("../src/client/call");
+    __resetOncePerProcessFlagsForTests();
     const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const result = await callToolWithMeta("get_windows_and_tabs", {});
     expect(result.data).toEqual({ echoedTool: "get_windows_and_tabs", from: ID_A });

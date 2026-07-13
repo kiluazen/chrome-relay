@@ -387,8 +387,11 @@ export async function runDoctor(): Promise<boolean> {
     // v2 instance registry: one line per ping-verified profile. This is
     // the multi-profile view — the legacy fixed-port check above only ever
     // sees whichever host won the 12122 race.
-    const instances = await discoverInstances();
-    console.log(`Registered profiles (v2): ${instances.length === 0 ? "none (pre-v2 extension, or none connected)" : ""}`);
+    const { verified: instances, unresolved } = await discoverInstances();
+    console.log(`Registered profiles (v2): ${instances.length === 0 && unresolved.length === 0 ? "none (pre-v2 extension, or none connected)" : ""}`);
+    for (const u of unresolved) {
+      console.log(`  ${u.label ?? "(unlabeled)"} [${instancePrefix(u.descriptor.instanceId)}] — UNREACHABLE (registered, host not answering; pid ${u.descriptor.pid})`);
+    }
     for (const inst of instances) {
       const prefix = instancePrefix(inst.descriptor.instanceId);
       const fileAccess =
