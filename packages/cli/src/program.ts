@@ -1,4 +1,4 @@
-// CLI entry point — just builds the Command tree by registering each
+// CLI entry point: builds the Command tree by registering each
 // per-domain module. The actual command bodies live in commands/*.ts.
 //
 // Code-quality-hardening PR 7 (file split): until 0.5.8 every command was
@@ -15,13 +15,15 @@ import { registerInput } from "./commands/input.js";
 import { registerCapture } from "./commands/capture.js";
 import { registerSessions } from "./commands/sessions.js";
 import { registerLoop } from "./commands/loop.js";
+import { registerProfile } from "./commands/profile.js";
+import { registerUpload } from "./commands/upload.js";
 
 export function buildProgram(): Command {
   const program = new Command();
 
   program
     .name("chrome-relay")
-    .description("Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms from any shell.")
+    .description("Your agent drives the Chrome you're signed into. Reads pages, clicks buttons, fills forms from any shell.")
     .version(CHROME_RELAY_VERSION)
     .showHelpAfterError()
     // Global --workspace and --group flags: usable at the top level
@@ -30,11 +32,16 @@ export function buildProgram(): Command {
     // effective value via baseArgs() which checks subcommand-level first,
     // then falls back to the program-level (parent) option.
     //
-    //   --workspace W → target a named Chrome WINDOW (own taskbar entry)
-    //   --group     G → target a named tab-GROUP (Chrome's colored folder
+    //   --workspace W targets a named Chrome WINDOW (own taskbar entry)
+    //   --group     G targets a named tab-GROUP (Chrome's colored folder
     //                   inside one window)
     .option("--workspace <name>", "target the active tab in a named workspace window (works at top level too)")
     .option("--group <name>",     "target the active tab in a named tab-group (works at top level too)")
+    //   --profile   P targets a connected Chrome PROFILE (parent scope —
+    //                   composes with the three above). One profile
+    //                   connected: never needed. Two+: unscoped commands
+    //                   fail profile_ambiguous instead of guessing.
+    .option("--profile <name>",   "target a connected Chrome profile by label or instanceId prefix (works at top level too)")
     .enablePositionalOptions()
     .addHelpText(
       "after",
@@ -44,7 +51,7 @@ The core loop:
   chrome-relay tabs
   chrome-relay navigate "https://chrome-relay.kushalsm.com" --new      # background tab
   chrome-relay snapshot --tab <tabId> -i                 # actionable elements get @refs
-  chrome-relay click @e12                                # act on a ref — no --tab needed
+  chrome-relay click @e12                                # act on a ref, no --tab needed
   chrome-relay fill @e14 "value"
   chrome-relay snapshot --tab <tabId> -i                 # re-look after the page changes
 
@@ -58,14 +65,14 @@ Also:
 
 Notes:
   Refs come from snapshot and carry their own tab. Tools attach via CDP and
-  run on backgrounded tabs without stealing focus. Errors are structured —
-  branch on relayError.code (stale_ref means: re-run snapshot).
+  run on backgrounded tabs without stealing focus. Errors are structured.
+  Branch on relayError.code (stale_ref means: re-run snapshot).
 `
     );
 
   // Build the context every per-domain module needs. baseArgs closes over
   // the program instance so it can read program-level (parent) flags.
-  // withBase is a one-call combiner — `withBase(opts, { foo: 1 })` =
+  // withBase is a one-call combiner: `withBase(opts, { foo: 1 })` =
   // `{ ...baseArgs(opts), foo: 1 }` so command actions stop repeating
   // the `Object.assign(args, baseArgs(opts))` boilerplate.
   const baseArgs = makeBaseArgs(program);
@@ -76,13 +83,15 @@ Notes:
     run: runTool
   };
 
-  // install-update doesn't need ctx — its commands don't target a tab.
+  // install-update doesn't need ctx. Its commands don't target a tab.
   registerInstallUpdate(program);
   registerNavigation(ctx);
   registerInput(ctx);
   registerCapture(ctx);
   registerSessions(ctx);
   registerLoop(ctx);
+  registerProfile(ctx);
+  registerUpload(ctx);
 
   return program;
 }

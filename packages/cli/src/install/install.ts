@@ -7,10 +7,12 @@ import {
   CHROME_WEB_STORE_EXTENSION_ID,
   DEFAULT_EXTENSION_IDS,
   DEFAULT_HTTP_PORT,
+  instancePrefix,
   LEGACY_DEV_EXTENSION_ID,
   LOCAL_UNPACKED_EXTENSION_ID,
   NATIVE_HOST_NAME
 } from "@chrome-relay/protocol";
+import { discoverInstances } from "../client/route.js";
 
 const APP_DIR = path.join(os.homedir(), ".chrome-relay");
 
@@ -358,16 +360,44 @@ export async function runDoctor(): Promise<boolean> {
     }
 
     let serverReachable = false;
+    let connected: { extensionId?: string | null; extensionVersion?: string | null } = {};
     try {
       const response = await fetch(`http://127.0.0.1:${DEFAULT_HTTP_PORT}/ping`);
       serverReachable = response.ok;
+      if (response.ok) connected = (await response.json()) as typeof connected;
     } catch {
       serverReachable = false;
     }
     console.log(`Allowed extension IDs: ${formatKnownExtensionIds()}`);
     console.log(`Local bridge reachable: ${serverReachable ? "yes" : "no"}`);
-    if (!serverReachable) {
+    if (serverReachable) {
+      // WHICH extension owns the bridge matters: when both the store build
+      // and an unpacked dev build are loaded, they race for the port, and
+      // "new commands return unsupported_tool" is the confusing symptom.
+      const flavor =
+        connected.extensionId === CHROME_WEB_STORE_EXTENSION_ID ? "Chrome Web Store" :
+        connected.extensionId === LOCAL_UNPACKED_EXTENSION_ID ? "local unpacked (dev)" :
+        connected.extensionId === LEGACY_DEV_EXTENSION_ID ? "legacy dev" :
+        connected.extensionId ? "unknown id" : "id not reported (pre-0.8 host still running — restart Chrome or run chrome-relay update)";
+      console.log(`Connected extension: ${connected.extensionVersion ?? "?"} — ${flavor}${connected.extensionId ? ` (${connected.extensionId})` : ""}`);
+    } else {
       console.log(`Tip: load the extension in one of the detected browsers so it can launch the native host.`);
+    }
+
+    // v2 instance registry: one line per ping-verified profile. This is
+    // the multi-profile view — the legacy fixed-port check above only ever
+    // sees whichever host won the 12122 race.
+    const instances = await discoverInstances();
+    console.log(`Registered profiles (v2): ${instances.length === 0 ? "none (pre-v2 extension, or none connected)" : ""}`);
+    for (const inst of instances) {
+      const prefix = instancePrefix(inst.descriptor.instanceId);
+      const fileAccess =
+        inst.fileSchemeAccess === true ? "yes" :
+        inst.fileSchemeAccess === false ? "NO — uploads will fail with file_access_denied; fix: chrome://extensions → Chrome Relay → Allow access to file URLs" :
+        "unknown";
+      console.log(
+        `  ${inst.label ?? "(unlabeled)"} [${prefix}] — ext ${inst.descriptor.extensionVersion}, host ${inst.descriptor.hostVersion}, port ${inst.descriptor.port}, file-URL access: ${fileAccess}`
+      );
     }
     return allHealthy;
   } catch (error) {

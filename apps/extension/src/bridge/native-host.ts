@@ -6,6 +6,7 @@ import type {
 } from "@chrome-relay/protocol";
 import { NATIVE_HOST_NAME, toBridgeError } from "@chrome-relay/protocol";
 import { runTool } from "../browser/tools";
+import { getInstanceId, getFileSchemeAccess } from "../browser/identity";
 
 const RECONNECT_DELAY_MS = 1500;
 const RECENT_TOOLS_STORAGE_KEY = "recentToolExecutions";
@@ -173,13 +174,30 @@ function connect(): void {
     scheduleReconnect();
   });
 
-  port.postMessage({
-    type: "bridge.ready",
-    payload: {
-      extensionId: chrome.runtime.id,
-      version: chrome.runtime.getManifest().version
+  // ready carries the minted profile identity (v2). Identity reads are
+  // async (storage.local), so fire the payload from a microtask; the port
+  // may have died meanwhile — postMessage then throws and the onDisconnect
+  // path owns recovery.
+  const readyPort = port;
+  void (async () => {
+    const [instanceId, fileSchemeAccess] = await Promise.all([
+      getInstanceId(),
+      getFileSchemeAccess()
+    ]);
+    try {
+      readyPort.postMessage({
+        type: "bridge.ready",
+        payload: {
+          extensionId: chrome.runtime.id,
+          version: chrome.runtime.getManifest().version,
+          instanceId,
+          ...(fileSchemeAccess !== undefined ? { fileSchemeAccess } : {})
+        }
+      });
+    } catch {
+      /* port gone; onDisconnect already scheduled the reconnect */
     }
-  });
+  })();
 }
 
 export function startNativeBridge(): void {
