@@ -9,6 +9,19 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.8.0": [
+    "Multi-profile: chrome-relay now routes between multiple Chrome profiles running the extension. `chrome-relay profile list` shows connected profiles; `profile label <name>` / `profile unlabel <name>` manage aliases; `--profile <label|idprefix>` (global or per-command) scopes any command. With ONE profile connected nothing changes and no flag is needed. With two+, unscoped commands fail with code profile_ambiguous listing candidates — branch on it and retry with --profile.",
+    "Qualified refs: once the extension is 0.8.0+, snapshot refs print profile-qualified (`[ref=3f2a:e12]`, used as `@3f2a:e12`). The token routes by itself — `click @3f2a:e12` needs no --profile even with several profiles connected. Bare `@eN` refs remain accepted. A ref used against the wrong profile fails target_conflict; a ref whose prefix matches no reachable profile fails profile_not_found (re-run snapshot).",
+    "Upload: new `chrome-relay upload` with three strategies, no auto-fallback. `upload set --ref/--selector <files...>` sets an <input type=file> directly (works on hidden inputs; not_a_file_input tells you to try choose). `upload choose --click-ref/--click-selector <files...>` clicks a trigger with the OS file dialog intercepted — no dialog ever appears (no_file_chooser = wrong trigger or a drop zone). `upload drop --ref/--selector <files...>` drops files onto a drop zone. Files are PATHS, read by Chrome itself; missing paths fail locally as file_not_found. set/choose return what the input ACTUALLY holds after the call.",
+    "Upload requires the extension's 'Allow access to file URLs' toggle (Chrome gates debugger file operations on it). Failures surface as file_access_denied with the fix; `chrome-relay doctor` reports the toggle per profile.",
+    "Every result served by a resolved profile is stamped with it — a `[chrome-relay] profile: <label> [<id>]` stderr line — so transcripts are never ambiguous about where a command landed.",
+    "Requires extension 0.8.0 for the new capabilities. Older extensions keep working unchanged (the CLI falls back to pre-0.8 behavior); older CLIs keep working against the 0.8.0 extension (it emits bare refs until it hears a 0.8.0 host). New error codes: profile_ambiguous, profile_not_found, label_conflict, not_a_file_input, no_file_chooser, file_chooser_busy, file_chooser_unsupported, file_access_denied, multiple_not_supported, file_not_found, target_closed, unauthorized."
+  ],
+  "0.7.2": [
+    "Fix (Windows): `chrome-relay update` now resolves the installed binary with `where` (Windows has no `which`), picks the spawnable `.cmd`/`.exe` over the extensionless npm shim, and re-execs it through a shell with the path quoted. Pre-0.7.2 the `which` call always failed on Windows, so update skipped the post-install manifest refresh and re-fired the cli-outdated nudge — the same loop fixed on macOS/Linux in 0.5.21, now closed on Windows too.",
+    "Fix (Windows): `screencast stop --gif/--mp4` detected ffmpeg with `which`, which doesn't exist on Windows, so the stitch step failed with `external_dependency_missing` even when ffmpeg was on PATH. Now uses `where` on win32. No change to the macOS/Linux path.",
+    "No extension change. Both fixes are CLI-only; existing 0.7.x extensions work unchanged."
+  ],
   "0.7.1": [
     "Fix: `wait` failed with `invalid_arguments: got 0 conditions` when invoked through the CLI. Root cause: the CLI transmitted the PARSED tool args over the bridge, and chrome_wait's parser transforms its shape ({selector} -> {condition}), so the extension re-parsed a shape it doesn't accept. The CLI now validates locally but transmits raw args — parsers run on the same raw shape at both ends, as designed. No extension change needed; 0.7.0 extensions work."
   ],
