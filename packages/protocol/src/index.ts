@@ -323,6 +323,11 @@ export interface InstanceDescriptor {
   hostVersion: string;
   protocolVersion: number;
   startedAt: string;
+  /** Which browser spawned this host ("Google Chrome", "Dia", …), detected
+   *  from the host's parent process. One CLI can front several Chromium
+   *  browsers at once; each browser+profile is its own instance, and this
+   *  is how `profile list` tells them apart. Absent when detection failed. */
+  browser?: string;
 }
 
 /** /ping response (v2 fields optional — a pre-v2 host omits them). */

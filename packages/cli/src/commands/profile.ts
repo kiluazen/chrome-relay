@@ -34,6 +34,7 @@ function describe(v: VerifiedInstance): Record<string, unknown> {
     instanceId: v.descriptor.instanceId,
     prefix: instancePrefix(v.descriptor.instanceId),
     label: v.label,
+    ...(v.descriptor.browser ? { browser: v.descriptor.browser } : {}),
     extensionVersion: v.descriptor.extensionVersion,
     hostVersion: v.descriptor.hostVersion,
     port: v.descriptor.port,

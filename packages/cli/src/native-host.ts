@@ -15,6 +15,7 @@
 // host can never delete the descriptor of the newer host that replaced it.
 
 import process from "node:process";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   DEFAULT_HTTP_PORT,
@@ -30,6 +31,30 @@ import { CHROME_RELAY_VERSION } from "./index.js";
 
 const generationId = randomUUID();
 const token = randomUUID();
+
+/** The browser that spawned us IS our parent process — the one identity
+ *  source that can't lie or be absent from old extensions. macOS/Linux:
+ *  read the parent's executable path. Windows: skipped for now (wmic/CIM
+ *  cost isn't worth it at spawn time); the field is optional. */
+function detectBrowser(): string | undefined {
+  if (process.platform === "win32") return undefined;
+  try {
+    const comm = execFileSync("ps", ["-o", "comm=", "-p", String(process.ppid)], {
+      timeout: 2_000
+    }).toString().trim();
+    if (!comm) return undefined;
+    // "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" → "Google Chrome"
+    const appMatch = /\/([^/]+)\.app\//.exec(comm);
+    if (appMatch) return appMatch[1];
+    const base = comm.split("/").pop() ?? comm;
+    // Linux binaries: "chrome" / "brave" / "chromium" — good enough as-is.
+    return base || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const browser = detectBrowser();
 
 const bridge = new ExtensionBridge((message) => {
   writeNativeMessage(process.stdout, message);
@@ -95,7 +120,8 @@ async function writeDescriptorWhenReady(): Promise<void> {
     extensionVersion: bridge.getExtensionVersion() ?? "",
     hostVersion: CHROME_RELAY_VERSION,
     protocolVersion: PROTOCOL_VERSION,
-    startedAt: new Date().toISOString()
+    startedAt: new Date().toISOString(),
+    ...(browser ? { browser } : {})
   };
   writeInstanceDescriptor(descriptor);
   descriptorInstanceId = instanceId;

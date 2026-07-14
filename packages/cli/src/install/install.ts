@@ -67,6 +67,8 @@ function getChromiumBrowserTargets(): BrowserTarget[] {
       { label: "Brave",                  installRoot: path.join(appSupport, "BraveSoftware/Brave-Browser"),    manifestDir: path.join(appSupport, "BraveSoftware/Brave-Browser/NativeMessagingHosts") },
       { label: "Vivaldi",                installRoot: path.join(appSupport, "Vivaldi"),                        manifestDir: path.join(appSupport, "Vivaldi/NativeMessagingHosts") },
       { label: "Arc",                    installRoot: path.join(appSupport, "Arc/User Data"),                  manifestDir: path.join(appSupport, "Arc/User Data/NativeMessagingHosts") },
+      // Dia (The Browser Company) uses the Arc-style nested User Data layout.
+      { label: "Dia",                    installRoot: path.join(appSupport, "Dia/User Data"),                  manifestDir: path.join(appSupport, "Dia/User Data/NativeMessagingHosts") },
       { label: "Opera",                  installRoot: path.join(appSupport, "com.operasoftware.Opera"),        manifestDir: path.join(appSupport, "com.operasoftware.Opera/NativeMessagingHosts") }
     ];
   }
@@ -399,7 +401,7 @@ export async function runDoctor(): Promise<boolean> {
         inst.fileSchemeAccess === false ? "NO — uploads will fail with file_access_denied; fix: chrome://extensions → Chrome Relay → Allow access to file URLs" :
         "unknown";
       console.log(
-        `  ${inst.label ?? "(unlabeled)"} [${prefix}] — ext ${inst.descriptor.extensionVersion}, host ${inst.descriptor.hostVersion}, port ${inst.descriptor.port}, file-URL access: ${fileAccess}`
+        `  ${inst.label ?? "(unlabeled)"} [${prefix}] — ${inst.descriptor.browser ?? "browser?"}, ext ${inst.descriptor.extensionVersion}, host ${inst.descriptor.hostVersion}, port ${inst.descriptor.port}, file-URL access: ${fileAccess}`
       );
     }
     return allHealthy;

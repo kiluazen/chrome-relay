@@ -15,6 +15,10 @@ let exitSpy: ReturnType<typeof vi.spyOn>;
 let stderrSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
+  // Hermetic routing: without this, a developer machine with REAL instance
+  // descriptors in ~/.chrome-relay makes resolveRoute (correctly) refuse to
+  // route these stub-fetch calls. Same pin as program.test.ts.
+  process.env.CHROME_RELAY_HOME = "/nonexistent/chrome-relay-test-home";
   fetchSpy = vi.fn();
   vi.stubGlobal("fetch", fetchSpy);
   fetchSpy.mockImplementation(async () => ({
@@ -28,6 +32,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete process.env.CHROME_RELAY_HOME;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
