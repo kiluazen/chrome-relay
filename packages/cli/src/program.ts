@@ -68,6 +68,10 @@ Notes:
   Refs come from snapshot and carry their own tab. Tools attach via CDP and
   run on backgrounded tabs without stealing focus. Errors are structured.
   Branch on relayError.code (stale_ref means: re-run snapshot).
+  One CLI works across many browsers and profiles at once: install the
+  extension in every browser and browser profile you want this CLI to
+  reach, then \`chrome-relay profile list\` shows who's connected and
+  --profile <label|idprefix> scopes any command when more than one is.
 
 How one CLI reaches many browsers/profiles:
   Every browser profile running the extension spawns its OWN native host

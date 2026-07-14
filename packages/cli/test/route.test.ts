@@ -226,6 +226,31 @@ describe("routing rules", () => {
     expect(await relayCode(() => resolveRoute(undefined, {}))).toBe("profile_ambiguous");
   });
 
+  it("the ambiguity error IS the picker: browser + exact retry flag per candidate", async () => {
+    await bootHost(ID_A, { browser: "Google Chrome" });
+    await bootHost(ID_B, { browser: "Dia" });
+    const { saveLabels, loadLabels } = await import("../src/registry");
+    const labels = loadLabels();
+    labels.instances[ID_A] = { label: "main" };
+    saveLabels(labels);
+
+    let err: RelayError | null = null;
+    try {
+      await resolveRoute(undefined, {});
+    } catch (e) {
+      err = e as RelayError;
+    }
+    expect(err?.code).toBe("profile_ambiguous");
+    // Message is a menu of runnable flags, one per candidate, browser named.
+    expect(err?.message).toContain("--profile main");
+    expect(err?.message).toContain("Google Chrome");
+    expect(err?.message).toContain("Dia");
+    // Details are agent-parseable: retryWith gives the exact flag.
+    const candidates = (err?.details as { candidates: Array<Record<string, unknown>> }).candidates;
+    expect(candidates.map((c) => c.retryWith).sort()).toEqual(["--profile bbbb", "--profile main"]);
+    expect(candidates.map((c) => c.browser).sort()).toEqual(["Dia", "Google Chrome"]);
+  });
+
   it("--profile routes by label and by id prefix", async () => {
     const a = await bootHost(ID_A);
     await bootHost(ID_B);

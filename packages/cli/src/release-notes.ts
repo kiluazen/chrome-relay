@@ -9,6 +9,13 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.8.1": [
+    "Dia (The Browser Company) support: `chrome-relay install` now writes Dia's native-messaging manifest, so its extension can connect. One CLI reaches every browser + profile with the extension installed — Chrome, Dia, Arc, Brave, ... alike.",
+    "profile_ambiguous is now a MENU: the error lists every candidate with its label, browser, id prefix, and the exact `--profile ...` flag to rerun with (details.candidates[].retryWith) — pick and continue in one round trip, no `profile list` needed first.",
+    "`profile list` and `doctor` now name each instance's BROWSER (detected from the host's parent process) and reachability.",
+    "`chrome-relay skills get core` gained 'Many browsers & profiles' and 'Uploads' sections; top-level --help now explains that one CLI works across many browsers/profiles and to install the extension everywhere you want reachable.",
+    "CLI-only release; extension 0.8.0 unchanged."
+  ],
   "0.8.0": [
     "Multi-profile: chrome-relay now routes between multiple Chrome profiles running the extension. `chrome-relay profile list` shows connected profiles; `profile label <name>` / `profile unlabel <name>` manage aliases; `--profile <label|idprefix>` (global or per-command) scopes any command. With ONE profile connected nothing changes and no flag is needed. With two+, unscoped commands fail with code profile_ambiguous listing candidates — branch on it and retry with --profile.",
     "Qualified refs: once the extension is 0.8.0+, snapshot refs print profile-qualified (`[ref=3f2a:e12]`, used as `@3f2a:e12`). The token routes by itself — `click @3f2a:e12` needs no --profile even with several profiles connected. Bare `@eN` refs remain accepted. A ref used against the wrong profile fails target_conflict; a ref whose prefix matches no reachable profile fails profile_not_found (re-run snapshot).",

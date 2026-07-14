@@ -53,7 +53,11 @@ function candidateList(verified: VerifiedInstance[]): Array<Record<string, unkno
     instanceId: v.descriptor.instanceId,
     prefix: instancePrefix(v.descriptor.instanceId),
     label: v.label,
-    extensionVersion: v.descriptor.extensionVersion
+    browser: v.descriptor.browser ?? null,
+    extensionVersion: v.descriptor.extensionVersion,
+    // The exact flag that retries this command at this candidate — the
+    // error IS the picker; an agent should never need a second lookup.
+    retryWith: `--profile ${v.label ?? instancePrefix(v.descriptor.instanceId)}`
   }));
 }
 
@@ -156,7 +160,9 @@ function unresolvedList(unresolved: DiscoveryResult["unresolved"]): Array<Record
     instanceId: u.descriptor.instanceId,
     prefix: instancePrefix(u.descriptor.instanceId),
     label: u.label,
-    unreachable: true
+    browser: u.descriptor.browser ?? null,
+    unreachable: true,
+    retryWith: `--profile ${u.label ?? instancePrefix(u.descriptor.instanceId)}`
   }));
 }
 
@@ -283,12 +289,22 @@ export async function resolveRoute(
   const total = verified.length + unresolved.length;
   if (verified.length === 1 && unresolved.length === 0) return toRoute(verified[0]);
   if (total > 1) {
+    // The error IS the picker: one line per candidate with label, browser,
+    // prefix, and the exact retry flag — the agent chooses and continues
+    // in a single round trip, no `profile list` needed first.
+    const menu = [
+      ...verified.map(
+        (v) =>
+          `  --profile ${v.label ?? instancePrefix(v.descriptor.instanceId)}   → ${v.label ?? "(unlabeled)"} [${instancePrefix(v.descriptor.instanceId)}]${v.descriptor.browser ? `, ${v.descriptor.browser}` : ""}`
+      ),
+      ...unresolved.map(
+        (u) =>
+          `  --profile ${u.label ?? instancePrefix(u.descriptor.instanceId)}   → ${u.label ?? "(unlabeled)"} [${instancePrefix(u.descriptor.instanceId)}]${u.descriptor.browser ? `, ${u.descriptor.browser}` : ""} (UNREACHABLE right now)`
+      )
+    ].join("\n");
     throw new RelayError({
       code: "profile_ambiguous",
-      message: `${total} profiles registered (${verified.length} reachable) — pass --profile <label|idprefix>. ${[
-        ...verified.map((v) => `${v.label ?? "(unlabeled)"} [${instancePrefix(v.descriptor.instanceId)}]`),
-        ...unresolved.map((u) => `${u.label ?? "(unlabeled)"} [${instancePrefix(u.descriptor.instanceId)}] (unreachable)`)
-      ].join(", ")}.`,
+      message: `${total} profiles connected (${verified.length} reachable) — rerun this exact command with one of:\n${menu}`,
       phase: "resolve_profile",
       details: { candidates: [...candidateList(verified), ...unresolvedList(unresolved)] },
       retryable: false

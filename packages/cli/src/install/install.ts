@@ -401,7 +401,7 @@ export async function runDoctor(): Promise<boolean> {
         inst.fileSchemeAccess === false ? "NO — uploads will fail with file_access_denied; fix: chrome://extensions → Chrome Relay → Allow access to file URLs" :
         "unknown";
       console.log(
-        `  ${inst.label ?? "(unlabeled)"} [${prefix}] — ${inst.descriptor.browser ?? "browser?"}, ext ${inst.descriptor.extensionVersion}, host ${inst.descriptor.hostVersion}, port ${inst.descriptor.port}, file-URL access: ${fileAccess}`
+        `  ${inst.label ?? "(unlabeled)"} [${prefix}] — ${inst.descriptor.browser ?? "browser?"} — REACHABLE — ext ${inst.descriptor.extensionVersion}, host ${inst.descriptor.hostVersion}, port ${inst.descriptor.port}, file-URL access: ${fileAccess}`
       );
     }
     return allHealthy;
