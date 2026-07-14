@@ -9,6 +9,10 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.8.2": [
+    "Every profile error is now a picker, not a wall. profile_ambiguous, profile_not_found, and the ref-vs-profile target_conflict all end with a runnable menu — one line per connected browser/profile (label, id prefix, browser) and the exact `--profile ...` flag to rerun this same command with. Previously only the unscoped-ambiguous case listed candidates; `--profile X matches N` said 'narrow it' with nothing to narrow between, and profile_not_found listed labels only. Now uniform: see what's connected, pick one, continue — in one round trip, no `profile list` first.",
+    "extension_not_connected (a targeted profile that didn't answer) now also lists what IS reachable. The ref-prefix-collision case still points to re-snapshot (a token-level collision genuinely can't be fixed by --profile). CLI-only; extensions unchanged."
+  ],
   "0.8.1": [
     "Dia (The Browser Company) support: `chrome-relay install` now writes Dia's native-messaging manifest, so its extension can connect. One CLI reaches every browser + profile with the extension installed — Chrome, Dia, Arc, Brave, ... alike.",
     "profile_ambiguous is now a MENU: the error lists every candidate with its label, browser, id prefix, and the exact `--profile ...` flag to rerun with (details.candidates[].retryWith) — pick and continue in one round trip, no `profile list` needed first.",

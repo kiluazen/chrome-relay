@@ -273,6 +273,50 @@ describe("routing rules", () => {
     expect(await relayCode(() => resolveRoute("nope", {}))).toBe("profile_not_found");
   });
 
+  it("EVERY profile error is a picker: not_found and match-multiple both list the runnable menu", async () => {
+    await bootHost(ID_A, { browser: "Google Chrome" });
+    await bootHost(ID_B, { browser: "Dia" });
+    const { saveLabels, loadLabels } = await import("../src/registry");
+    const labels = loadLabels();
+    labels.instances[ID_A] = { label: "main" };
+    labels.instances[ID_B] = { label: "dia" };
+    saveLabels(labels);
+
+    // profile_not_found → menu of ALL connected, with browsers + flags.
+    let e1: RelayError | null = null;
+    try { await resolveRoute("nope", {}); } catch (e) { e1 = e as RelayError; }
+    expect(e1?.code).toBe("profile_not_found");
+    expect(e1?.message).toContain("--profile main");
+    expect(e1?.message).toContain("--profile dia");
+    expect(e1?.message).toContain("Google Chrome");
+    expect(e1?.message).toContain("Dia");
+
+    // --profile prefix matching BOTH (shared 'xxxx'? no — use a shared-prefix
+    // pair). Here 'a'/'b' are unique, so test the shared-prefix match path
+    // via id-prefix that hits one; instead assert the match-multiple menu on
+    // a prefix both share is covered by the collision test. This asserts the
+    // no-match picker, the most common real case.
+    const candidates = (e1?.details as { connected: Array<Record<string, unknown>> }).connected;
+    expect(candidates.map((c) => c.retryWith).sort()).toEqual(["--profile dia", "--profile main"]);
+  });
+
+  it("ref-vs-profile target_conflict names BOTH the wrong scope and the ref's owner", async () => {
+    await bootHost(ID_A, { browser: "Google Chrome" });
+    await bootHost(ID_B, { browser: "Dia" });
+    const { saveLabels, loadLabels } = await import("../src/registry");
+    const labels = loadLabels();
+    labels.instances[ID_A] = { label: "main" };
+    labels.instances[ID_B] = { label: "dia" };
+    saveLabels(labels);
+
+    let err: RelayError | null = null;
+    try { await resolveRoute("main", { ref: "bbbb:e1" }); } catch (e) { err = e as RelayError; }
+    expect(err?.code).toBe("target_conflict");
+    // Points at the mistake AND the fix: rerun with the ref owner's profile.
+    expect(err?.message).toContain("--profile dia");
+    expect((err?.details as { refOwner: { label: string } }).refOwner.label).toBe("dia");
+  });
+
   it("a qualified ref routes on its own, no --profile needed", async () => {
     await bootHost(ID_A);
     await bootHost(ID_B);

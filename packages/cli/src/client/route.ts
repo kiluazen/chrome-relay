@@ -166,12 +166,41 @@ function unresolvedList(unresolved: DiscoveryResult["unresolved"]): Array<Record
   }));
 }
 
-function unreachableError(what: string, unresolved: DiscoveryResult["unresolved"]): RelayError {
+// One runnable line per candidate: the exact --profile flag, the label, the
+// id prefix, the browser. EVERY profile error ends with this menu so the
+// agent never sees a bare "disambiguate" with nothing to disambiguate
+// between — it always gets "here's what's connected, rerun with one of
+// these." That uniformity is the design: a profile error is a picker.
+function menuLine(label: string | null, prefix: string, browser: string | null | undefined, unreachable: boolean): string {
+  const name = label ?? "(unlabeled)";
+  const flag = label ?? prefix;
+  const b = browser ? `, ${browser}` : "";
+  return `  --profile ${flag}   → ${name} [${prefix}]${b}${unreachable ? " (UNREACHABLE right now)" : ""}`;
+}
+
+function profileMenu(verified: VerifiedInstance[], unresolved: DiscoveryResult["unresolved"] = []): string {
+  return [
+    ...verified.map((v) => menuLine(v.label, instancePrefix(v.descriptor.instanceId), v.descriptor.browser, false)),
+    ...unresolved.map((u) => menuLine(u.label, instancePrefix(u.descriptor.instanceId), u.descriptor.browser, true))
+  ].join("\n");
+}
+
+// "<what went wrong> — rerun this exact command with one of:\n<menu>"
+function withMenu(head: string, verified: VerifiedInstance[], unresolved: DiscoveryResult["unresolved"] = []): string {
+  const menu = profileMenu(verified, unresolved);
+  if (!menu) return `${head} — but nothing is connected. Is the extension running? \`chrome-relay profile list\` to check.`;
+  return `${head} — rerun this exact command with one of:\n${menu}`;
+}
+
+function unreachableError(what: string, verified: VerifiedInstance[], unresolved: DiscoveryResult["unresolved"]): RelayError {
+  const reachable = verified.length
+    ? ` Reachable right now:\n${profileMenu(verified)}`
+    : "";
   return new RelayError({
     code: "extension_not_connected",
-    message: `${what} is registered but its host didn't answer the handshake — transient (mid-restart, hiccup) or the profile's Chrome is wedged. Retry; if it persists, restart that Chrome profile.`,
+    message: `${what} is registered but its host didn't answer the handshake — transient (mid-restart, hiccup) or that browser profile is wedged. Retry; if it persists, restart that browser profile.${reachable}`,
     phase: "resolve_profile",
-    details: { unresolved: unresolvedList(unresolved) },
+    details: { unresolved: unresolvedList(unresolved), reachable: candidateList(verified) },
     retryable: true
   });
 }
@@ -197,17 +226,22 @@ export async function resolveRoute(
   args: Record<string, unknown>
 ): Promise<ResolvedRoute> {
   const refPrefixes = [...collectRefPrefixes(args)];
+
+  const { verified, unresolved } = await discoverInstances();
+
   if (refPrefixes.length > 1) {
     throw new RelayError({
       code: "target_conflict",
-      message: `refs from ${refPrefixes.length} different profiles in one call (${refPrefixes.join(", ")}) — a call routes to exactly one profile.`,
+      message: withMenu(
+        `this call carries refs minted by ${refPrefixes.length} different profiles (${refPrefixes.join(", ")}) — one command routes to exactly one profile. Use refs from a single profile's snapshot, or scope explicitly`,
+        verified,
+        unresolved
+      ),
       phase: "resolve_profile",
-      details: { refPrefixes },
+      details: { refPrefixes, candidates: [...candidateList(verified), ...unresolvedList(unresolved)] },
       retryable: false
     });
   }
-
-  const { verified, unresolved } = await discoverInstances();
 
   const refPrefixGuard = (selected?: VerifiedInstance): void => {
     for (const prefix of refPrefixes) {
@@ -225,11 +259,14 @@ export async function resolveRoute(
         });
       }
       if (selected && !normalizeId(selected.descriptor.instanceId).startsWith(prefix)) {
+        const owner = verified.find((v) => normalizeId(v.descriptor.instanceId).startsWith(prefix));
+        const ownerName = owner ? (owner.label ?? instancePrefix(owner.descriptor.instanceId)) : prefix;
         throw new RelayError({
           code: "target_conflict",
-          message: `--profile ${profileArg} resolves to ${selected.label ?? instancePrefix(selected.descriptor.instanceId)}, but the call carries a ref minted by profile ${prefix}. Drop --profile or use a ref from the right profile's snapshot.`,
+          message:
+            `--profile ${profileArg} points at ${selected.label ?? instancePrefix(selected.descriptor.instanceId)}, but the ref was minted by profile ${prefix}. Either drop --profile (the ref routes itself), or rerun with --profile ${ownerName} to act in that profile.`,
           phase: "resolve_profile",
-          details: { profile: profileArg, refPrefix: prefix, selected: candidateList([selected])[0] },
+          details: { profile: profileArg, refPrefix: prefix, selected: candidateList([selected])[0], refOwner: owner ? candidateList([owner])[0] : null },
           retryable: false
         });
       }
@@ -244,10 +281,10 @@ export async function resolveRoute(
       const unresolvedHit = unresolved.some(
         (u) => u.label === profileArg || (/^[0-9a-f]+$/.test(needle) && normalizeId(u.descriptor.instanceId).startsWith(needle))
       );
-      if (unresolvedHit) throw unreachableError(`--profile ${profileArg}`, unresolved);
+      if (unresolvedHit) throw unreachableError(`--profile ${profileArg}`, verified, unresolved);
       throw new RelayError({
         code: "profile_not_found",
-        message: `--profile ${profileArg} matches no connected profile. Connected: ${verified.length ? verified.map((v) => v.label ?? instancePrefix(v.descriptor.instanceId)).join(", ") : "(none — is the extension running?)"}.`,
+        message: withMenu(`--profile ${profileArg} matches no connected profile`, verified, unresolved),
         phase: "resolve_profile",
         details: { requested: profileArg, connected: candidateList(verified), unresolved: unresolvedList(unresolved) },
         retryable: false
@@ -256,7 +293,7 @@ export async function resolveRoute(
     if (matches.length > 1) {
       throw new RelayError({
         code: "profile_ambiguous",
-        message: `--profile ${profileArg} matches ${matches.length} connected profiles — use a longer id prefix or a label.`,
+        message: withMenu(`--profile ${profileArg} matches ${matches.length} connected profiles — narrow it`, matches),
         phase: "resolve_profile",
         details: { requested: profileArg, candidates: candidateList(matches) },
         retryable: false
@@ -273,10 +310,14 @@ export async function resolveRoute(
     refPrefixGuard(); // collision check across verified + unresolved
     const span = prefixSpan(prefix, verified, unresolved);
     if (span.verified.length === 1) return toRoute(span.verified[0]);
-    if (span.total === 1) throw unreachableError(`the profile that minted ref prefix ${prefix}`, unresolved);
+    if (span.total === 1) throw unreachableError(`the profile that minted ref prefix ${prefix}`, verified, unresolved);
     throw new RelayError({
       code: "profile_not_found",
-      message: `ref prefix ${prefix} matches no registered profile — the profile that minted this ref isn't reachable. Connected: ${verified.length ? verified.map((v) => v.label ?? instancePrefix(v.descriptor.instanceId)).join(", ") : "(none)"}.`,
+      message: withMenu(
+        `ref prefix ${prefix} matches no connected profile — the profile that minted this ref isn't here. Re-run \`snapshot\` in the profile you mean, or scope`,
+        verified,
+        unresolved
+      ),
       phase: "resolve_profile",
       details: { refPrefix: prefix, connected: candidateList(verified), unresolved: unresolvedList(unresolved) },
       retryable: false
@@ -292,19 +333,9 @@ export async function resolveRoute(
     // The error IS the picker: one line per candidate with label, browser,
     // prefix, and the exact retry flag — the agent chooses and continues
     // in a single round trip, no `profile list` needed first.
-    const menu = [
-      ...verified.map(
-        (v) =>
-          `  --profile ${v.label ?? instancePrefix(v.descriptor.instanceId)}   → ${v.label ?? "(unlabeled)"} [${instancePrefix(v.descriptor.instanceId)}]${v.descriptor.browser ? `, ${v.descriptor.browser}` : ""}`
-      ),
-      ...unresolved.map(
-        (u) =>
-          `  --profile ${u.label ?? instancePrefix(u.descriptor.instanceId)}   → ${u.label ?? "(unlabeled)"} [${instancePrefix(u.descriptor.instanceId)}]${u.descriptor.browser ? `, ${u.descriptor.browser}` : ""} (UNREACHABLE right now)`
-      )
-    ].join("\n");
     throw new RelayError({
       code: "profile_ambiguous",
-      message: `${total} profiles connected (${verified.length} reachable) — rerun this exact command with one of:\n${menu}`,
+      message: withMenu(`${total} profiles connected (${verified.length} reachable) — pick which browser/profile to act in`, verified, unresolved),
       phase: "resolve_profile",
       details: { candidates: [...candidateList(verified), ...unresolvedList(unresolved)] },
       retryable: false
@@ -314,7 +345,7 @@ export async function resolveRoute(
     // v2 evidence exists but the host didn't answer. Falling back to the
     // legacy fixed port here could reach a DIFFERENT profile's host —
     // silent misroute. Fail loud and retryable instead.
-    throw unreachableError("the only registered profile", unresolved);
+    throw unreachableError("the only registered profile", verified, unresolved);
   }
   // Zero v2 evidence of any kind: legacy fixed-port fallback. Pre-v2
   // behavior and pre-v2 errors (extension_not_connected) apply from here.
