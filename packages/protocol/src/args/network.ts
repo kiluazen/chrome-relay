@@ -19,9 +19,9 @@ export interface NetworkFilter {
 }
 
 export type ChromeNetworkArgs =
-  | (TargetArgs & { action: "read" } & NetworkFilter)
+  | (TargetArgs & { action: "read"; rawHeaders?: boolean } & NetworkFilter)
   | (TargetArgs & { action: "clear" })
-  | (TargetArgs & { action: "har"; withBodies?: boolean; bestEffortBodies?: boolean } & NetworkFilter)
+  | (TargetArgs & { action: "har"; withBodies?: boolean; bestEffortBodies?: boolean; rawHeaders?: boolean } & NetworkFilter)
   | (TargetArgs & { action: "body"; requestId: string; full?: boolean; head?: number });
 
 function parseFilter(obj: Record<string, unknown>): NetworkFilter {
@@ -79,15 +79,18 @@ export function parseChromeNetworkArgs(input: unknown): ChromeNetworkArgs {
   if (action === "har") {
     const withBodies      = optBool(obj, "withBodies");
     const bestEffortBodies = optBool(obj, "bestEffortBodies");
+    const rawHeadersHar = optBool(obj, "rawHeaders");
     return {
       ...target, action: "har",
       ...(withBodies !== undefined      ? { withBodies }      : {}),
       ...(bestEffortBodies !== undefined ? { bestEffortBodies } : {}),
+      ...(rawHeadersHar !== undefined    ? { rawHeaders: rawHeadersHar } : {}),
       ...parseFilter(obj)
     };
   }
   if (action === "read") {
-    return { ...target, action: "read", ...parseFilter(obj) };
+    const rawHeaders = optBool(obj, "rawHeaders");
+    return { ...target, action: "read", ...(rawHeaders !== undefined ? { rawHeaders } : {}), ...parseFilter(obj) };
   }
   throw new RelayError({
     code: "invalid_arguments",
