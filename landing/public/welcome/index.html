@@ -93,51 +93,71 @@
         padding: clamp(48px, 8vh, 96px) 0;
       }
 
-      .success-mark {
-        position: relative;
-        display: inline-grid;
+      .celebration {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: grid;
         place-items: center;
-        width: 54px;
-        height: 54px;
-        margin-bottom: 18px;
+        pointer-events: none;
+        animation: celebration-exit 1900ms ease-out both;
+      }
+
+      .celebration-mark {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        place-items: center;
+        width: 92px;
+        height: 92px;
         border: 1px solid var(--line);
         border-radius: 50%;
         background: var(--green-soft);
         color: var(--green);
-        font-size: 27px;
+        font-size: 46px;
         font-weight: 750;
-        box-shadow: 0 0 0 9px rgba(230, 242, 235, 0.55);
+        box-shadow: 0 0 0 14px rgba(230, 242, 235, 0.62), var(--shadow);
+        animation: success-pop 1500ms cubic-bezier(.2,.8,.2,1) both;
       }
 
-      .burst { position: absolute; inset: -26px; pointer-events: none; }
-
-      .burst i {
-        --turn: 0deg;
+      .confetti {
         position: absolute;
         left: 50%;
         top: 50%;
-        width: 4px;
-        height: 13px;
-        border-radius: 999px;
-        background: var(--green);
-        opacity: 0;
-        transform: translate(-50%, -50%) rotate(var(--turn)) translateY(-26px) scaleY(0.3);
-        animation: celebrate 900ms cubic-bezier(.2,.8,.2,1) forwards;
+        width: 1px;
+        height: 1px;
       }
 
-      .burst i:nth-child(1) { --turn: 0deg; }
-      .burst i:nth-child(2) { --turn: 45deg; animation-delay: 40ms; background: #ba7136; }
-      .burst i:nth-child(3) { --turn: 90deg; animation-delay: 80ms; }
-      .burst i:nth-child(4) { --turn: 135deg; animation-delay: 120ms; background: #ba7136; }
-      .burst i:nth-child(5) { --turn: 180deg; animation-delay: 160ms; }
-      .burst i:nth-child(6) { --turn: 225deg; animation-delay: 200ms; background: #ba7136; }
-      .burst i:nth-child(7) { --turn: 270deg; animation-delay: 240ms; }
-      .burst i:nth-child(8) { --turn: 315deg; animation-delay: 280ms; background: #ba7136; }
+      .confetti i {
+        position: absolute;
+        width: 7px;
+        height: 18px;
+        border-radius: 2px;
+        background: var(--color, var(--green));
+        transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-36px) scale(.35);
+        animation: confetti-burst 1350ms cubic-bezier(.16,.8,.25,1) var(--delay, 0ms) both;
+      }
 
-      @keyframes celebrate {
-        0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--turn)) translateY(-22px) scaleY(0.25); }
-        35% { opacity: 0.9; }
-        100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--turn)) translateY(-42px) scaleY(1); }
+      .confetti i:nth-child(3n) { width: 9px; height: 9px; border-radius: 50%; }
+      .confetti i:nth-child(4n) { width: 5px; height: 15px; }
+
+      @keyframes success-pop {
+        0% { opacity: 0; transform: scale(.48) rotate(-10deg); }
+        18% { opacity: 1; transform: scale(1.1) rotate(2deg); }
+        30%, 68% { opacity: 1; transform: scale(1) rotate(0); }
+        100% { opacity: 0; transform: scale(.82); }
+      }
+
+      @keyframes confetti-burst {
+        0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-36px) scale(.35); }
+        14% { opacity: 1; }
+        72% { opacity: 1; }
+        100% { opacity: 0; transform: translate(-50%, -50%) rotate(calc(var(--angle) + 150deg)) translateY(calc(var(--distance) * -1)) scale(1); }
+      }
+
+      @keyframes celebration-exit {
+        0%, 78% { visibility: visible; }
+        100% { visibility: hidden; }
       }
 
       h1 {
@@ -146,6 +166,7 @@
         font-weight: 760;
         letter-spacing: -0.045em;
         line-height: 1;
+        white-space: nowrap;
       }
 
       .sub {
@@ -206,10 +227,6 @@
         line-height: 1.62;
       }
 
-      .help { margin: 18px 0 0; color: var(--muted); font-size: 14px; }
-      .help a { color: var(--green); font-weight: 650; text-decoration: none; }
-      .help a:hover { text-decoration: underline; }
-
       .footer-wrap { margin-top: auto; border-top: 1px solid var(--line); }
 
       .footer {
@@ -237,19 +254,48 @@
         .brand img { width: 30px; height: 30px; }
         .brand { font-size: 18px; }
         .nav-links { gap: 14px; font-size: 14px; }
-        h1 { font-size: clamp(39px, 12vw, 58px); }
+        h1 { font-size: clamp(22px, 7.4vw, 39px); }
         .prompt-card { border-radius: 8px; }
         pre { font-size: 12px; }
         .footer { padding: 22px 0 28px; }
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .burst i { animation: none; }
+        .celebration { display: none; }
       }
     </style>
   </head>
   <body>
     <div class="bg-art"></div>
+    <div class="celebration" aria-hidden="true">
+      <div class="celebration-mark">✓</div>
+      <div class="confetti">
+        <i style="--angle:0deg;--distance:176px;--delay:0ms;--color:#1f7a4d"></i>
+        <i style="--angle:15deg;--distance:142px;--delay:70ms;--color:#ba7136"></i>
+        <i style="--angle:30deg;--distance:188px;--delay:25ms;--color:#d8a63d"></i>
+        <i style="--angle:45deg;--distance:154px;--delay:95ms;--color:#1f7a4d"></i>
+        <i style="--angle:60deg;--distance:181px;--delay:40ms;--color:#ba7136"></i>
+        <i style="--angle:75deg;--distance:148px;--delay:115ms;--color:#d8a63d"></i>
+        <i style="--angle:90deg;--distance:190px;--delay:10ms;--color:#1f7a4d"></i>
+        <i style="--angle:105deg;--distance:158px;--delay:80ms;--color:#ba7136"></i>
+        <i style="--angle:120deg;--distance:179px;--delay:45ms;--color:#d8a63d"></i>
+        <i style="--angle:135deg;--distance:145px;--delay:105ms;--color:#1f7a4d"></i>
+        <i style="--angle:150deg;--distance:186px;--delay:20ms;--color:#ba7136"></i>
+        <i style="--angle:165deg;--distance:151px;--delay:90ms;--color:#d8a63d"></i>
+        <i style="--angle:180deg;--distance:176px;--delay:0ms;--color:#1f7a4d"></i>
+        <i style="--angle:195deg;--distance:142px;--delay:70ms;--color:#ba7136"></i>
+        <i style="--angle:210deg;--distance:188px;--delay:25ms;--color:#d8a63d"></i>
+        <i style="--angle:225deg;--distance:154px;--delay:95ms;--color:#1f7a4d"></i>
+        <i style="--angle:240deg;--distance:181px;--delay:40ms;--color:#ba7136"></i>
+        <i style="--angle:255deg;--distance:148px;--delay:115ms;--color:#d8a63d"></i>
+        <i style="--angle:270deg;--distance:190px;--delay:10ms;--color:#1f7a4d"></i>
+        <i style="--angle:285deg;--distance:158px;--delay:80ms;--color:#ba7136"></i>
+        <i style="--angle:300deg;--distance:179px;--delay:45ms;--color:#d8a63d"></i>
+        <i style="--angle:315deg;--distance:145px;--delay:105ms;--color:#1f7a4d"></i>
+        <i style="--angle:330deg;--distance:186px;--delay:20ms;--color:#ba7136"></i>
+        <i style="--angle:345deg;--distance:151px;--delay:90ms;--color:#d8a63d"></i>
+      </div>
+    </div>
     <nav class="nav" aria-label="Primary">
       <a class="brand" href="/">
         <img src="/icon-128.png" alt="" />
@@ -262,12 +308,8 @@
     </nav>
 
     <main class="welcome">
-      <div class="success-mark" aria-hidden="true">
-        <span>✓</span>
-        <span class="burst"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-      </div>
-      <h1>Chrome Relay is installed.</h1>
-      <p class="sub">One last step: paste this into your agent. It will install the local bridge, verify version 0.8+, and show you the browsers and profiles it can reach.</p>
+      <h1>Chrome Relay is installed</h1>
+      <p class="sub">One last step, paste this into your agent</p>
       <div class="prompt-card">
         <div class="prompt-head">
           <span>Prompt for your agent</span>
@@ -289,7 +331,6 @@ PATH and fix it before continuing. Then run chrome-relay tabs. If several
 profiles are connected, use the exact --profile choices from the error and
 show me the tabs in each one.</pre>
       </div>
-      <p class="help">Need a hand? <a href="/docs/installation/">Read the install guide</a>.</p>
     </main>
 
     <div class="footer-wrap">
