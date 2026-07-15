@@ -1,4 +1,4 @@
-// snapshot / screenshot / read / ax / click-ax / screencast — visual +
+// snapshot / screenshot / read / ax / click-ax / screencast: visual +
 // structural capture commands.
 
 import { writeFileSync } from "node:fs";
@@ -9,10 +9,10 @@ import { callTool } from "../client/call.js";
 
 // snapshot --diff (adoption-spec Change 4): print only what changed since
 // the previous snapshot of this tab. The full snapshot was still taken and
-// the ref map refreshed — refs in the diff are current and clickable.
+// the ref map refreshed. Refs in the diff are current and clickable.
 function printSnapshotDiff(current: string, prevText: string | null): void {
   if (prevText === null) {
-    process.stderr.write("[chrome-relay] no previous snapshot for this tab — showing full output.\n");
+    process.stderr.write("[chrome-relay] no previous snapshot for this tab. Showing full output.\n");
     process.stdout.write(current + "\n");
     return;
   }
@@ -34,7 +34,7 @@ function printSnapshotDiff(current: string, prevText: string | null): void {
   process.stdout.write(`${added} addition${added === 1 ? "" : "s"}, ${removed} removal${removed === 1 ? "" : "s"}\n`);
 }
 
-// Print a snapshot result: compact text by default (that's the product —
+// Print a snapshot result: compact text by default (that's the product:
 // it's what agents pay tokens on), full JSON envelope behind --json.
 function printSnapshot(result: unknown, asJson: boolean): void {
   if (asJson) {
@@ -61,12 +61,13 @@ export function registerCapture(ctx: CommandContext): void {
   tabOpt(
     program
       .command("snapshot")
-      .description("Page snapshot with actionable @refs — accessibility tree + cursor-interactive sweep, compact text.")
+      .description("Page snapshot with actionable @refs. Accessibility tree plus cursor-interactive sweep, compact text.")
       .option("-i, --interactive", "only ref-bearing elements (buttons, links, inputs, named content, clickables)")
       .option("-d, --depth <n>", "truncate the tree at this depth", (v) => Number(v))
       .option("-s, --scope <css>", "restrict to the subtree of the first CSS match")
       .option("-u, --urls", "include link hrefs as url= attrs")
       .option("--diff", "print only what changed since the previous snapshot of this tab (~100 tokens instead of a re-read)")
+      .option("--no-elide", "print every row of long identical-shape runs (default keeps 10 + a count marker)")
       .option("--json", "structured output: { title, url, tabId, nodes, refs }")
       .addHelpText(
         "after",
@@ -74,11 +75,11 @@ export function registerCapture(ctx: CommandContext): void {
 
 Examples:
   chrome-relay snapshot -i                 # see the page, get @refs
-  chrome-relay click @e12                  # act on a ref — no --tab needed
+  chrome-relay click @e12                  # act on a ref, no --tab needed
   chrome-relay snapshot -i -s "#main"      # scope to a subtree
   chrome-relay snapshot --json             # machine-readable envelope
 
-The core loop: snapshot -i → click/fill @eN → snapshot -i again after the
+The core loop: snapshot -i -> click/fill @eN -> snapshot -i again after the
 page changes. Refs carry their own tab and heal across DOM churn
 (backendNodeId fast path + role/name re-find); a dead ref returns
 error.code = stale_ref, which means: re-run snapshot.
@@ -91,6 +92,7 @@ error.code = stale_ref, which means: re-run snapshot.
     if (opts.scope) extras.scope = opts.scope;
     if (opts.urls) extras.urls = true;
     if (opts.diff) extras.diff = true;
+    if (opts.elide === false) extras.elide = false;
     try {
       const result = await callTool("chrome_snapshot", withBase(opts, extras));
       if (opts.diff && !opts.json) {
@@ -112,7 +114,7 @@ error.code = stale_ref, which means: re-run snapshot.
       .option("--bbox <rect>", "capture a region: 'x,y,width,height' (pixels)")
       .option("--selector <css>", "capture the bounding box of a CSS selector")
       .option("--padding <px>", "pixels of padding around --selector region", (v) => Number(v))
-      .option("--max-edge <px>", "downscale so longer edge ≤ this many pixels (no default; opt-in)", (v) => Number(v))
+      .option("--max-edge <px>", "downscale so longer edge is at most this many pixels (no default; opt-in)", (v) => Number(v))
       .option("-o, --out <path>", "save image to path (base64 PNG decoded)")
       .addHelpText(
         "after",
@@ -157,13 +159,13 @@ full-tab screenshot when an agent only needs to see one component.
   });
 
   // ---------- read / ax (deprecated aliases for snapshot) ----------
-  // Both dispatch to the unified snapshot and print the NEW format — the
+  // Both dispatch to the unified snapshot and print the NEW format. The
   // old walkers are deleted, not parked (docs/adoption-spec-codebase-impact.md
   // §4b). Removal: next minor.
   tabOpt(
     program
       .command("read")
-      .description("[deprecated — use `snapshot`] Alias for the unified snapshot.")
+      .description("[deprecated: use `snapshot`] Alias for the unified snapshot.")
       .option("-i, --interactive", "only ref-bearing elements")
       .option("--json", "structured output")
   ).action(async (opts) => {
@@ -181,10 +183,10 @@ full-tab screenshot when an agent only needs to see one component.
   tabOpt(
     program
       .command("ax")
-      .description("[deprecated — use `snapshot`] Alias for the unified snapshot.")
+      .description("[deprecated: use `snapshot`] Alias for the unified snapshot.")
       .option("-i, --interactive-only", "only ref-bearing elements")
-      .option("--root <role>", "(ignored — use `snapshot --scope <css>`)")
-      .option("--include-subframes", "(ignored — snapshot is top-frame only)")
+      .option("--root <role>", "(ignored: use `snapshot --scope <css>`)")
+      .option("--include-subframes", "(ignored: snapshot is top-frame only)")
       .option("--json", "structured output")
   ).action(async (opts) => {
     process.stderr.write("[chrome-relay] deprecated: `ax` is now an alias for `snapshot` (new output format, one ref space). Use `chrome-relay snapshot`.\n");
@@ -201,7 +203,7 @@ full-tab screenshot when an agent only needs to see one component.
   tabOpt(
     program
       .command("click-ax")
-      .description("[deprecated — use `click @eN`] Click by raw backendDOMNodeId (from `snapshot --json` refs).")
+      .description("[deprecated: use `click @eN`] Click by raw backendDOMNodeId (from `snapshot --json` refs).")
       .requiredOption("--node <id>", "backendDOMNodeId from `chrome-relay ax`", (v) => Number(v))
       .addHelpText(
         "after",
@@ -221,9 +223,9 @@ Notes:
 
   // ---------- screencast (Page.startScreencast / stopScreencast) ----------
   // Paint-driven JPEG frame capture. Catches CSS transitions, fade-ins,
-  // hover tooltips — everything Page.captureScreenshot polling misses.
+  // hover tooltips, everything Page.captureScreenshot polling misses.
   // REQUIRES an active tab (Chrome doesn't paint backgrounded tabs).
-  // CLI shape: start → returns immediately, stop → returns frames JSON or
+  // CLI shape: start returns immediately, stop returns frames JSON or
   // writes them to disk + invokes ffmpeg if --out is given. Stop runs a
   // SHA-256 dedupe pass by default; pass --no-dedupe to keep raw frames.
   // See docs/recording.md.
@@ -341,14 +343,16 @@ Notes:
       if (opts.gif || opts.mp4) {
         const fps = typeof opts.fps === "number" ? opts.fps : 15;
         const { spawnSync } = await import("node:child_process");
-        const which = spawnSync("which", ["ffmpeg"]);
+        // `which` is POSIX-only; Windows uses `where`. ffmpeg itself is a
+        // .exe spawned directly below, so only the detection needs the swap.
+        const which = spawnSync(process.platform === "win32" ? "where" : "which", ["ffmpeg"]);
         if (which.status !== 0) {
           // Code-quality-hardening PR 10: explicit external_dependency_missing.
-          // Old behavior printed "skipping" and returned exit 0 — agents
+          // Old behavior printed "skipping" and returned exit 0. Agents
           // saw success even though the GIF didn't exist. Now we fail
           // unless --allow-missing-ffmpeg.
           if (opts.allowMissingFfmpeg) {
-            process.stderr.write("[chrome-relay] ffmpeg not on PATH — skipping --gif/--mp4 (allow-missing-ffmpeg).\n");
+            process.stderr.write("[chrome-relay] ffmpeg not on PATH. Skipping --gif/--mp4 (allow-missing-ffmpeg).\n");
             return;
           }
           const { RelayError } = await import("@chrome-relay/protocol");

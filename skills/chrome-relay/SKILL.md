@@ -20,15 +20,19 @@ Drives the user's real Chrome through a Chrome extension + local native host. Pr
 1. [Chrome extension](https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb)
 2. CLI:
    ```sh
-   pnpm add -g chrome-relay
+   npm install -g chrome-relay@latest
    chrome-relay install
+   chrome-relay --version
    chrome-relay doctor
    ```
 
-Verify CLI >= 0.7.0. wait/get/batch/`snapshot --diff` landed there. 0.6.0 brought the snapshot/@ref loop. >= 0.5.20 fixed a silent click bug on Radix/React-Aria UIs:
+Use the latest CLI. Multi-browser/profile routing and uploads require >= 0.8.0; Dia detection and the agent-friendly profile picker require >= 0.8.1. If the printed version stays below 0.8 after installing, stop and resolve the stale binary on `PATH` before using 0.8 commands:
 ```sh
 chrome-relay --version
+which -a chrome-relay        # macOS/Linux; use `where chrome-relay` on Windows
 ```
+
+At the start of a session, run `chrome-relay profile list`. With one connected instance, normal commands need no profile flag. With several, this tells you exactly which browsers and profiles are reachable before you act.
 
 ## The core loop
 
@@ -99,16 +103,21 @@ Snapshot output is compact indented text, usually 1 to 15 KB for most pages. Rea
 
 ## Many browsers & profiles (CLI >= 0.8)
 
-One CLI reaches EVERY browser and browser profile where the extension is installed — Chrome, Dia, Arc, Brave alike, and each Chrome profile separately. Install the extension everywhere you want reachable; run `chrome-relay install` once so every detected browser can spawn its host.
+The primary supported targets are Google Chrome (including multiple Chrome profiles), Dia, and Brave. One CLI reaches every connected instance where the extension is installed; each Chrome profile is a separate addressable instance.
+
+The installer also knows native-host manifest paths for Chrome Canary, Chromium, Edge, Vivaldi, Arc, and Opera. Treat those as compatibility targets unless the current task has verified them; do not claim that manifest detection alone proves full browser support.
+
+Install the extension once in every browser/profile you want reachable, then run `chrome-relay install` once so every detected browser can spawn its own host.
 
 ```sh
 chrome-relay profile list             # who's connected: label, browser, id prefix
-chrome-relay profile label work       # name an instance once (unique; free a name with `profile unlabel`)
+chrome-relay profile label work       # one connected: label it directly
+chrome-relay --profile 3f2a profile label personal  # several: first pick by id prefix
 chrome-relay --profile work tabs      # scope any command (global or per-command flag)
 chrome-relay click @3f2a:e12          # snapshot refs are profile-qualified and route by THEMSELVES
 ```
 
-One instance connected: no flags, everything routes implicitly. Several: unscoped commands fail `profile_ambiguous`, and the error lists every candidate (label, browser, id prefix) — pick one and retry with `--profile`. It never guesses. Refs carry their profile the way they carry their tab, so after one `snapshot` you rarely need the flag at all.
+One instance connected: no flags, everything routes implicitly. Several: unscoped commands fail `profile_ambiguous`. Treat the error as a picker: choose one of its exact `--profile <label|idprefix>` entries and rerun the command. It never guesses. Refs carry their profile the way they carry their tab, so after one `snapshot` you rarely need the flag again. Free a stale label with `chrome-relay profile unlabel <name>`.
 
 ## Uploads (CLI >= 0.8)
 

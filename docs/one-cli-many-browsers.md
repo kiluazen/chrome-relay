@@ -82,8 +82,9 @@ Identity notes: profiles can't be discovered (Chrome hides profile names
 from extensions), so each extension **mints** a stable UUID; you attach
 human names with `chrome-relay profile label <name>` (stored CLI-side in
 `~/.chrome-relay/labels.json`, unique, freed by `profile unlabel`). The
-browser name is detected by the host from its parent process — the one
-identity source that needs nothing from the extension and can't be wrong.
+browser name is detected by the host from its parent process, so it needs
+nothing from the extension. Detection is best-effort; `profile list` shows
+the name the host actually observed.
 
 ## Failure modes an agent should know
 
@@ -97,22 +98,9 @@ identity source that needs nothing from the extension and can't be wrong.
 - `unauthorized` → your descriptor was stale; re-discovery fixes it on the
   next call.
 
-## Known clarity gaps (candidates for the next release, not hot-edits)
+## Where agents learn this
 
-1. **Top-level `--help` says nothing about any of this.** Its Notes explain
-   refs and CDP but not the one-host-per-instance model or `--profile`.
-   The first `profile_ambiguous` an agent ever sees is currently the first
-   time it learns multiple profiles exist. Proposed: a short "several
-   browsers/profiles?" paragraph in the main help, pointing at
-   `profile list`.
-2. **The skill** (`skills/chrome-relay/SKILL.md`) predates 0.8.0 — no
-   mention of profiles, qualified refs, or upload. Now that 0.8.0 is live
-   in the store and on npm, it's eligible for the update.
-3. **`doctor` vs `profile list` overlap** — doctor shows the registry too;
-   one of them should be the canonical "what can I reach" answer.
-4. A **`chrome-relay status`**-style one-liner (instances + who owns the
-   legacy port + which one an unscoped command would pick) would make the
-   mediation self-explaining at a glance.
-
-All four ride the normal release train. This doc is the source they
-graduate from.
+- Top-level `chrome-relay --help` explains the one-host-per-instance model and points to `profile list`.
+- `chrome-relay profile list` is the canonical present-state inventory; `doctor` is the deeper installation diagnostic.
+- Every ambiguity/not-found/conflict error includes the connected candidates and exact `--profile` retry flags.
+- `chrome-relay skills get core` prints the version-matched agent playbook, including profiles, qualified refs, and uploads.

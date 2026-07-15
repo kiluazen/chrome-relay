@@ -46,7 +46,17 @@ function describe(v: VerifiedInstance): Record<string, unknown> {
 
 /** Pick the label target: --profile when given, else the single connected
  *  profile — the same routing rule every command follows. */
-function pickTarget(verified: VerifiedInstance[], profileArg: string | undefined): VerifiedInstance {
+function labelPicker(verified: VerifiedInstance[], name: string): string {
+  return verified
+    .map((v) => {
+      const selector = v.label ?? instancePrefix(v.descriptor.instanceId);
+      const identity = `${v.label ?? "(unlabeled)"} [${instancePrefix(v.descriptor.instanceId)}]${v.descriptor.browser ? `, ${v.descriptor.browser}` : ""}`;
+      return `  chrome-relay --profile ${selector} profile label ${name}  → ${identity}`;
+    })
+    .join("\n");
+}
+
+function pickTarget(verified: VerifiedInstance[], profileArg: string | undefined, name: string): VerifiedInstance {
   if (verified.length === 0) {
     fail(
       new RelayError({
@@ -71,8 +81,8 @@ function pickTarget(verified: VerifiedInstance[], profileArg: string | undefined
         code: matches.length === 0 ? "profile_not_found" : "profile_ambiguous",
         message:
           matches.length === 0
-            ? `--profile ${profileArg} matches no connected profile.`
-            : `--profile ${profileArg} matches ${matches.length} connected profiles.`,
+            ? `--profile ${profileArg} matches no connected profile. Pick one and rerun:\n${labelPicker(verified, name)}`
+            : `--profile ${profileArg} matches ${matches.length} connected profiles. Pick one with a longer ID prefix and rerun:\n${labelPicker(matches, name)}`,
         phase: "resolve_profile",
         details: { requested: profileArg, connected: verified.map(describe) },
         retryable: false
@@ -83,7 +93,7 @@ function pickTarget(verified: VerifiedInstance[], profileArg: string | undefined
     fail(
       new RelayError({
         code: "profile_ambiguous",
-        message: `${verified.length} profiles connected — pass --profile <label|idprefix> to say which one to label.`,
+        message: `${verified.length} profiles connected — pick which one to label and run its command:\n${labelPicker(verified, name)}`,
         phase: "resolve_profile",
         details: { candidates: verified.map(describe) },
         retryable: false
@@ -137,7 +147,7 @@ Notes:
             }
           : {}),
         ...(verified.some((v) => v.label === null)
-          ? { hint: "unlabeled profiles are addressable by id prefix; give them names with `profile label <name>`" }
+          ? { hint: "label an unlabeled instance with `chrome-relay --profile <idprefix> profile label <name>`" }
           : {})
       });
     });
@@ -159,7 +169,7 @@ Notes:
       }
       const parentOpts = program.opts() as { profile?: string };
       const { verified } = await discoverInstances();
-      const target = pickTarget(verified, parentOpts.profile);
+      const target = pickTarget(verified, parentOpts.profile, name);
 
       // The whole read → uniqueness-check → mutate → save transaction sits
       // under the registry lock: without it, two concurrent labelers both

@@ -3,7 +3,19 @@
 > Every command, its flags, and an example. `--help` on any command is always authoritative.
 
 
-Global targeting: most commands accept `-t/--tab <id>`, `--workspace <name>`, or `--group <name>` (exactly one). With none, the active tab is used — except ref actions, which target the ref's own tab.
+Global targeting: `--profile <label|idprefix>` first selects a connected browser/profile. Within it, most commands accept `-t/--tab <id>`, `--workspace <name>`, or `--group <name>` (exactly one). With none, the active tab is used — except ref actions, whose qualified token carries both its profile and tab.
+
+## Choose a browser/profile (CLI 0.8+)
+
+```sh
+chrome-relay profile list
+chrome-relay profile label work                       # one connected instance
+chrome-relay --profile 3f2a profile label personal    # several: choose by ID prefix
+chrome-relay --profile work tabs
+chrome-relay profile unlabel personal
+```
+
+One connected instance routes implicitly. With several, an unscoped command fails `profile_ambiguous` and prints exact `--profile` choices; it never guesses. A qualified ref such as `@3f2a:e12` routes itself.
 
 ## See the browser
 
@@ -131,6 +143,16 @@ chrome-relay network har --tab 42 -o session.har
 ```
 
 Per-tab ring buffers, last 200 entries each. Details: [Observability](/docs/observability/).
+
+## Upload (CLI and extension 0.8+)
+
+```sh
+chrome-relay upload set --selector 'input[type=file]' --tab 42 ./cv.pdf
+chrome-relay upload choose --click-ref @3f2a:e4 ./cv.pdf
+chrome-relay upload drop --selector '.dropzone' --tab 42 ./avatar.png
+```
+
+`set` targets a file input directly, including hidden inputs. `choose` intercepts the browser picker before clicking, so no OS dialog appears. `drop` dispatches drag-enter/over/drop events. Chrome reads filesystem paths directly; there is no bridge upload or size cap. Enable “Allow access to file URLs” for Chrome Relay in the browser's extension settings; `doctor` reports the toggle per profile.
 
 ## Emulate
 

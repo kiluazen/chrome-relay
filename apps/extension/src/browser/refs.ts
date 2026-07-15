@@ -61,6 +61,11 @@ function schedulePersist(): void {
   persistTimer = setTimeout(() => {
     persistTimer = null;
     const payload: PersistedRefMap = { counter, entries: [...entries.entries()] };
+    // The MV3 service worker can be torn down between scheduling and this
+    // callback. Tests exercise the same lifetime boundary by removing the
+    // mocked global. Persistence is best-effort, so missing storage must not
+    // become an uncaught timer exception after the browser context is gone.
+    if (typeof chrome === "undefined" || !chrome.storage?.session) return;
     void chrome.storage.session.set({ [STORAGE_KEY]: payload }).catch(() => {
       /* best effort — in-memory map stays authoritative */
     });

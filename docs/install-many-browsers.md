@@ -1,8 +1,8 @@
 # Installing chrome-relay across many browsers and profiles
 
-One `chrome-relay` CLI reaches **every browser and browser profile where the
-extension is installed** — Chrome, Dia, Arc, Brave, Edge, Vivaldi, Opera
-alike, and each Chrome profile separately. Each install is its own
+One `chrome-relay` CLI reaches **every supported browser and browser profile where the
+extension is installed**. The primary tested targets are Google Chrome (including
+multiple Chrome profiles), Dia, and Brave. Each install is its own
 addressable instance; the CLI routes every command to exactly one of them
 (see [`one-cli-many-browsers.md`](./one-cli-many-browsers.md) for how).
 
@@ -19,14 +19,16 @@ addressable instance; the CLI routes every command to exactly one of them
    pnpm add -g chrome-relay     # or npm i -g chrome-relay
    chrome-relay install         # writes native-messaging manifests for every detected browser
    ```
-   `install` covers Chrome, Chrome Canary, Chromium, Edge, Brave, Vivaldi,
-   Arc, Dia, and Opera. Already-running extensions connect within seconds;
+   `install` also knows manifest paths for detected Chrome Canary, Chromium,
+   Edge, Vivaldi, Arc, and Opera installations. Those are compatibility targets,
+   not a claim of the same end-to-end test coverage as Chrome, Dia, and Brave.
+   Already-running extensions connect within seconds;
    no browser restart needed.
 
 3. **See what's connected, name things:**
    ```sh
    chrome-relay profile list          # label, browser, id prefix, reachability
-   chrome-relay profile label work    # target it by name from then on
+   chrome-relay profile label work    # one connected: label it directly
    chrome-relay --profile 5f85 profile label personal   # several connected: pick by id prefix
    ```
    Labels are yours to choose ("work", "personal", "dia", …), unique, and

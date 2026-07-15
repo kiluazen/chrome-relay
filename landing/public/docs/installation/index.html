@@ -4,9 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Installation | Chrome Relay</title>
-<meta name="description" content="Two pieces — the Chrome extension and the CLI. One command wires them together." />
+<meta name="description" content="Two pieces. The Chrome extension and the CLI. One command wires them together." />
 <meta property="og:title" content="Installation | Chrome Relay" />
-<meta property="og:description" content="Two pieces — the Chrome extension and the CLI. One command wires them together." />
+<meta property="og:description" content="Two pieces. The Chrome extension and the CLI. One command wires them together." />
 <meta property="og:type" content="article" />
 <meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/installation/" />
 <meta property="og:image" content="https://chrome-relay.kushalsm.com/ext-index.png" />
@@ -14,7 +14,7 @@
 <link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/installation/" />
 <link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/installation.md" title="Markdown version" />
 <link rel="icon" type="image/png" href="/icon-128.png" />
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Installation","description":"Two pieces — the Chrome extension and the CLI. One command wires them together.","url":"https://chrome-relay.kushalsm.com/docs/installation/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Installation","description":"Two pieces. The Chrome extension and the CLI. One command wires them together.","url":"https://chrome-relay.kushalsm.com/docs/installation/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
 <style>
 :root {
   color-scheme: light;
@@ -144,14 +144,21 @@ blockquote p { margin: 0; }
   <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/">Overview</a><a href="/docs/installation/" class="active">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Evaluate</div><a href="/docs/vs-agent-browser/">vs agent-browser</a><a href="/docs/vs-claude-codex/">vs Claude / Codex</a><a href="/docs/why-open-tools/">The replaceable part</a></aside>
   <main>
     <h1>Installation</h1>
-    <p class="page-desc">Two pieces — the Chrome extension and the CLI. One command wires them together.</p>
+    <p class="page-desc">Two pieces. The Chrome extension and the CLI. One command wires them together.</p>
     <p>Chrome Relay is two artifacts that meet in the middle:</p>
 <ol>
-<li><strong>The extension</strong> — runs inside Chrome, holds the CDP session, executes every browser action.</li>
-<li><strong>The CLI</strong> — what your agent invokes. Ships with the native messaging host that the extension connects to.</li>
+<li><strong>The extension</strong> runs inside Chrome, holds the CDP session, and executes browser actions.</li>
+<li><strong>The CLI</strong> is what your agent invokes. It ships with the native messaging host that the extension connects to.</li>
 </ol>
 <h2 id="1-install-the-extension">1. Install the extension<a class="anchor" href="#1-install-the-extension" aria-hidden="true">#</a></h2>
-<p>From the <a href="https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb">Chrome Web Store</a>. Works in Chrome and Chromium forks — Edge, Brave, Arc, Vivaldi, Opera.</p>
+<p>From the <a href="https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb">Chrome Web Store</a>. Install it once in every browser profile you want your agent to reach.</p>
+<p>The primary supported browsers are:</p>
+<ul>
+<li><strong>Google Chrome</strong>, including several Chrome profiles at the same time.</li>
+<li><strong>Dia</strong>.</li>
+<li><strong>Brave</strong>.</li>
+</ul>
+<p>The installer also writes native-host manifests for detected Chrome Canary, Chromium, Edge, Vivaldi, Arc, and Opera installations. Those are compatibility targets; manifest detection does not by itself mean they have received the same end-to-end testing as Chrome, Dia, and Brave.</p>
 <p>Permissions it asks for, and why:</p>
 <table>
 <thead>
@@ -162,7 +169,7 @@ blockquote p { margin: 0; }
 </thead>
 <tbody><tr>
 <td><code>nativeMessaging</code></td>
-<td>connecting to the local CLI host — the only channel out of the extension, and it goes to your own machine</td>
+<td>connecting to the local CLI host. This is the only channel out of the extension, and it goes to your own machine</td>
 </tr>
 <tr>
 <td><code>debugger</code></td>
@@ -178,57 +185,82 @@ blockquote p { margin: 0; }
 </tr>
 </tbody></table>
 <h2 id="2-install-the-cli">2. Install the CLI<a class="anchor" href="#2-install-the-cli" aria-hidden="true">#</a></h2>
+<p>Needs <a href="https://nodejs.org">Node.js</a> 18 or newer — the CLI ships as an npm package and works on macOS, Windows, and Linux.</p>
 <pre><code class="language-sh">pnpm add -g chrome-relay     # or npm i -g chrome-relay
 chrome-relay install
 </code></pre>
-<p><code>install</code> detects every Chromium-family browser on the machine and registers the native messaging host for each (macOS, Linux, and Windows — on Windows it also writes the HKCU registry entries Chrome reads).</p>
+<p><code>install</code> detects every Chromium-family browser on the machine and registers the native messaging host for each. On Windows it also writes the HKCU registry entries Chrome reads, and drops a <code>run-host.cmd</code> wrapper under <code>%USERPROFILE%\.chrome-relay</code>.</p>
+<p><strong>Windows note:</strong> if <code>chrome-relay</code> isn&#39;t recognized right after the global install, restart your terminal so <code>PATH</code> picks up the npm global bin (<code>%APPDATA%\npm</code>), then re-run <code>chrome-relay install</code>.</p>
 <h2 id="3-verify">3. Verify<a class="anchor" href="#3-verify" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay doctor
+chrome-relay --version
+chrome-relay profile list
 </code></pre>
-<p>Doctor checks the whole chain: wrapper script present, native host starts, extension connects, local bridge reachable. Then:</p>
+<p>Doctor checks the whole chain: wrapper script, per-browser manifests, connected extension instances, local hosts, versions, and upload file access. Multi-browser/profile routing requires CLI and extension 0.8.0 or newer. If <code>chrome-relay --version</code> stays below 0.8 after installing the latest package, find the stale executable first (<code>which -a chrome-relay</code> on macOS/Linux; <code>where chrome-relay</code> on Windows).</p>
+<p><code>profile list</code> is the authoritative answer to “which running browsers and profiles can my agent reach right now?” Then:</p>
 <pre><code class="language-sh">chrome-relay tabs
 </code></pre>
 <p>If you get your window and tab list as JSON, you&#39;re done.</p>
-<h2 id="4-teach-your-agent-optional-but-recommended">4. Teach your agent (optional but recommended)<a class="anchor" href="#4-teach-your-agent-optional-but-recommended" aria-hidden="true">#</a></h2>
-<pre><code class="language-sh">npx skills add kiluazen/kstack@chrome-relay
+<h2 id="multiple-browsers-and-profiles">Multiple browsers and profiles<a class="anchor" href="#multiple-browsers-and-profiles" aria-hidden="true">#</a></h2>
+<p>One CLI serves every supported browser/profile where the extension is installed. Each extension instance has a stable generated ID; Chrome does not expose profile names, so you can attach your own labels:</p>
+<pre><code class="language-sh">chrome-relay profile list
+chrome-relay profile label work                       # one instance connected
+chrome-relay --profile 3f2a profile label personal    # several: select by ID prefix
+chrome-relay --profile work tabs
 </code></pre>
-<p>This installs the <a href="/docs/skill/">agent skill</a> — the playbook that tells Claude Code / Codex how to use the commands well (the snapshot→ref loop, which text tool to pick for which editor, the fallback ladder). Also available raw at <a href="/skill.md">/skill.md</a>.</p>
+<p>With one connected instance, every command routes there and no flag is needed. With several, an unscoped command returns <code>profile_ambiguous</code> as a picker containing each label, browser, ID prefix, and exact <code>--profile</code> retry. Chrome Relay never guesses. Snapshot refs are profile-qualified (<code>@3f2a:e12</code>), so actions on a ref route themselves after the first snapshot.</p>
+<h2 id="4-teach-your-agent-optional-but-recommended">4. Teach your agent (optional but recommended)<a class="anchor" href="#4-teach-your-agent-optional-but-recommended" aria-hidden="true">#</a></h2>
+<p>If the CLI is installed, print the version-matched playbook:</p>
+<pre><code class="language-sh">chrome-relay skills get core
+</code></pre>
+<p>For agents with a skills directory:</p>
+<pre><code class="language-sh">npx -y skills add kiluazen/kstack@chrome-relay
+</code></pre>
+<p>The <code>-y</code> auto-confirms npx&#39;s &quot;install the <code>skills</code> package?&quot; prompt, so a headless agent doesn&#39;t hang on a TTY question. This installs the <a href="/docs/skill/">agent skill</a>. It teaches the snapshot/ref loop, which text tool to pick for which editor, the fallback ladder, and the failure modes. Also available raw at <a href="/skill.md">/skill.md</a>.</p>
 <h2 id="troubleshooting">Troubleshooting<a class="anchor" href="#troubleshooting" aria-hidden="true">#</a></h2>
 <table>
 <thead>
 <tr>
 <th>Symptom</th>
-<th>Cause → fix</th>
+<th>Fix</th>
 </tr>
 </thead>
 <tbody><tr>
 <td><code>extension_not_connected</code></td>
-<td>Extension not installed, or installed after <code>chrome-relay install</code> ran → re-run <code>chrome-relay install</code>, then restart Chrome</td>
+<td>Install the extension, re-run <code>chrome-relay install</code>, then restart Chrome</td>
 </tr>
 <tr>
 <td><code>doctor</code> says no wrapper</td>
-<td>CLI installed but <code>install</code> never ran → <code>chrome-relay install</code></td>
+<td>Run <code>chrome-relay install</code></td>
 </tr>
 <tr>
 <td>Worked yesterday, dead today</td>
-<td>Chrome updated and restarted the native host → usually self-heals on first command; otherwise toggle the extension off/on</td>
+<td>Chrome may have restarted the native host. Retry once, then toggle the extension off/on</td>
 </tr>
 <tr>
-<td>Commands hang ~15 s then time out</td>
-<td>Another process is holding port 12122 → kill it or reboot the bridge by restarting Chrome</td>
+<td><code>profile_ambiguous</code></td>
+<td>Pick one of the exact <code>--profile</code> choices in the error and rerun the command</td>
+</tr>
+<tr>
+<td>Browser missing from <code>profile list</code></td>
+<td>Install the extension in that exact browser/profile, then rerun <code>chrome-relay install</code></td>
+</tr>
+<tr>
+<td><code>profile</code> is an unknown command</td>
+<td>Your PATH is resolving a pre-0.8 CLI; locate and remove the stale executable</td>
 </tr>
 <tr>
 <td><code>unsupported_tool</code> on <code>snapshot</code></td>
-<td>Extension is older than the CLI → update the extension (Web Store updates roll out on Chrome&#39;s schedule; <code>chrome://extensions</code> → Update forces it)</td>
+<td>Extension is older than the CLI. Update the extension from <code>chrome://extensions</code></td>
 </tr>
 </tbody></table>
 <h2 id="updating">Updating<a class="anchor" href="#updating" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay update          # updates the CLI and prints what changed, as JSON
 chrome-relay release-notes --since 0.5.22   # just read the changelog
 </code></pre>
-<p>The changelog is agent-readable on purpose — your agent can check what changed before relying on a new flag.</p>
+<p>The changelog is agent-readable on purpose. Your agent can check what changed before relying on a new flag.</p>
 
-    <div class="pager"><a class="prev" href="/docs/"><span class="dir">← Previous</span><span class="t">Overview</span></a><a class="next" href="/docs/quickstart/"><span class="dir">Next →</span><span class="t">Quickstart</span></a></div>
+    <div class="pager"><a class="prev" href="/docs/"><span class="dir">Previous</span><span class="t">Overview</span></a><a class="next" href="/docs/quickstart/"><span class="dir">Next</span><span class="t">Quickstart</span></a></div>
   </main>
 </div>
 <footer class="footer">

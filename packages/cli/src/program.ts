@@ -49,11 +49,12 @@ export function buildProgram(): Command {
       `
 
 The core loop:
+  chrome-relay profile list                       # see every reachable browser/profile
   chrome-relay tabs
   chrome-relay navigate "https://chrome-relay.kushalsm.com" --new      # background tab
   chrome-relay snapshot --tab <tabId> -i                 # actionable elements get @refs
-  chrome-relay click @e12                                # act on a ref, no --tab needed
-  chrome-relay fill @e14 "value"
+  chrome-relay click @3f2a:e12                           # qualified ref routes profile + tab
+  chrome-relay fill @3f2a:e14 "value"
   chrome-relay snapshot --tab <tabId> -i                 # re-look after the page changes
 
 Also:
@@ -78,8 +79,9 @@ How one CLI reaches many browsers/profiles:
   (native messaging is 1:1) on its own local port, registered in
   ~/.chrome-relay/instances/. Each CLI call discovers the registry, picks
   exactly ONE host, and sends the command to it — there is no shared daemon.
-  One profile connected: nothing to think about. Several (across Chrome,
-  Dia, Arc, ... alike): scope with --profile <label|idprefix>, or use a
+  One profile connected: nothing to think about. Several (the primary
+  supported targets are Chrome profiles, Dia, and Brave): use --profile
+  <label|idprefix>, or use a
   qualified ref (@3f2a:e12) which routes by itself; unscoped commands fail
   with profile_ambiguous rather than guess. \`chrome-relay profile list\`
   shows what's connected; every result names the profile that served it.

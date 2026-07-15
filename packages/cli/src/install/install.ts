@@ -318,7 +318,7 @@ export async function runDoctor(): Promise<boolean> {
     const installed = await getInstalledBrowsers();
     if (installed.length === 0) {
       console.log(`No Chromium-based browsers detected.`);
-      console.log(`Tip: install Chrome / Arc / Brave / Edge / Chromium / Vivaldi / Opera then re-run "chrome-relay install".`);
+      console.log(`Tip: install Chrome / Chrome Canary / Chromium / Edge / Brave / Vivaldi / Arc / Dia / Opera (availability varies by OS), then re-run "chrome-relay install".`);
       return false;
     }
 

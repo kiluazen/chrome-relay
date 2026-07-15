@@ -18,14 +18,18 @@ Extension: [Chrome Web Store](https://chromewebstore.google.com/detail/chrome-re
 ```
 agent (any shell)
   → chrome-relay CLI
-  → localhost HTTP (127.0.0.1:12122)
-  → native messaging host
-  → Chrome extension (service worker)
+  → verified instance registry
+  → one browser/profile's authenticated localhost host
+  → that browser/profile's Chrome Relay extension
   → CDP (chrome.debugger)
   → your real tabs
 ```
 
 Everything is local — no cloud relay, no account, no telemetry. The extension attaches to the *already running* Chrome through native messaging, so there's no `--remote-debugging-port` relaunch and no open debug port. Details: [architecture](https://chrome-relay.kushalsm.com/docs/architecture/).
+
+## Browsers and profiles
+
+CLI 0.8+ reaches every connected supported browser/profile from one install. The primary tested targets are Chrome—including multiple simultaneous Chrome profiles—Dia, and Brave. `chrome-relay profile list` shows what is reachable; with several instances an unscoped command returns a `profile_ambiguous` picker instead of guessing. Profile-qualified refs route themselves. The installer also has compatibility manifest paths for several other Chromium-family browsers. See [the installation guide](https://chrome-relay.kushalsm.com/docs/installation/#multiple-browsers-and-profiles).
 
 ## Surface
 

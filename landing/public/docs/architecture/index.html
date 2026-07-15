@@ -147,13 +147,15 @@ blockquote p { margin: 0; }
     <p class="page-desc">Five hops, each with one job. Why the extension route is the only safe way into a running Chrome.</p>
     <pre><code>agent (any shell)
   → chrome-relay CLI            parses args, renders output
-  → HTTP, 127.0.0.1:12122       localhost-only bridge (Fastify)
-  → native messaging host       long-lived Node process, spawned by Chrome
-  → extension service worker    tool handlers, ref map, buffers
+  → instance registry           discovers and verifies connected profiles
+  → localhost HTTP              authenticated ephemeral port for one profile
+  → native messaging host       one process spawned by that extension instance
+  → extension service worker    that browser/profile&#39;s tools, refs, buffers
   → chrome.debugger (CDP)       trusted input, snapshots, capture
   → your tabs
 </code></pre>
 <p>Every hop is local. The wire format is one JSON envelope per call: <code>{ name, args }</code> in, <code>{ ok, data } | { ok: false, errorDetails }</code> out.</p>
+<p>Each browser profile running the extension spawns its own native host. The host registers an authenticated ephemeral localhost port under <code>~/.chrome-relay/instances/</code>; every CLI call verifies those descriptors, resolves exactly one profile, and sends the command there. With one connected profile this is invisible. With several, <code>--profile &lt;label|idprefix&gt;</code> chooses one and profile-qualified refs such as <code>@3f2a:e12</code> route themselves. Port <code>12122</code> exists only as a legacy compatibility path for pre-0.8 installations.</p>
 <h2 id="why-not---remote-debugging-port">Why not <code>--remote-debugging-port</code>?<a class="anchor" href="#why-not---remote-debugging-port" aria-hidden="true">#</a></h2>
 <p>The standard way tools attach to a real Chrome is launching it with a CDP debug port. Two problems:</p>
 <ol>
@@ -172,7 +174,7 @@ blockquote p { margin: 0; }
 </thead>
 <tbody><tr>
 <td><strong>CLI</strong> (<code>chrome-relay</code>, npm)</td>
-<td>argument parsing, output rendering (snapshot text, JSON), exit codes. Stateless — every invocation is one HTTP call.</td>
+<td>argument parsing, profile discovery/routing, output rendering (snapshot text, JSON), exit codes. Stateless — every invocation resolves one host and makes one HTTP call.</td>
 </tr>
 <tr>
 <td><strong>Protocol</strong> (bundled into the CLI)</td>
@@ -180,7 +182,7 @@ blockquote p { margin: 0; }
 </tr>
 <tr>
 <td><strong>Native host</strong></td>
-<td>spawned by Chrome on the extension&#39;s <code>connectNative()</code>; runs the localhost HTTP server; relays frames. No logic.</td>
+<td>spawned once per extension instance on <code>connectNative()</code>; registers its authenticated localhost endpoint and relays frames.</td>
 </tr>
 <tr>
 <td><strong>Extension</strong></td>
@@ -199,7 +201,7 @@ blockquote p { margin: 0; }
 <h2 id="background-tabs-that-act-foregrounded">Background tabs that act foregrounded<a class="anchor" href="#background-tabs-that-act-foregrounded" aria-hidden="true">#</a></h2>
 <p>Chrome throttles and hides backgrounded tabs (<code>document.hidden</code>, paused rAF, visibility events). The extension patches visibility APIs on relay-driven tabs so pages behave normally while the agent works and you keep your focus elsewhere. The one hard limit: Chrome doesn&#39;t <em>paint</em> background tabs, so <code>screencast</code> (video capture) needs the tab active — screenshots don&#39;t.</p>
 
-    <div class="pager"><a class="prev" href="/docs/why-your-real-chrome/"><span class="dir">← Previous</span><span class="t">Why your real Chrome</span></a><a class="next" href="/docs/snapshots/"><span class="dir">Next →</span><span class="t">Snapshots</span></a></div>
+    <div class="pager"><a class="prev" href="/docs/why-your-real-chrome/"><span class="dir">Previous</span><span class="t">Why your real Chrome</span></a><a class="next" href="/docs/snapshots/"><span class="dir">Next</span><span class="t">Snapshots</span></a></div>
   </main>
 </div>
 <footer class="footer">
