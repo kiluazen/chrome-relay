@@ -1,4 +1,4 @@
-// CLI entry point — just builds the Command tree by registering each
+// CLI entry point: builds the Command tree by registering each
 // per-domain module. The actual command bodies live in commands/*.ts.
 //
 // Code-quality-hardening PR 7 (file split): until 0.5.8 every command was
@@ -9,19 +9,22 @@
 import { Command } from "commander";
 import { CHROME_RELAY_VERSION } from "./index.js";
 import { makeBaseArgs, makeWithBase, runTool, type CommandContext } from "./commands/shared.js";
+import { setDefaultProfileSource } from "./client/call.js";
 import { registerInstallUpdate } from "./commands/install-update.js";
 import { registerNavigation } from "./commands/navigation.js";
 import { registerInput } from "./commands/input.js";
 import { registerCapture } from "./commands/capture.js";
 import { registerSessions } from "./commands/sessions.js";
 import { registerLoop } from "./commands/loop.js";
+import { registerProfile } from "./commands/profile.js";
+import { registerUpload } from "./commands/upload.js";
 
 export function buildProgram(): Command {
   const program = new Command();
 
   program
     .name("chrome-relay")
-    .description("Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms from any shell.")
+    .description("Your agent drives the Chrome you're signed into. Reads pages, clicks buttons, fills forms from any shell.")
     .version(CHROME_RELAY_VERSION)
     .showHelpAfterError()
     // Global --workspace and --group flags: usable at the top level
@@ -30,22 +33,28 @@ export function buildProgram(): Command {
     // effective value via baseArgs() which checks subcommand-level first,
     // then falls back to the program-level (parent) option.
     //
-    //   --workspace W → target a named Chrome WINDOW (own taskbar entry)
-    //   --group     G → target a named tab-GROUP (Chrome's colored folder
+    //   --workspace W targets a named Chrome WINDOW (own taskbar entry)
+    //   --group     G targets a named tab-GROUP (Chrome's colored folder
     //                   inside one window)
     .option("--workspace <name>", "target the active tab in a named workspace window (works at top level too)")
     .option("--group <name>",     "target the active tab in a named tab-group (works at top level too)")
+    //   --profile   P targets a connected Chrome PROFILE (parent scope —
+    //                   composes with the three above). One profile
+    //                   connected: never needed. Two+: unscoped commands
+    //                   fail profile_ambiguous instead of guessing.
+    .option("--profile <name>",   "target a connected Chrome profile by label or instanceId prefix (works at top level too)")
     .enablePositionalOptions()
     .addHelpText(
       "after",
       `
 
 The core loop:
+  chrome-relay profile list                       # see every reachable browser/profile
   chrome-relay tabs
   chrome-relay navigate "https://chrome-relay.kushalsm.com" --new      # background tab
   chrome-relay snapshot --tab <tabId> -i                 # actionable elements get @refs
-  chrome-relay click @e12                                # act on a ref — no --tab needed
-  chrome-relay fill @e14 "value"
+  chrome-relay click @3f2a:e12                           # qualified ref routes profile + tab
+  chrome-relay fill @3f2a:e14 "value"
   chrome-relay snapshot --tab <tabId> -i                 # re-look after the page changes
 
 Also:
@@ -58,16 +67,37 @@ Also:
 
 Notes:
   Refs come from snapshot and carry their own tab. Tools attach via CDP and
-  run on backgrounded tabs without stealing focus. Errors are structured —
-  branch on relayError.code (stale_ref means: re-run snapshot).
+  run on backgrounded tabs without stealing focus. Errors are structured.
+  Branch on relayError.code (stale_ref means: re-run snapshot).
+  One CLI works across many browsers and profiles at once: install the
+  extension in every browser and browser profile you want this CLI to
+  reach, then \`chrome-relay profile list\` shows who's connected and
+  --profile <label|idprefix> scopes any command when more than one is.
+
+How one CLI reaches many browsers/profiles:
+  Every browser profile running the extension spawns its OWN native host
+  (native messaging is 1:1) on its own local port, registered in
+  ~/.chrome-relay/instances/. Each CLI call discovers the registry, picks
+  exactly ONE host, and sends the command to it — there is no shared daemon.
+  One profile connected: nothing to think about. Several (the primary
+  supported targets are Chrome profiles, Dia, and Brave): use --profile
+  <label|idprefix>, or use a
+  qualified ref (@3f2a:e12) which routes by itself; unscoped commands fail
+  with profile_ambiguous rather than guess. \`chrome-relay profile list\`
+  shows what's connected; every result names the profile that served it.
 `
     );
 
   // Build the context every per-domain module needs. baseArgs closes over
   // the program instance so it can read program-level (parent) flags.
-  // withBase is a one-call combiner — `withBase(opts, { foo: 1 })` =
+  // withBase is a one-call combiner: `withBase(opts, { foo: 1 })` =
   // `{ ...baseArgs(opts), foo: 1 }` so command actions stop repeating
   // the `Object.assign(args, baseArgs(opts))` boilerplate.
+  // Program-level --profile must scope EVERY command, including ones with
+  // no target flags (`tabs`). baseArgs covers the flagged ones; this source
+  // is the fallback the call layer consults for the rest.
+  setDefaultProfileSource(() => (program.opts() as { profile?: string }).profile);
+
   const baseArgs = makeBaseArgs(program);
   const ctx: CommandContext = {
     program,
@@ -76,13 +106,15 @@ Notes:
     run: runTool
   };
 
-  // install-update doesn't need ctx — its commands don't target a tab.
+  // install-update doesn't need ctx. Its commands don't target a tab.
   registerInstallUpdate(program);
   registerNavigation(ctx);
   registerInput(ctx);
   registerCapture(ctx);
   registerSessions(ctx);
   registerLoop(ctx);
+  registerProfile(ctx);
+  registerUpload(ctx);
 
   return program;
 }

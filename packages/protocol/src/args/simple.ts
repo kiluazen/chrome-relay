@@ -330,6 +330,9 @@ export interface ChromeSnapshotArgs extends TargetArgs {
    *  can print only what changed. A full snapshot is still taken and the
    *  ref map still refreshes; diff only changes what is PRINTED. */
   diff?: boolean;
+  /** Default true: long runs (>20) of identical-shape siblings keep the
+   *  first 10 + one loud marker line. false = print everything. */
+  elide?: boolean;
 }
 export function parseChromeSnapshotArgs(input: unknown): ChromeSnapshotArgs {
   const obj = asObject(input, TOOL_NAMES.SNAPSHOT);
@@ -344,6 +347,8 @@ export function parseChromeSnapshotArgs(input: unknown): ChromeSnapshotArgs {
   if (urls !== undefined) out.urls = urls;
   const diff = optBool(obj, "diff", TOOL_NAMES.SNAPSHOT);
   if (diff !== undefined) out.diff = diff;
+  const elide = optBool(obj, "elide", TOOL_NAMES.SNAPSHOT);
+  if (elide !== undefined) out.elide = elide;
   return out;
 }
 

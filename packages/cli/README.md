@@ -1,6 +1,6 @@
 # chrome-relay
 
-`chrome-relay` connects your local Chrome browser to coding agents through a local bridge and a Chrome extension.
+`chrome-relay` connects your running Chromium-family browsers and profiles to coding agents through local native hosts and the Chrome Relay extension.
 
 ## Install
 
@@ -10,7 +10,7 @@ chrome-relay install
 chrome-relay doctor
 ```
 
-Then load the Chrome Relay extension in Chrome.
+Then install the Chrome Relay extension in every browser/profile you want reachable. The primary supported targets are Chrome (including multiple profiles), Dia, and Brave. The installer also writes manifests for detected Chrome Canary, Chromium, Edge, Vivaldi, Arc, and Opera installations as compatibility targets.
 
 The native host installer allowlists the published Chrome Web Store extension ID:
 
@@ -18,7 +18,7 @@ The native host installer allowlists the published Chrome Web Store extension ID
 cpdiapbifblhlcpnmlmfpgfjlacebokb
 ```
 
-`chrome-relay doctor` prints the supported extension IDs and warns if the native-host manifest is stale.
+`chrome-relay doctor` checks every detected browser manifest and registered profile. `chrome-relay profile list` prints the currently reachable browser/profile instances.
 
 ## Usage
 
@@ -33,15 +33,17 @@ chrome-relay keys "Enter"
 chrome-relay screenshot --tab <tabId> -o page.png
 ```
 
+With one connected instance no profile flag is needed. With several, an unscoped command returns `profile_ambiguous` with exact `--profile <label|idprefix>` choices. Run `chrome-relay --profile <choice> tabs`, or use a qualified ref such as `@3f2a:e12`, which routes itself.
+
 ## How it works
 
 `chrome-relay` is a CLI-first browser bridge:
 
 ```text
 chrome-relay CLI
--> local bridge on your machine
--> Chrome native host
--> Chrome Relay extension
+-> verified local instance registry
+-> one browser/profile's authenticated localhost host
+-> that browser/profile's Chrome Relay extension
 -> Chrome APIs
 ```
 

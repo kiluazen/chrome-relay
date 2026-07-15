@@ -1,12 +1,12 @@
-// Docs build — markdown in docs-src/ → static pages in public/docs/.
+// Docs build: markdown in docs-src/ to static pages in public/docs/.
 //
 // Source of truth is markdown. Each page emits TWICE:
-//   public/docs/<slug>/index.html   — humans (site shell, sidebar, palette)
-//   public/docs/<slug>.md           — agents (raw markdown, no chrome)
+//   public/docs/<slug>/index.html: humans (site shell, sidebar, palette)
+//   public/docs/<slug>.md: agents (raw markdown, no chrome)
 // plus the agent-discovery surface at the root:
-//   public/llms.txt                 — index of the .md twins
-//   public/llms-full.txt            — every doc concatenated
-//   public/sitemap.xml              — landing pages + docs pages
+//   public/llms.txt: index of the .md twins
+//   public/llms-full.txt: every doc concatenated
+//   public/sitemap.xml: landing pages + docs pages
 //
 // No framework. `marked` renders GFM; the shell below is the same palette
 // and wallpaper as the landing page. Run: node build-docs.mjs
@@ -21,7 +21,7 @@ const SRC = join(ROOT, "docs-src");
 const OUT = join(ROOT, "public");
 const SITE = "https://chrome-relay.kushalsm.com";
 const TAGLINE =
-  "Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms, fully local.";
+  "Your agent drives the Chrome you're signed into. Reads pages, clicks buttons, fills forms, fully local.";
 
 // Heading renderer: stable ids + hover anchors for deep links.
 marked.use({
@@ -210,8 +210,8 @@ function pager(i) {
   const next = pages[i + 1];
   if (!prev && !next) return "";
   let html = '<div class="pager">';
-  if (prev) html += `<a class="prev" href="${hrefOf(prev)}"><span class="dir">← Previous</span><span class="t">${prev.nav}</span></a>`;
-  if (next) html += `<a class="next" href="${hrefOf(next)}"><span class="dir">Next →</span><span class="t">${next.nav}</span></a>`;
+  if (prev) html += `<a class="prev" href="${hrefOf(prev)}"><span class="dir">Previous</span><span class="t">${prev.nav}</span></a>`;
+  if (next) html += `<a class="next" href="${hrefOf(next)}"><span class="dir">Next</span><span class="t">${next.nav}</span></a>`;
   return html + "</div>";
 }
 
@@ -283,11 +283,11 @@ function shell(page, i) {
 // ---------------------------------------------------------------------------
 // Emit
 
-let fullTxt = `# Chrome Relay — full documentation\n# ${SITE}\n\n`;
+let fullTxt = `# Chrome Relay full documentation\n# ${SITE}\n\n`;
 const llmsLines = [
   "# Chrome Relay",
   "",
-  `> ${TAGLINE} CLI → localhost HTTP → native messaging host → Chrome extension → CDP. No cloud relay, no account, no telemetry.`,
+  `> ${TAGLINE} CLI to localhost HTTP to native messaging host to Chrome extension to CDP. No cloud relay, no account, no telemetry.`,
   "",
   "## Docs"
 ];
@@ -315,7 +315,7 @@ llmsLines.push(
 writeFileSync(join(OUT, "llms.txt"), llmsLines.join("\n") + "\n");
 writeFileSync(join(OUT, "llms-full.txt"), fullTxt);
 
-// Skill twin at the root — agents fetch /skill.md directly.
+// Skill twin at the root. Agents fetch /skill.md directly.
 const skill = readFileSync(join(ROOT, "..", "skills", "chrome-relay", "SKILL.md"), "utf8")
   .replace(/<!--[\s\S]*?-->\n*/, ""); // drop the mirror banner
 writeFileSync(join(OUT, "skill.md"), skill);
@@ -328,7 +328,7 @@ const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://w
   .join("\n")}\n</urlset>\n`;
 writeFileSync(join(OUT, "sitemap.xml"), sitemap);
 
-// robots.txt — allow everything, point at the sitemap.
+// robots.txt: allow everything, point at the sitemap.
 writeFileSync(join(OUT, "robots.txt"), `User-agent: *\nAllow: /\n\nSitemap: ${SITE}/sitemap.xml\n`);
 
-console.log(`built ${pages.length} pages → public/docs/, llms.txt, llms-full.txt, skill.md, sitemap.xml, robots.txt`);
+console.log(`built ${pages.length} pages to public/docs/, llms.txt, llms-full.txt, skill.md, sitemap.xml, robots.txt`);

@@ -6,6 +6,42 @@ import { CHROME_RELAY_VERSION } from "../index.js";
 import { runDoctor, runInstall } from "../install/install.js";
 import { listReleaseNotesSince } from "../release-notes.js";
 
+type SpawnSyncFn = typeof import("node:child_process").spawnSync;
+
+// `which` doesn't exist on Windows; `where` is the equivalent. `where` can
+// print several matches (the extensionless npm shim plus the .cmd/.exe), so
+// we prefer a directly-spawnable one — CreateProcess can't run the
+// extensionless shim at all, and needs a shell for a .cmd/.bat.
+function whichBinary(spawnSync: SpawnSyncFn, name: string): string | null {
+  const tool = process.platform === "win32" ? "where" : "which";
+  const res = spawnSync(tool, [name]);
+  if (res.status !== 0) return null;
+  const lines = (res.stdout?.toString() ?? "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length === 0) return null;
+  if (process.platform === "win32") {
+    return lines.find((l) => /\.(cmd|bat|exe)$/i.test(l)) ?? lines[0];
+  }
+  return lines[0];
+}
+
+// On Windows the resolved CLI bin is usually a .cmd shim, which must run
+// through a shell. Quote the path ourselves (shell:true uses verbatim args)
+// so a space in the path survives.
+function spawnCli(
+  spawnSync: SpawnSyncFn,
+  bin: string,
+  args: string[],
+  opts: Parameters<SpawnSyncFn>[2] = {}
+): ReturnType<SpawnSyncFn> {
+  if (process.platform === "win32") {
+    return spawnSync(`"${bin}"`, args, { ...opts, shell: true });
+  }
+  return spawnSync(bin, args, opts);
+}
+
 export function registerInstallUpdate(program: Command): void {
   program
     .command("install")
@@ -94,10 +130,9 @@ export function registerInstallUpdate(program: Command): void {
           process.exit(1);
         }
 
-        const which = spawnSync("which", ["chrome-relay"]);
-        const newBin = which.stdout?.toString().trim();
-        if (which.status === 0 && newBin) {
-          const versionOut = spawnSync(newBin, ["--version"]);
+        const newBin = whichBinary(spawnSync, "chrome-relay");
+        if (newBin) {
+          const versionOut = spawnCli(spawnSync, newBin, ["--version"]);
           const newVersion = (versionOut.stdout?.toString() ?? "").trim();
           out.binary.path = newBin;
           if (newVersion && newVersion !== fromVersion) {
@@ -109,7 +144,7 @@ export function registerInstallUpdate(program: Command): void {
             // `chrome-relay update` left Chrome talking to the previous
             // version — which then kept firing the cli-outdated nudge
             // telling the user to run the very command they just ran.
-            const install = spawnSync(newBin, ["install"], { stdio: "inherit" });
+            const install = spawnCli(spawnSync, newBin, ["install"], { stdio: "inherit" });
             if (install.status !== 0) {
               out.warnings.push({
                 code: "install_refresh_failed",
@@ -117,7 +152,7 @@ export function registerInstallUpdate(program: Command): void {
               });
             }
 
-            const rn = spawnSync(newBin, ["release-notes", "--since", fromVersion]);
+            const rn = spawnCli(spawnSync, newBin, ["release-notes", "--since", fromVersion]);
             try {
               const parsed = JSON.parse(rn.stdout?.toString() ?? "");
               if (Array.isArray(parsed.changes)) {
@@ -139,7 +174,7 @@ export function registerInstallUpdate(program: Command): void {
         } else {
           out.warnings.push({
             code: "update_not_verified",
-            message: `Install completed but \`which chrome-relay\` did not return a path. Could not verify the active binary changed.`
+            message: `Install completed but \`${process.platform === "win32" ? "where" : "which"} chrome-relay\` did not return a path. Could not verify the active binary changed.`
           });
         }
       }

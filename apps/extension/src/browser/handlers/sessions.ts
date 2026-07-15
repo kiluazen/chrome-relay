@@ -36,7 +36,9 @@ import {
   readNetwork,
   getBody,
   clearNetwork,
-  buildHar
+  buildHar,
+  redactEntry,
+  redactHar
 } from "../network-buffer";
 import { resolveTarget, requireTabId, invalidArg, type ToolHandler } from "./target";
 
@@ -221,15 +223,21 @@ export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
       };
     }
 
+    const raw = parsed.rawHeaders === true;
+
     if (parsed.action === "har") {
-      return buildHar(
+      const har = await buildHar(
         tabId,
         { filter: parsed.filter, status: parsed.status, method: parsed.method, limit: parsed.limit },
         parsed.withBodies === true,
         parsed.bestEffortBodies === true
       );
+      return raw ? har : redactHar(har as { log?: { entries?: Array<Record<string, unknown>> } });
     }
-    // parsed.action === "read"
-    return readNetwork(tabId, { filter: parsed.filter, status: parsed.status, method: parsed.method, limit: parsed.limit });
+    // parsed.action === "read". Sensitive headers (cookies, auth, tokens)
+    // are redacted by default so the output is safe to paste — the agent's
+    // transcript is the leak surface. --raw-headers opts back in.
+    const result = readNetwork(tabId, { filter: parsed.filter, status: parsed.status, method: parsed.method, limit: parsed.limit });
+    return raw ? result : { ...result, entries: result.entries.map(redactEntry), headersRedacted: true };
   }
 };

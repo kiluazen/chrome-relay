@@ -145,7 +145,15 @@ blockquote p { margin: 0; }
   <main>
     <h1>Command reference</h1>
     <p class="page-desc">Every command, its flags, and an example. `--help` on any command is always authoritative.</p>
-    <p>Global targeting: most commands accept <code>-t/--tab &lt;id&gt;</code>, <code>--workspace &lt;name&gt;</code>, or <code>--group &lt;name&gt;</code> (exactly one). With none, the active tab is used — except ref actions, which target the ref&#39;s own tab.</p>
+    <p>Global targeting: <code>--profile &lt;label|idprefix&gt;</code> first selects a connected browser/profile. Within it, most commands accept <code>-t/--tab &lt;id&gt;</code>, <code>--workspace &lt;name&gt;</code>, or <code>--group &lt;name&gt;</code> (exactly one). With none, the active tab is used — except ref actions, whose qualified token carries both its profile and tab.</p>
+<h2 id="choose-a-browserprofile-cli-08">Choose a browser/profile (CLI 0.8+)<a class="anchor" href="#choose-a-browserprofile-cli-08" aria-hidden="true">#</a></h2>
+<pre><code class="language-sh">chrome-relay profile list
+chrome-relay profile label work                       # one connected instance
+chrome-relay --profile 3f2a profile label personal    # several: choose by ID prefix
+chrome-relay --profile work tabs
+chrome-relay profile unlabel personal
+</code></pre>
+<p>One connected instance routes implicitly. With several, an unscoped command fails <code>profile_ambiguous</code> and prints exact <code>--profile</code> choices; it never guesses. A qualified ref such as <code>@3f2a:e12</code> routes itself.</p>
 <h2 id="see-the-browser">See the browser<a class="anchor" href="#see-the-browser" aria-hidden="true">#</a></h2>
 <table>
 <thead>
@@ -272,6 +280,12 @@ chrome-relay network body --tab 42 --request-id &lt;id&gt;
 chrome-relay network har --tab 42 -o session.har
 </code></pre>
 <p>Per-tab ring buffers, last 200 entries each. Details: <a href="/docs/observability/">Observability</a>.</p>
+<h2 id="upload-cli-and-extension-08">Upload (CLI and extension 0.8+)<a class="anchor" href="#upload-cli-and-extension-08" aria-hidden="true">#</a></h2>
+<pre><code class="language-sh">chrome-relay upload set --selector &#39;input[type=file]&#39; --tab 42 ./cv.pdf
+chrome-relay upload choose --click-ref @3f2a:e4 ./cv.pdf
+chrome-relay upload drop --selector &#39;.dropzone&#39; --tab 42 ./avatar.png
+</code></pre>
+<p><code>set</code> targets a file input directly, including hidden inputs. <code>choose</code> intercepts the browser picker before clicking, so no OS dialog appears. <code>drop</code> dispatches drag-enter/over/drop events. Chrome reads filesystem paths directly; there is no bridge upload or size cap. Enable “Allow access to file URLs” for Chrome Relay in the browser&#39;s extension settings; <code>doctor</code> reports the toggle per profile.</p>
 <h2 id="emulate">Emulate<a class="anchor" href="#emulate" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay viewport preset iphone-14 --tab 42
 chrome-relay viewport set --width 390 --height 844 --dpr 3 --mobile --touch --tab 42
@@ -327,7 +341,7 @@ chrome-relay group create research --color blue --tab 42   # native tab groups
 </code></pre>
 <p>Branch on <code>code</code>. The full list: <a href="/docs/errors/">Errors</a>.</p>
 
-    <div class="pager"><a class="prev" href="/docs/clicking/"><span class="dir">← Previous</span><span class="t">Clicking</span></a><a class="next" href="/docs/observability/"><span class="dir">Next →</span><span class="t">Observability</span></a></div>
+    <div class="pager"><a class="prev" href="/docs/clicking/"><span class="dir">Previous</span><span class="t">Clicking</span></a><a class="next" href="/docs/observability/"><span class="dir">Next</span><span class="t">Observability</span></a></div>
   </main>
 </div>
 <footer class="footer">

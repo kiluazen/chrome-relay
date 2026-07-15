@@ -7,6 +7,10 @@ export * from "./snapshot";
 
 export const NATIVE_HOST_NAME = "dev.chrome_relay.native_host";
 export const DEFAULT_HTTP_PORT = 12122;
+// Wire-protocol version, echoed by /ping and written into instance
+// descriptors. Bump on breaking changes to the bridge/HTTP contract.
+// v2 = multi-profile (registry discovery, qualified refs, profile stamp).
+export const PROTOCOL_VERSION = 2;
 export const CHROME_WEB_STORE_EXTENSION_ID = "cpdiapbifblhlcpnmlmfpgfjlacebokb";
 export const LEGACY_DEV_EXTENSION_ID = "cdmmkpadhnpcfjljhgpdnnljhjafmhop";
 export const LOCAL_UNPACKED_EXTENSION_ID = "cleiodnaklknhhfopegimjelfibjmbkc";
@@ -76,7 +80,12 @@ export const TOOL_NAMES = {
   BATCH: "chrome_batch",
   // Adoption-spec Change 6 — one value (text/value/attr/count/title/url)
   // without paying for a full snapshot.
-  GET: "chrome_get"
+  GET: "chrome_get",
+  // File upload — three strategies as actions (set/choose/drop), mirroring
+  // the click-strategy taxonomy: each mechanism has its own failure mode,
+  // the agent picks, no auto-fallback. All strategies take file PATHS;
+  // Chrome reads the files itself, nothing crosses the bridge.
+  UPLOAD: "chrome_upload"
 } as const;
 
 export type ToolName = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES];
@@ -143,6 +152,42 @@ export type BridgeErrorCode =
   | "extension_not_connected"
   | "external_dependency_missing"
   | "partial_success_disallowed"
+  // --- multi-profile routing (v2) ---
+  // Two+ profiles connected and the call carried no profile scope, or a
+  // --profile / ref-prefix matched more than one instance. details.candidates
+  // enumerates {instanceId, label, email?} so the agent can retry scoped.
+  | "profile_ambiguous"
+  // --profile or a qualified-ref prefix matched no connected instance.
+  // details.connected lists what IS reachable.
+  | "profile_not_found"
+  // `profile label` with a name already bound to a different instanceId.
+  | "label_conflict"
+  // --- file upload (v2) ---
+  // upload set: the resolved node is not an <input type="file">. Try
+  // `upload choose` on the visible trigger instead.
+  | "not_a_file_input"
+  // upload choose: the click landed but no file chooser opened within the
+  // timeout — wrong trigger, or the site uses a drop zone.
+  | "no_file_chooser"
+  // upload choose: another choose is already armed on this tab. Interception
+  // is serialized per tab; retry after it settles.
+  | "file_chooser_busy"
+  // upload choose: a chooser opened but this strategy can't drive it (no
+  // backendNodeId — non-input-backed chooser, or OOPIF in v1).
+  | "file_chooser_unsupported"
+  // Chrome's "Allow access to file URLs" toggle is off for the extension;
+  // debugger file operations are gated on it. details carry remediation.
+  | "file_access_denied"
+  // More files passed than the input accepts (single-file input, or
+  // chooser mode selectSingle).
+  | "multiple_not_supported"
+  // A --file path did not stat locally. Fails CLI-side before the wire.
+  | "file_not_found"
+  // /call carried a missing/wrong bearer token. Means the descriptor the
+  // client routed by is stale — re-discover via the instance registry.
+  | "unauthorized"
+  // The target tab navigated or closed while an operation was armed.
+  | "target_closed"
   | "internal_error";
 
 export interface BridgeError {
@@ -158,6 +203,9 @@ export type BridgeNoticeCode =
   | "cli_outdated"
   | "extension_outdated"
   | "target_overridden"
+  // upload: the target input's `accept` attribute doesn't match a file's
+  // extension/type. A notice, not a failure — sites lie about accept.
+  | "accept_mismatch"
   | "deprecated";
 
 export interface BridgeNotice {
@@ -170,8 +218,8 @@ export interface BridgeNotice {
 }
 
 export type BridgeResponse<T = unknown> =
-  | { ok: true; data: T; notice?: string; notices?: BridgeNotice[] }
-  | { ok: false; error: string; errorDetails?: BridgeError; notice?: string; notices?: BridgeNotice[] };
+  | { ok: true; data: T; profile?: ProfileStamp; notice?: string; notices?: BridgeNotice[] }
+  | { ok: false; error: string; errorDetails?: BridgeError; profile?: ProfileStamp; notice?: string; notices?: BridgeNotice[] };
 
 // RelayError — thrown inside handlers; serialized to BridgeError at the
 // trust boundary. Both the extension and the native host use this; the
@@ -225,6 +273,85 @@ export interface BridgeReadyMessage {
   payload: {
     extensionId: string;
     version: string;
+    /** Stable per-profile identity minted in chrome.storage.local (v2).
+     *  Absent from pre-v2 extensions — the host then skips writing an
+     *  instance descriptor and only the legacy fixed port works. */
+    instanceId?: string;
+    /** Chrome's "Allow access to file URLs" toggle for this extension.
+     *  Gates debugger file operations (upload). Absent = unknown. */
+    fileSchemeAccess?: boolean;
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Multi-profile (v2).
+//
+// Identity is MINTED, not discovered: an extension cannot read its own
+// profile's name, so each install mints a UUID instanceId. Aliases (labels)
+// live in a CLI-owned persistent registry — the only place uniqueness is
+// enforceable. Discovery happens via per-host instance descriptor files;
+// the /ping handshake (echoing instanceId) is the authority, the descriptor
+// is only the pointer. See docs/multi-profile-and-upload.md.
+
+/** Who served this call. Stamped on every post-routing result — success and
+ *  failure alike — so a transcript is never ambiguous about which profile a
+ *  command landed in. Routing failures (no resolved profile) instead carry
+ *  details.candidates on the error. `label` is decorated CLI-side from the
+ *  alias registry; the host only knows the instanceId. */
+export interface ProfileStamp {
+  instanceId: string;
+  label?: string | null;
+}
+
+/** On-disk descriptor written by each native host to
+ *  <app dir>/instances/<instanceId>.json after bridge.ready. Written
+ *  atomically (temp + rename); deleted on exit only when generationId
+ *  still matches the exiting process. */
+export interface InstanceDescriptor {
+  schemaVersion: 1;
+  instanceId: string;
+  /** Fresh per host process. Guards descriptor cleanup and lets /ping
+   *  prove the descriptor describes the process actually on the port. */
+  generationId: string;
+  port: number;
+  /** Bearer token required on /call for this host. Possession proves
+   *  local file access (descriptor is 0600). */
+  token: string;
+  pid: number;
+  extensionId: string;
+  extensionVersion: string;
+  hostVersion: string;
+  protocolVersion: number;
+  startedAt: string;
+  /** Which browser spawned this host ("Google Chrome", "Dia", …), detected
+   *  from the host's parent process. One CLI can front several Chromium
+   *  browsers at once; each browser+profile is its own instance, and this
+   *  is how `profile list` tells them apart. Absent when detection failed. */
+  browser?: string;
+}
+
+/** /ping response (v2 fields optional — a pre-v2 host omits them). */
+export interface PingResponse {
+  ok: boolean;
+  port: number;
+  cliVersion: string;
+  extensionVersion: string | null;
+  extensionId: string | null;
+  instanceId?: string | null;
+  generationId?: string | null;
+  protocolVersion?: number;
+  fileSchemeAccess?: boolean | null;
+}
+
+// Host → extension, sent once at startup. This is what lets the extension
+// know it may use v2 wire features (qualified refs): an OLD host never sends
+// it, so a store-updated extension in front of an old CLI keeps minting bare
+// refs the old CLI can parse. Deploy-skew safety, not ceremony.
+export interface BridgeHelloMessage {
+  type: "bridge.hello";
+  payload: {
+    hostVersion: string;
+    protocolVersion: number;
   };
 }
 
@@ -255,6 +382,7 @@ export interface ToolResultMessage {
 
 export type BridgeMessage =
   | BridgeReadyMessage
+  | BridgeHelloMessage
   | BridgePingMessage
   | BridgePongMessage
   | ToolCallMessage

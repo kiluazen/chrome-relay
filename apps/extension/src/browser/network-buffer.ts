@@ -204,6 +204,56 @@ export interface NetworkQuery {
   limit?: number;
 }
 
+// Headers whose values are secrets. Redacted by default in read/har output
+// (the buffer keeps raw values; --raw-headers opts back in). Conservative
+// exact set + a pattern for vendor-prefixed variants — captured live: raw
+// network output carried auth headers straight into an agent transcript.
+const SENSITIVE_HEADER_EXACT = new Set([
+  "cookie", "set-cookie", "authorization", "proxy-authorization",
+  "x-api-key", "api-key", "x-auth-token", "x-access-token",
+  "x-csrf-token", "x-xsrf-token", "x-session-id", "x-amz-security-token"
+]);
+const SENSITIVE_HEADER_PATTERN = /(token|secret|session|cookie|auth|api[-_]?key)/i;
+
+export function isSensitiveHeader(name: string): boolean {
+  const n = name.toLowerCase();
+  return SENSITIVE_HEADER_EXACT.has(n) || SENSITIVE_HEADER_PATTERN.test(n);
+}
+
+function redactHeaderMap(h: Record<string, string> | undefined): Record<string, string> | undefined {
+  if (!h) return h;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(h)) {
+    out[k] = isSensitiveHeader(k) ? "\u00abredacted\u00bb" : v;
+  }
+  return out;
+}
+
+export function redactEntry(e: NetworkEntry): NetworkEntry {
+  return {
+    ...e,
+    requestHeaders: redactHeaderMap(e.requestHeaders),
+    responseHeaders: redactHeaderMap(e.responseHeaders)
+  };
+}
+
+// HAR shape: log.entries[].request/response.{headers: [{name,value}], cookies: []}
+export function redactHar(har: { log?: { entries?: Array<Record<string, unknown>> } }): typeof har {
+  for (const entry of har.log?.entries ?? []) {
+    for (const side of ["request", "response"] as const) {
+      const part = entry[side] as { headers?: Array<{ name: string; value: string }>; cookies?: unknown[] } | undefined;
+      if (!part) continue;
+      for (const h of part.headers ?? []) {
+        if (isSensitiveHeader(h.name)) h.value = "\u00abredacted\u00bb";
+      }
+      if (Array.isArray(part.cookies) && part.cookies.length > 0) {
+        part.cookies = [{ name: "\u00abredacted\u00bb", value: `${part.cookies.length} cookie(s) redacted` }];
+      }
+    }
+  }
+  return har;
+}
+
 export function readNetwork(tabId: number, q: NetworkQuery = {}): { entries: NetworkEntry[]; total: number } {
   const buf = buffers.get(tabId);
   if (!buf) return { entries: [], total: 0 };

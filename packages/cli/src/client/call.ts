@@ -1,11 +1,12 @@
 import {
-  DEFAULT_HTTP_PORT,
   RelayError,
   type BridgeError,
   type BridgeNotice,
   type LocalBridgeCallRequest,
+  type ProfileStamp,
   type ToolName
 } from "@chrome-relay/protocol";
+import { resolveRoute } from "./route.js";
 
 // Once per process, suppress duplicate stderr notices so a chatty subcommand
 // (e.g. a screenshot loop) doesn't spam the user with the same line.
@@ -17,6 +18,20 @@ function emitNoticeOnce(notice: string): void {
   process.stderr.write(`[chrome-relay] ${notice}\n`);
 }
 
+// The profile stamp reaches the transcript on stderr — stdout keeps its
+// existing contract (bare tool data). One line per process: which profile
+// served this call, always, so a transcript is never ambiguous about where
+// a command landed. Suppressed only on the legacy fallback route, where no
+// v2 identity exists to report.
+let profilePrinted = false;
+
+function emitProfileOnce(stamp: ProfileStamp): void {
+  if (profilePrinted) return;
+  profilePrinted = true;
+  const label = stamp.label ?? "(unlabeled)";
+  process.stderr.write(`[chrome-relay] profile: ${label} [${stamp.instanceId.slice(0, 8)}]\n`);
+}
+
 // Wire payload from /call. Both legacy (`error` string, `notice` string) and
 // new (`errorDetails`, `notices`) fields may be present — the server sends
 // both for backwards compat. New code prefers the structured fields.
@@ -25,8 +40,33 @@ interface CallResponsePayload {
   data?: unknown;
   error?: string;
   errorDetails?: BridgeError;
+  profile?: ProfileStamp;
   notice?: string;
   notices?: BridgeNotice[];
+}
+
+export interface CallOptions {
+  /** --profile value: label or instanceId prefix. Routing also reads
+   *  qualified ref prefixes out of `args` on its own. */
+  profile?: string;
+}
+
+// Program-level --profile fallback. Commands that take target flags thread
+// --profile through baseArgs → __profile, but bare commands (`tabs`,
+// `workspace list`, …) never touch baseArgs — this source covers them.
+// buildProgram() installs it; precedence stays: explicit option > __profile
+// in args > program-level flag.
+let defaultProfileSource: (() => string | undefined) | undefined;
+
+export function setDefaultProfileSource(source: () => string | undefined): void {
+  defaultProfileSource = source;
+}
+
+/** Test-only: the notice/stamp lines print once per process, which bleeds
+ *  across tests sharing this module instance. */
+export function __resetOncePerProcessFlagsForTests(): void {
+  noticePrinted = false;
+  profilePrinted = false;
 }
 
 // Internal: returns both the tool data and any notices. Callers that want
@@ -35,11 +75,29 @@ interface CallResponsePayload {
 // prints the notice to stderr.
 export async function callToolWithMeta(
   name: string,
-  args: Record<string, unknown>
-): Promise<{ data: unknown; notice?: string; notices?: BridgeNotice[] }> {
-  const response = await fetch(`http://127.0.0.1:${DEFAULT_HTTP_PORT}/call`, {
+  args: Record<string, unknown>,
+  options: CallOptions = {}
+): Promise<{ data: unknown; profile?: ProfileStamp; notice?: string; notices?: BridgeNotice[] }> {
+  // `__profile` is a CLI-internal routing hint smuggled through the args
+  // object (so every callTool caller gets routing without a signature
+  // change). It is stripped HERE — it never goes on the wire; the extension
+  // has no concept of profiles, it IS one.
+  let profile = options.profile;
+  if (typeof args.__profile === "string") {
+    profile = profile ?? args.__profile;
+    args = { ...args };
+    delete args.__profile;
+  }
+  profile = profile ?? defaultProfileSource?.();
+
+  const route = await resolveRoute(profile, args);
+
+  const response = await fetch(`${route.baseUrl}/call`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      ...(route.token ? { authorization: `Bearer ${route.token}` } : {})
+    },
     body: JSON.stringify({
       name: name as ToolName,
       args
@@ -47,6 +105,16 @@ export async function callToolWithMeta(
   });
 
   const payload = (await response.json().catch(() => null)) as CallResponsePayload | null;
+
+  // Prefer the server's stamp (the authority — it names the process that
+  // actually served the call); fall back to the routing decision, decorated
+  // with the label the routing layer already resolved.
+  const stamp: ProfileStamp | undefined = payload?.profile
+    ? { ...payload.profile, label: route.label ?? payload.profile.label ?? null }
+    : route.instanceId
+      ? { instanceId: route.instanceId, label: route.label ?? null }
+      : undefined;
+  if (stamp) emitProfileOnce(stamp);
 
   const noticeString = payload?.notice ?? payload?.notices?.[0]?.message;
 
@@ -61,7 +129,7 @@ export async function callToolWithMeta(
   }
 
   if (noticeString) emitNoticeOnce(noticeString);
-  return { data: payload.data, notice: payload.notice, notices: payload.notices };
+  return { data: payload.data, profile: stamp, notice: payload.notice, notices: payload.notices };
 }
 
 // Rebuild a structured RelayError when the server sent errorDetails;
@@ -75,8 +143,9 @@ function rebuildError(payload: CallResponsePayload | null, fallbackMessage: stri
 
 export async function callTool(
   name: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  options: CallOptions = {}
 ): Promise<unknown> {
-  const { data } = await callToolWithMeta(name, args);
+  const { data } = await callToolWithMeta(name, args, options);
   return data;
 }
