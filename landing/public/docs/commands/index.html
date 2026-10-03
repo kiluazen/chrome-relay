@@ -176,10 +176,12 @@ chrome-relay profile unlabel personal
 </tr>
 </tbody></table>
 <h2 id="navigate">Navigate<a class="anchor" href="#navigate" aria-hidden="true">#</a></h2>
-<pre><code class="language-sh">chrome-relay navigate &quot;https://chrome-relay.kushalsm.com&quot; --new        # background tab (default for --new)
-chrome-relay navigate &quot;https://chrome-relay.kushalsm.com&quot; --tab 42     # retarget an existing tab
+<pre><code class="language-sh">chrome-relay navigate &quot;https://chrome-relay.kushalsm.com&quot; --new             # background tab (default for --new)
+chrome-relay navigate &quot;https://chrome-relay.kushalsm.com&quot; --tab 42          # retarget an existing tab
+chrome-relay navigate &quot;https://chrome-relay.kushalsm.com&quot; --new --snapshot  # open, then print its refs
 </code></pre>
 <p>All navigation stays in the background. Legacy <code>--active</code> requests are rejected before navigation, including raw calls and batches.</p>
+<p><code>navigate</code> returns once the new document is usable (DOMContentLoaded), so the next <code>snapshot</code> reads the page you asked for, not the new tab&#39;s blank placeholder. The result reports <code>ready</code>, <code>readyState</code> and <code>waitedMs</code>; a slow page returns <code>ready: false</code> instead of failing, and a network error page returns <code>loadFailed: true</code>. <code>--wait load</code> also waits for images and other subresources, <code>--wait commit</code> only for the first byte, <code>--wait none</code> returns as soon as Chrome accepts the navigation. <code>--timeout &lt;ms&gt;</code> bounds the wait (default 10 s).</p>
 <h2 id="read-the-page">Read the page<a class="anchor" href="#read-the-page" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay snapshot --tab 42 -i        # the way — see /docs/snapshots/
 chrome-relay snapshot --tab 42 -i -s &quot;#main&quot; -d 3 -u --json
@@ -212,10 +214,19 @@ chrome-relay snapshot --tab 42 -i -s &quot;#main&quot; -d 3 -u --json
 <td>print only what changed since this tab&#39;s previous snapshot (~100 tokens instead of a re-read; refs in the diff are current and clickable)</td>
 </tr>
 <tr>
+<td><code>--settle</code></td>
+<td>first wait (up to 2 s) for the page to stop changing</td>
+</tr>
+<tr>
+<td><code>--no-wait</code></td>
+<td>read mid-navigation instead of waiting for the pending document</td>
+</tr>
+<tr>
 <td><code>--json</code></td>
 <td>structured <code>{ title, url, tabId, nodes, refs }</code></td>
 </tr>
 </tbody></table>
+<p>A snapshot taken while a navigation is pending waits (up to 10 s) for the new document&#39;s DOMContentLoaded instead of describing the document being replaced. If the page is still loading at the deadline, the output says so on a <code>Loading:</code> line.</p>
 <p><code>read</code> / <code>ax</code> are deprecated aliases for <code>snapshot</code>.</p>
 <h2 id="wait">Wait<a class="anchor" href="#wait" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay wait @e12                        # ref resolves and has a box
@@ -247,6 +258,7 @@ cat commands.json | chrome-relay batch --stdin
 <p>Sequential execution in the extension, bail-on-error by default (<code>--no-bail</code> to continue). Uses wire tool names. Amortizes process startup and the bridge hop across N actions; nested batches are rejected.</p>
 <h2 id="act">Act<a class="anchor" href="#act" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay click @e12                          # ref (preferred)
+chrome-relay click @e12 --snapshot               # click, wait for the page to react, print it
 chrome-relay click @e12 --no-wait                # skip the delayed-navigation check
 chrome-relay click &#39;button.save&#39; --tab 42        # CSS selector
 chrome-relay click --x 540 --y 320 --tab 42      # coordinates
@@ -256,6 +268,7 @@ chrome-relay keys &quot;Cmd+K&quot; --tab 42               # single key or chord
 chrome-relay hover @e3                           # pointer move only; fires :hover
 chrome-relay click-ax --node 4837 --tab 42       # deprecated — raw backendNodeId
 </code></pre>
+<p><code>--snapshot</code> on <code>navigate</code>, <code>click</code>, <code>fill</code>, <code>type</code> and <code>keys</code> prints the action&#39;s result, then an interactive snapshot of the tab it acted on: one command instead of two. For input actions it first waits for the page to stop reacting (no recent request in flight and the DOM quiet briefly, at most 2 s), or for the navigation the input started. The observer runs in an isolated world, so page scripts cannot see it.</p>
 <p><code>click --no-wait</code> still dispatches trusted input and checks for immediate navigation, but skips the default 120 ms grace period for delayed navigation. Use it when the next step explicitly verifies the result, for example <code>wait --text &quot;Saved&quot; --tab 42</code> or <code>snapshot --tab 42 --diff</code>. Its response includes <code>navigationCheck: &quot;immediate&quot;</code>; the absence of <code>navigated</code> does not rule out later navigation. In a batch, set <code>waitForNavigation: false</code> on the click&#39;s wire args and follow with the appropriate wait. Older extensions ignore this field and retain their usual delay.</p>
 <h2 id="evaluate-javascript">Evaluate JavaScript<a class="anchor" href="#evaluate-javascript" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay js --tab 42 &quot;return document.title&quot;

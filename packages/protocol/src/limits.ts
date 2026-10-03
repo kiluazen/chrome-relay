@@ -35,8 +35,9 @@ export const DEFAULT_WAIT_TIMEOUT_MS = 10_000;
  *  so the wait resolves (or times out) inside its own HTTP round-trip
  *  instead of the transport killing it first. */
 export const MAX_WAIT_TIMEOUT_MS = 25_000;
-/** chrome_wait: poll interval for selector/text/fn conditions. */
-export const WAIT_POLL_INTERVAL_MS = 100;
+/** chrome_wait: poll interval for selector/text/fn conditions. One probe
+ *  is ~1ms of CDP; 50ms halves the average detection lag of 100ms. */
+export const WAIT_POLL_INTERVAL_MS = 50;
 /** chrome_wait --load networkidle: quiet window with no new resources. */
 export const NETWORKIDLE_QUIET_MS = 500;
 /** chrome_snapshot: longest it waits for a pending navigation to reach

@@ -32,13 +32,15 @@ At the start of a session, run `chrome-relay profile list`. With one connected i
 
 ```sh
 chrome-relay tabs                             # find or create a tab
-chrome-relay navigate "https://kushalsm.com" --new   # background tab by default
-chrome-relay snapshot --tab 1234 -i           # see the page: actionable elements get @refs
-chrome-relay click @e12                       # act on refs, no --tab, no selector
+chrome-relay navigate "https://kushalsm.com" --new --snapshot   # open in the background, print its @refs
+chrome-relay click @e12 --snapshot            # act on a ref; prints the page after it reacts
 chrome-relay fill @e14 "hello"
-chrome-relay wait --text "Saved" --tab 1234   # block until the page reacts
+chrome-relay keys Enter --tab 1234 --snapshot # submit; prints the result page
+chrome-relay wait --text "Saved" --tab 1234   # block until a specific condition holds
 chrome-relay snapshot --tab 1234 --diff       # print only what changed (~100 tokens)
 ```
+
+`--snapshot` on `navigate`, `click`, `fill`, `type` and `keys` saves a turn: the action, then an interactive snapshot of the same tab. Input actions first wait for the page to finish reacting (requests done, DOM quiet, at most 2s) or for the navigation they started. `navigate` already returns once the page is usable (`--wait load|commit|none` to change that), and a plain `snapshot` waits for a pending navigation rather than reading a blank tab.
 
 Snapshot output is compact indented text, usually 1 to 15 KB for most pages. Read it directly, no jq needed:
 

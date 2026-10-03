@@ -51,11 +51,10 @@ export function buildProgram(): Command {
 The core loop:
   chrome-relay profile list                       # see every reachable browser/profile
   chrome-relay tabs
-  chrome-relay navigate "https://chrome-relay.kushalsm.com" --new      # background tab
-  chrome-relay snapshot --tab <tabId> -i                 # actionable elements get @refs
-  chrome-relay click @3f2a:e12                           # qualified ref routes profile + tab
+  chrome-relay navigate "https://chrome-relay.kushalsm.com" --new --snapshot   # background tab + its @refs
+  chrome-relay click @3f2a:e12 --snapshot                # qualified ref routes profile + tab; prints the result
   chrome-relay fill @3f2a:e14 "value"
-  chrome-relay snapshot --tab <tabId> -i                 # re-look after the page changes
+  chrome-relay snapshot --tab <tabId> -i                 # re-look any time
 
 Also:
   chrome-relay wait --tab <tabId> --text "Welcome"       # selector/@ref/text/url/load/fn

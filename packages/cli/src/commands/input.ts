@@ -52,7 +52,9 @@ click started), then prints its interactive snapshot after the click result.
     // agent sees the typo instead of a silent fallback to selector mode.
     if (typeof opts.x === "number") extras.x = opts.x;
     if (typeof opts.y === "number") extras.y = opts.y;
-    if (opts.wait === false) extras.waitForNavigation = false;
+    // --snapshot's settle already watches for a navigation the click starts,
+    // so the click itself skips its 120ms grace period.
+    if (opts.wait === false || opts.snapshot) extras.waitForNavigation = false;
     await run("chrome_click_element", withBase(opts, extras), opts.snapshot ? { settle: true } : undefined);
   });
 

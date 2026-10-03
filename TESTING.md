@@ -60,6 +60,10 @@ The E2E suite and two-profile benchmark run full Chromium with `channel: "chromi
 
 The suite reaches into the extension's service worker with `serviceWorker.evaluate(...)` to call `runTool` directly. No need to set up native messaging or a CLI bridge in tests. Tab-selection assertions inside the test browser do not prove preservation of macOS desktop focus.
 
+### Agent-loop benchmark
+
+`apps/extension/scripts/agent-loop-bench.mjs` times the full open → read → act → read loop through the real CLI, native host and extension in headless Chromium, and checks that the post-click snapshot reads the new page. See `docs/agent-loop-performance.md` for flags and the current numbers. It needs a development extension build (`NODE_ENV=development npx wxt build`) so the extension ID matches the native-host manifest it writes.
+
 ### Adding a fixture
 
 A fixture is one HTML page that reproduces one specific behavior. Keep them small (~50 lines). Don't paste a full real-world page in.

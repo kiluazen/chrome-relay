@@ -285,7 +285,8 @@ describe("CLI argument parsing", () => {
       mockBridgeResponse({ ok: true, data: { title: "", url: "", tabId: 77, nodeCount: 0, nodes: [], refs: {} } });
       await runArgs("click", "@e3", "--snapshot");
       const bodies = fetchSpy.mock.calls.map((c) => JSON.parse(String((c[1] as { body: string }).body)));
-      expect(bodies[0].args).toEqual({ ref: "e3", settle: true }); // armed with the click
+      // Armed with the click; the grace period is settle's job now.
+      expect(bodies[0].args).toEqual({ ref: "e3", waitForNavigation: false, settle: true });
       expect(bodies[1]).toEqual({ name: "chrome_snapshot", args: { tabId: 77, interactiveOnly: true, settle: true } });
     });
 
