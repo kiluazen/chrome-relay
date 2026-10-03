@@ -1,7 +1,7 @@
 // tabs / navigate / switch / close / call: the tab-lifecycle and raw
 // pass-through commands.
 
-import { tabOpt, type CommandContext } from "./shared.js";
+import { snapshotOpt, tabOpt, type CommandContext } from "./shared.js";
 
 export function registerNavigation(ctx: CommandContext): void {
   const { program, withBase, run } = ctx;
@@ -20,7 +20,7 @@ export function registerNavigation(ctx: CommandContext): void {
       await run("get_windows_and_tabs", {});
     });
 
-  tabOpt(
+  snapshotOpt(tabOpt(
     program
       .command("navigate <url>")
       .description("Navigate a tab to a URL. Use --tab <id> to target an existing tab.")
@@ -41,6 +41,7 @@ Examples:
   chrome-relay navigate --tab 123 "https://chrome-relay.kushalsm.com"          # navigate an existing tab
   chrome-relay navigate "https://chrome-relay.kushalsm.com" --new              # open in a new background tab
   chrome-relay navigate "https://chrome-relay.kushalsm.com" --new --wait load  # also wait for images/subresources
+  chrome-relay navigate "https://chrome-relay.kushalsm.com" --new --snapshot   # open, then print the page's refs
 
 Chrome Relay operates in the background. Use --tab to target an existing
 tab without selecting it. --active is rejected before navigation.
@@ -52,7 +53,7 @@ A network error page returns loadFailed:true. --wait none returns as soon
 as Chrome accepts the navigation.
 `
       )
-  ).action(async (url: string, opts) => {
+  )).action(async (url: string, opts) => {
     if (/^\d+$/.test(url)) {
       process.stderr.write(
         `navigate expects a URL, but "${url}" looks like a tab ID.\n` +
@@ -73,7 +74,7 @@ as Chrome accepts the navigation.
     }
     extras.waitUntil = waitUntil;
     if (typeof opts.timeout === "number" && Number.isFinite(opts.timeout)) extras.waitTimeoutMs = opts.timeout;
-    await run("chrome_navigate", withBase(opts, extras));
+    await run("chrome_navigate", withBase(opts, extras), opts.snapshot ? { settle: false } : undefined);
   });
 
   program

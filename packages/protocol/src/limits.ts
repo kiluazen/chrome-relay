@@ -42,6 +42,9 @@ export const NETWORKIDLE_QUIET_MS = 500;
 /** chrome_snapshot: longest it waits for a pending navigation to reach
  *  DOMContentLoaded before reading the tree anyway (flagged loading). */
 export const SNAPSHOT_READY_TIMEOUT_MS = 10_000;
+/** chrome_snapshot settle:true — longest it waits for the page to stop
+ *  reacting (DOM quiet, recent requests done) before reading anyway. */
+export const SNAPSHOT_SETTLE_MAX_MS = 2_000;
 
 /** chrome_batch: max commands per batch. */
 export const MAX_BATCH_COMMANDS = 50;

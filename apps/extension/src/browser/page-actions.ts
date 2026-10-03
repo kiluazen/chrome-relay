@@ -81,6 +81,29 @@ export function locateForClick(selector: string) {
   };
 }
 
+// Element rect in DOCUMENT coordinates, for Page.captureScreenshot's clip
+// (captureBeyondViewport reads the clip relative to the document, not the
+// viewport — a viewport rect captured the wrong region on any scrolled
+// page). Scrolls the element into view first so a scrolled-away overflow
+// container still shows it.
+export function locateForScreenshot(selector: string) {
+  const element = document.querySelector(selector);
+  if (!(element instanceof HTMLElement)) {
+    throw new Error(`Element not found for selector: ${selector}`);
+  }
+  element.scrollIntoView({ block: "center", inline: "center" });
+  const rect = element.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) {
+    throw new Error(`Element has zero size and cannot be clicked: ${selector}`);
+  }
+  return {
+    x: rect.left + window.scrollX,
+    y: rect.top + window.scrollY,
+    width: rect.width,
+    height: rect.height
+  };
+}
+
 export function fillElement(selector: string, value: string) {
   const element = document.querySelector(selector);
   if (!(element instanceof HTMLElement)) {

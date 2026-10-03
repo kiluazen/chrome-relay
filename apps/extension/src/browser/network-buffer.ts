@@ -20,6 +20,7 @@ import {
   TOOL_NAMES
 } from "@chrome-relay/protocol";
 import { ensureAttached, send } from "./cdp";
+import { networkCaptureTabs } from "./network-state";
 
 export interface NetworkEntry {
   id: string;                  // requestId from CDP, used to fetch body on demand
@@ -90,6 +91,7 @@ async function subscribeIfNeeded(tabId: number): Promise<void> {
   await ensureAttached(tabId);
   await send(tabId, "Network.enable", {});
   buf.subscribed = true;
+  networkCaptureTabs.add(tabId);
 }
 
 // CDP event payloads — only what we read.
@@ -189,13 +191,18 @@ chrome.debugger.onEvent.addListener((source, method, params) => {
   }
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => buffers.delete(tabId));
+chrome.tabs.onRemoved.addListener((tabId) => {
+  buffers.delete(tabId);
+  networkCaptureTabs.delete(tabId);
+});
 
 // ----- public API -----
 
 export async function ensureNetworkCapture(tabId: number): Promise<void> {
   await subscribeIfNeeded(tabId);
 }
+
+
 
 export interface NetworkQuery {
   filter?: string;             // url substring (case-insensitive)

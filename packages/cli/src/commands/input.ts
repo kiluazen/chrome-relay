@@ -7,7 +7,7 @@
 // one is target_conflict.
 
 import { parseRefToken } from "@chrome-relay/protocol";
-import { tabOpt, type CommandContext } from "./shared.js";
+import { snapshotOpt, tabOpt, type CommandContext } from "./shared.js";
 
 // Route a selector-or-@ref positional into the right wire arg.
 function addressArg(value: string): Record<string, unknown> {
@@ -18,7 +18,7 @@ function addressArg(value: string): Record<string, unknown> {
 export function registerInput(ctx: CommandContext): void {
   const { program, withBase, run } = ctx;
 
-  tabOpt(
+  snapshotOpt(tabOpt(
     program
       .command("click [target]")
       .description("Click an element. Pass a @ref from `snapshot`, a CSS selector, OR --x/--y coordinates.")
@@ -32,6 +32,7 @@ export function registerInput(ctx: CommandContext): void {
 Examples:
   chrome-relay click @e12
   chrome-relay click @e12 --no-wait   # fast input; verify the next state yourself
+  chrome-relay click @e12 --snapshot  # click, then print the page it led to
   chrome-relay click 'button[aria-label="Save"]'
   chrome-relay click --tab 123 --x 1327 --y 771
 
@@ -39,9 +40,12 @@ Prefer @refs from \`chrome-relay snapshot\`. They carry their own tab and
 survive DOM churn (backendNodeId + role/name heal). CSS selectors for
 elements you know statically. Coordinates for canvas/SVG chart internals
 where no DOM handle exists. See docs/clicking-strategies.md.
+
+--snapshot waits for the page to react (DOM quiet, or the navigation the
+click started), then prints its interactive snapshot after the click result.
 `
       )
-  ).action(async (target: string | undefined, opts) => {
+  )).action(async (target: string | undefined, opts) => {
     const extras: Record<string, unknown> = {};
     if (target) Object.assign(extras, addressArg(target));
     // Forward partial input. Protocol parser rejects x-without-y so the
@@ -49,10 +53,10 @@ where no DOM handle exists. See docs/clicking-strategies.md.
     if (typeof opts.x === "number") extras.x = opts.x;
     if (typeof opts.y === "number") extras.y = opts.y;
     if (opts.wait === false) extras.waitForNavigation = false;
-    await run("chrome_click_element", withBase(opts, extras));
+    await run("chrome_click_element", withBase(opts, extras), opts.snapshot ? { settle: true } : undefined);
   });
 
-  tabOpt(
+  snapshotOpt(tabOpt(
     program
       .command("fill <target> <value>")
       .description("Fill an input or textarea. Target is a @ref from `snapshot` or a CSS selector.")
@@ -63,13 +67,14 @@ where no DOM handle exists. See docs/clicking-strategies.md.
 Examples:
   chrome-relay fill @e4 "kushal@kushalsm.com"
   chrome-relay fill 'input[name="email"]' "kushal@kushalsm.com"
+  chrome-relay fill @e4 "query" --snapshot   # fill, then print the updated page
 `
       )
-  ).action(async (target: string, value: string, opts) => {
-    await run("chrome_fill_or_select", withBase(opts, { ...addressArg(target), value }));
+  )).action(async (target: string, value: string, opts) => {
+    await run("chrome_fill_or_select", withBase(opts, { ...addressArg(target), value }), opts.snapshot ? { settle: true } : undefined);
   });
 
-  tabOpt(
+  snapshotOpt(tabOpt(
     program
       .command("keys <keys>")
       .description("Press a single key or chord via trusted CDP input (e.g. Enter, Cmd+K).")
@@ -84,13 +89,14 @@ Examples:
   chrome-relay keys Shift+ArrowDown
 
 For typing text into a field, use \`chrome-relay type\` instead.
+--snapshot prints the page after the key's effect (e.g. keys Enter --snapshot).
 `
       )
-  ).action(async (keys: string, opts) => {
-    await run("chrome_keyboard", withBase(opts, { keys }));
+  )).action(async (keys: string, opts) => {
+    await run("chrome_keyboard", withBase(opts, { keys }), opts.snapshot ? { settle: true } : undefined);
   });
 
-  tabOpt(
+  snapshotOpt(tabOpt(
     program
       .command("type <text>")
       .description("Insert text via trusted CDP input. Works in contenteditable / Draft.js / Lexical.")
@@ -110,10 +116,10 @@ When to pick which:
   js: anything else.
 `
       )
-  ).action(async (text: string, opts) => {
+  )).action(async (text: string, opts) => {
     const extras: Record<string, unknown> = { text };
     if (opts.selector) Object.assign(extras, addressArg(opts.selector));
-    await run("chrome_type", withBase(opts, extras));
+    await run("chrome_type", withBase(opts, extras), opts.snapshot ? { settle: true } : undefined);
   });
 
   tabOpt(

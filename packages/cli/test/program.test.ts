@@ -83,6 +83,18 @@ describe("CLI argument parsing", () => {
       expect(lastBody().args).toMatchObject({ waitUntil: "none" });
     });
 
+    it("--snapshot follows the action with an interactive snapshot of the tab it opened", async () => {
+      mockBridgeResponse({ ok: true, data: { tabId: 55, url: "https://example.com", ready: true } });
+      mockBridgeResponse({ ok: true, data: { title: "Ex", url: "https://example.com", tabId: 55, nodeCount: 1, nodes: [{ role: "link", name: "More", ref: "e1" }], refs: {} } });
+      await runArgs("navigate", "https://example.com", "--new", "--snapshot");
+      const bodies = fetchSpy.mock.calls.map((c) => JSON.parse(String((c[1] as { body: string }).body)));
+      expect(bodies.map((b) => b.name)).toEqual(["chrome_navigate", "chrome_snapshot"]);
+      expect(bodies[1].args).toEqual({ tabId: 55, interactiveOnly: true });
+      const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
+      expect(out).toContain('"tabId": 55');
+      expect(out).toContain('link "More" [ref=e1]');
+    });
+
     it("rejects an unknown --wait state before calling the bridge", async () => {
       await runArgs("navigate", "https://example.com", "--wait", "idle");
       expect(fetchSpy).not.toHaveBeenCalled();
@@ -266,6 +278,35 @@ describe("CLI argument parsing", () => {
       const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
       expect(out).toContain('- button "Save" [ref=e1]');
       expect(out).not.toContain("backendNodeId"); // refs map stays off stdout in text mode
+    });
+
+    it("click @ref --snapshot settles, then snapshots the ref's own tab", async () => {
+      mockBridgeResponse({ ok: true, data: { clicked: true, x: 1, y: 2, ref: "e3", tabId: 77 } });
+      mockBridgeResponse({ ok: true, data: { title: "", url: "", tabId: 77, nodeCount: 0, nodes: [], refs: {} } });
+      await runArgs("click", "@e3", "--snapshot");
+      const bodies = fetchSpy.mock.calls.map((c) => JSON.parse(String((c[1] as { body: string }).body)));
+      expect(bodies[0].args).toEqual({ ref: "e3", settle: true }); // armed with the click
+      expect(bodies[1]).toEqual({ name: "chrome_snapshot", args: { tabId: 77, interactiveOnly: true, settle: true } });
+    });
+
+    it("keys --snapshot reuses the action's target when the result names no tab", async () => {
+      mockBridgeResponse({ ok: true, data: { sent: true, keys: "Enter" } });
+      mockBridgeResponse({ ok: true, data: { title: "", url: "", tabId: 9, nodeCount: 0, nodes: [], refs: {} } });
+      await runArgs("keys", "Enter", "--tab", "9", "--snapshot");
+      const bodies = fetchSpy.mock.calls.map((c) => JSON.parse(String((c[1] as { body: string }).body)));
+      expect(bodies[1].args).toEqual({ tabId: 9, interactiveOnly: true, settle: true });
+    });
+
+    it("a failed action does not take the follow-up snapshot", async () => {
+      mockBridgeResponse({ ok: false, error: "nope", errorDetails: { code: "stale_ref", message: "nope", retryable: false } }, false, 400);
+      await runArgs("click", "@e3", "--snapshot");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it("snapshot --settle sends settle:true", async () => {
+      await runArgs("snapshot", "--tab", "1", "--settle");
+      expect(lastBody().args).toMatchObject({ tabId: 1, settle: true });
     });
 
     it("snapshot --no-wait sends waitForReady:false; default sends nothing", async () => {

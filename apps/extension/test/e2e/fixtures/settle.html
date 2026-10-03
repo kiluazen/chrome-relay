@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+<head><title>Settle fixture</title></head>
+<body>
+  <!-- Reaction on the next timer (a transition / state update stand-in). -->
+  <button id="load" onclick="setTimeout(() => { const b = document.createElement('button'); b.textContent = 'Loaded result'; document.body.appendChild(b); }, 200)">Load more</button>
+  <!-- Spinner now, result when a slow request returns. -->
+  <button id="fetch" onclick="
+    const s = document.createElement('p'); s.textContent = 'Loading…'; document.body.appendChild(s);
+    fetch('readiness.html?delay=400').then(() => { s.remove(); const b = document.createElement('button'); b.textContent = 'Fetched result'; document.body.appendChild(b); });
+  ">Fetch</button>
+  <script>window.__isolated = () => typeof globalThis.__crSettle;</script>
+</body>
+</html>

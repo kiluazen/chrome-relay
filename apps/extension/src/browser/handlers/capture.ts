@@ -16,14 +16,16 @@ import {
   parseChromeSnapshotArgs,
   RelayError,
   SNAPSHOT_READY_TIMEOUT_MS,
+  SNAPSHOT_SETTLE_MAX_MS,
   TOOL_NAMES
 } from "@chrome-relay/protocol";
 import { evalExpression, evalInTab, send } from "../cdp";
 import { clickAxNode } from "../a11y";
 import { mapPageError, resolveRefCenter, resolveRefObjectId } from "../element";
-import { locateForClick } from "../page-actions";
+import { locateForClick, locateForScreenshot } from "../page-actions";
 import { buildSnapshot } from "../snapshot";
 import { isDocumentLoading, waitForDocument } from "../readiness";
+import { waitForSettle } from "../settle";
 import { startScreencast, stopScreencast } from "../screencast";
 import { resolveTarget, requireTabId, invalidArg, type ToolHandler } from "./target";
 
@@ -101,12 +103,12 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
       clipMeta = { source: "bbox" };
     } else if (parsed.selector) {
       const padding = parsed.padding ?? 0;
-      const rect = await evalInTab(tabId, locateForClick, [parsed.selector]).catch((e) =>
+      const rect = await evalInTab(tabId, locateForScreenshot, [parsed.selector]).catch((e) =>
         mapPageError(e, TOOL_NAMES.SCREENSHOT, "locate_element")
       );
       const clip = {
-        x: Math.max(0, rect.x - rect.width / 2 - padding),
-        y: Math.max(0, rect.y - rect.height / 2 - padding),
+        x: Math.max(0, rect.x - padding),
+        y: Math.max(0, rect.y - padding),
         width: rect.width + padding * 2,
         height: rect.height + padding * 2,
         scale: 1
@@ -146,6 +148,10 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
     const tabId = requireTabId(tab);
     // Never describe a document that is about to be replaced: its refs
     // would die on arrival. Ready pages pay one cheap probe.
+    // settle: the caller just acted (click/fill/keys) and wants the page's
+    // reaction, not the frame before it. Runs first: a reaction that turns
+    // out to be a navigation is then handled by the readiness wait below.
+    if (parsed.settle === true) await waitForSettle(tabId, SNAPSHOT_SETTLE_MAX_MS);
     let loading = false;
     if (parsed.waitForReady !== false && (await isDocumentLoading(tabId))) {
       loading = !(await waitForDocument(tabId, "domcontentloaded", SNAPSHOT_READY_TIMEOUT_MS)).ready;
@@ -281,23 +287,15 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
       x = parsed.x;
       y = parsed.y;
     } else {
-      const result = await evalExpression<{ x: number; y: number; w: number; h: number } | null>(
-        tabId,
-        `(() => { const el = document.querySelector(${JSON.stringify(parsed.selector)}); if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()`
-      );
-      const rect = result.value;
-      if (!rect) {
-        throw new RelayError({
-          code: "element_not_found",
-          message: `chrome_hover: no element matches selector ${parsed.selector}`,
-          tool: TOOL_NAMES.HOVER,
-          phase: "locate_element",
-          details: { selector: parsed.selector },
-          retryable: false
-        });
+      // Same locate as selector clicks: scroll into view first — an
+      // element below the fold used to be "hovered" at off-screen coords.
+      try {
+        const rect = await evalInTab(tabId, locateForClick, [parsed.selector]);
+        x = rect.x;
+        y = rect.y;
+      } catch (e) {
+        mapPageError(e, TOOL_NAMES.HOVER, "locate_element");
       }
-      x = rect.x + rect.w / 2;
-      y = rect.y + rect.h / 2;
     }
     await send(tabId, "Input.dispatchMouseEvent", {
       type: "mouseMoved",

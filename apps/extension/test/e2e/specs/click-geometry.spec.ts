@@ -33,7 +33,7 @@ test.describe("ref click geometry", () => {
       tabId,
       code: "return window.__diag()"
     });
-    expect(diag.result.log).toEqual(["more"]);
+    expect(diag.result.log).toEqual(["hover", "more"]); // the click's own mouseMoved enters first
     expect(diag.result.scrollY).toBeGreaterThan(0);
     await runTool("chrome_close_tabs", { tabIds: [tabId] });
   });
@@ -51,5 +51,17 @@ test.describe("ref click geometry", () => {
     await runTool("chrome_click_element", { ref: top, waitForNavigation: false });
     const diag = await runTool<{ result: { log: string[] } }>("chrome_evaluate", { tabId, code: "return window.__diag()" });
     expect(diag.result.log).toEqual(["top"]);
+  });
+
+  test("hover by selector scrolls a below-the-fold element into view first", async ({ runTool, fixtures }) => {
+    const { tabId } = await runTool<{ tabId: number }>("chrome_navigate", {
+      url: fixtures.url("below-fold.html"),
+      newTab: true,
+      waitUntil: "load"
+    });
+    await runTool("chrome_hover", { tabId, selector: "#more" });
+    const diag = await runTool<{ result: { log: string[] } }>("chrome_evaluate", { tabId, code: "return window.__diag()" });
+    expect(diag.result.log).toEqual(["hover"]);
+    await runTool("chrome_close_tabs", { tabIds: [tabId] });
   });
 });

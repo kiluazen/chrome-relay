@@ -13,9 +13,11 @@ import {
   RelayError,
   TOOL_NAMES,
   parseToolArgs,
+  renderSnapshot,
+  type SnapshotData,
   type ToolName
 } from "@chrome-relay/protocol";
-import { callTool } from "../client/call.js";
+import { callToolWithMeta } from "../client/call.js";
 
 // Shared context passed to every command-group registration function.
 // Each per-domain module imports CommandContext and registers its
@@ -57,6 +59,14 @@ export function tabOpt(cmd: Command): Command {
     .option("--workspace <name>",  "target the active tab in a named workspace window (see `chrome-relay workspace`)")
     .option("--group <name>",      "target the active tab in a named tab-group (see `chrome-relay group`)")
     .option("--profile <name>",    "target a connected Chrome profile by label or instanceId prefix (see `chrome-relay profile`)");
+}
+
+// Attach --snapshot to an action command: print the page after the action.
+export function snapshotOpt(cmd: Command): Command {
+  return cmd.option(
+    "--snapshot",
+    "after the action, print an interactive snapshot (-i) of the tab it acted on: one call instead of two"
+  );
 }
 
 // Build a base args object from common options. Every subcommand that
@@ -135,10 +145,32 @@ function emitTargetOverride(kind: string, from: string, to: string): void {
   );
 }
 
+// `--snapshot` on an action: after it succeeds, print an interactive
+// snapshot of the tab it acted on, in the same process — the agent gets
+// the action's consequence without spending another turn on `snapshot`.
+export interface ThenSnapshot {
+  /** Wait for the DOM to go quiet first (click/fill/keys: the page reacts
+   *  after the input). navigate already waited for its document. */
+  settle: boolean;
+}
+
+// Where the action landed: a ref action reports its tab; otherwise the
+// snapshot reuses the action's own target flags (tab/workspace/group, or
+// the active tab when none was given — the same tab the action used).
+function snapshotTarget(result: unknown, args: Record<string, unknown>): Record<string, unknown> {
+  const tabId = (result as { tabId?: unknown } | null)?.tabId;
+  if (typeof tabId === "number") return { tabId };
+  const target: Record<string, unknown> = {};
+  for (const key of ["tabId", "workspaceName", "groupName"]) {
+    if (args[key] !== undefined) target[key] = args[key];
+  }
+  return target;
+}
+
 // Standard tool-result printer. JSON for objects, raw string for strings.
 // RelayError gets a structured stderr dump alongside the human message so
 // agents can parse `{relayError: {...}}` mechanically without a separate flag.
-async function runToolImpl(name: string, args: Record<string, unknown>): Promise<void> {
+async function runToolImpl(name: string, args: Record<string, unknown>, then?: ThenSnapshot): Promise<void> {
   try {
     // Peel the CLI-internal routing hint off before validation and wire.
     let profile: string | undefined;
@@ -154,12 +186,29 @@ async function runToolImpl(name: string, args: Record<string, unknown>): Promise
     // extension re-parse a shape it doesn't accept. Caught live in 0.7.0:
     // `wait .sel` validated fine here, then died extension-side with
     // "got 0 conditions" because the wire carried {condition} not {selector}.
+    // Arm the page-reaction tracker with the action itself, so the settle
+    // covers what the input set off (requests, transitions), not just what
+    // happens after the follow-up snapshot call arrives.
+    if (then?.settle) args = { ...args, settle: true };
     if (isToolName(name)) parseToolArgs(name, args);
-    const result = await callTool(name, args, { profile });
+    const { data: result, profile: stamp } = await callToolWithMeta(name, args, { profile });
     if (typeof result === "string") {
       process.stdout.write(result + "\n");
     } else {
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
+    }
+    if (then) {
+      // Same profile that served the action — a qualified ref routed it
+      // there, and the follow-up must not re-route by other means.
+      const snapArgs = {
+        ...snapshotTarget(result, args),
+        interactiveOnly: true,
+        ...(then.settle ? { settle: true } : {})
+      };
+      const { data: snap } = await callToolWithMeta("chrome_snapshot", snapArgs, {
+        profile: stamp?.instanceId ?? profile
+      });
+      process.stdout.write("\n" + renderSnapshot(snap as SnapshotData) + "\n");
     }
   } catch (error) {
     if (error instanceof RelayError) {

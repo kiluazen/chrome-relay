@@ -70,6 +70,7 @@ export function registerCapture(ctx: CommandContext): void {
       .option("--diff", "print only what changed since the previous snapshot of this tab (~100 tokens instead of a re-read)")
       .option("--no-elide", "print every row of long identical-shape runs (default keeps 10 + a count marker)")
       .option("--no-wait", "read the page as-is, even mid-navigation (default waits up to 10s for a pending navigation to reach DOMContentLoaded)")
+      .option("--settle", "first wait (up to 1.5s) for the DOM to stop changing — for reading a page that is still reacting to an action")
       .option("--json", "structured output: { title, url, tabId, nodes, refs }")
       .addHelpText(
         "after",
@@ -96,6 +97,7 @@ error.code = stale_ref, which means: re-run snapshot.
     if (opts.diff) extras.diff = true;
     if (opts.elide === false) extras.elide = false;
     if (opts.wait === false) extras.waitForReady = false;
+    if (opts.settle) extras.settle = true;
     try {
       const result = await callTool("chrome_snapshot", withBase(opts, extras));
       if (opts.diff && !opts.json) {

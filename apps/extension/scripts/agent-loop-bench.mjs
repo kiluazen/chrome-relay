@@ -53,6 +53,9 @@ const JSON_OUT = opt("--json", "");
 // an old flow and a new one: e.g. --navigate-args "--wait load".
 const NAV_ARGS = opt("--navigate-args", "").split(" ").filter(Boolean);
 const WAIT_AFTER_NAV = !flag("--no-wait-step");
+// --composite: the one-call-per-step flow (navigate --snapshot, click
+// --snapshot) — half the commands, so half the agent turns.
+const COMPOSITE = flag("--composite");
 
 const HOME = mkdtempSync(path.join(tmpdir(), "chrome-relay-loop-home-"));
 const cleanups = [];
@@ -237,8 +240,33 @@ function findRef(snapshotText, pattern) {
   return null;
 }
 
+// `--snapshot` output: the action's JSON, a blank line, then the snapshot.
+function splitComposite(stdout) {
+  const i = stdout.indexOf("\nPage: ");
+  return { json: JSON.parse(stdout.slice(0, i)), snapshot: stdout.slice(i + 1) };
+}
+
+async function compositeLoop(label, url, nextPattern) {
+  const t0 = performance.now();
+  const nav = await mustCli(["navigate", url, "--new", "--snapshot", ...NAV_ARGS]);
+  record(`${label}: navigate --snapshot`, nav.ms);
+  const { json, snapshot } = splitComposite(nav.stdout);
+  record(`${label}: snapshot bytes`, snapshot.length);
+  const ref = nextPattern ? findRef(snapshot, nextPattern) : null;
+  if (ref) {
+    const c = await mustCli(["click", `@${ref}`, "--snapshot"]);
+    record(`${label}: click --snapshot`, c.ms);
+    const after = splitComposite(c.stdout).snapshot;
+    const urlLine = (t) => t.split("\n").find((l) => l.startsWith("URL:"));
+    if (urlLine(after) === urlLine(snapshot)) record(`${label}: STALE after click`, 1);
+  }
+  record(`${label}: LOOP TOTAL`, performance.now() - t0);
+  await cli(["close", String(json.tabId)]);
+}
+
 // One agent loop on one page: open → ready → look → act → ready → look.
 async function agentLoop(label, url, nextPattern) {
+  if (COMPOSITE) return compositeLoop(label, url, nextPattern);
   const t0 = performance.now();
   const nav = await mustCli(["navigate", url, "--new", ...NAV_ARGS]);
   record(`${label}: navigate --new`, nav.ms);
@@ -264,6 +292,10 @@ async function agentLoop(label, url, nextPattern) {
     }
     const s2 = await mustCli(["snapshot", "--tab", String(tabId), "-i"]);
     record(`${label}: snapshot after click`, s2.ms);
+    // Correctness, not just speed: the click navigated, so the second
+    // snapshot must describe the new document, not a stale read of the old.
+    const urlLine = (t) => t.split("\n").find((l) => l.startsWith("URL:"));
+    if (urlLine(s2.stdout) === urlLine(snap.stdout)) record(`${label}: STALE after click`, 1);
   }
   record(`${label}: LOOP TOTAL`, performance.now() - t0);
   await cli(["close", String(tabId)]);
@@ -281,6 +313,21 @@ async function main() {
   for (let i = 0; i < 15; i++) {
     record("overhead: cli tabs", (await mustCli(["tabs"])).ms);
     record("overhead: http tabs", (await httpCall(desc, "get_windows_and_tabs", {})).ms);
+  }
+
+  // Where a big snapshot's time goes: the same read over raw HTTP (no CLI
+  // process, no rendering) and its wire size.
+  if (flag("--probe-snapshot")) {
+    const nav = await httpCall(desc, "chrome_navigate", { url: `${base}/page?n=1&items=1500&slow=0`, newTab: true, waitUntil: "load" });
+    const tabId = nav.body.data.tabId;
+    for (let i = 0; i < 6; i++) {
+      const r = await httpCall(desc, "chrome_snapshot", { tabId, interactiveOnly: true });
+      record("probe: http snapshot-1500", r.ms);
+      record("probe: wire bytes", JSON.stringify(r.body).length);
+      const c = await cli(["snapshot", "--tab", String(tabId), "-i"]);
+      record("probe: cli snapshot-1500", c.ms);
+    }
+    await httpCall(desc, "chrome_close_tabs", { tabIds: [tabId] });
   }
 
   const fixture = `${base}/page?n=1&items=200&slow=1200`;
