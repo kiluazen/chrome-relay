@@ -507,6 +507,13 @@ describe("CLI argument parsing", () => {
       });
     });
 
+    it("forwards --no-wait as an explicit fast click for refs, selectors and coordinates", async () => {
+      for (const argv of [["@e3"], ["#go"], ["--x", "10", "--y", "20"]]) {
+        await runArgs("click", ...argv, "--no-wait", "--tab", "9");
+        expect(lastBody().args).toMatchObject({ waitForNavigation: false, tabId: 9 });
+      }
+    });
+
     it("forwards --tab", async () => {
       await runArgs("click", "--tab", "9", "#go");
       expect(lastBody().args).toEqual({ selector: "#go", tabId: 9 });

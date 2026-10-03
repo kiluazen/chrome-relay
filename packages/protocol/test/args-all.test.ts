@@ -80,6 +80,16 @@ describe("simple-tool parsers", () => {
     expectInvalid(() => parseChromeClickArgs({ ref: "e3", selector: ".foo" }));
   });
 
+  it("click: preserves an explicit navigation wait choice in every addressing mode", () => {
+    for (const address of [{ ref: "e3" }, { selector: "#btn" }, { x: 10, y: 20 }]) {
+      expect(parseChromeClickArgs({ ...address, waitForNavigation: false }))
+        .toMatchObject({ ...address, waitForNavigation: false });
+      expect(parseChromeClickArgs({ ...address, waitForNavigation: true }))
+        .toMatchObject({ ...address, waitForNavigation: true });
+    }
+    expectInvalid(() => parseChromeClickArgs({ selector: "#btn", waitForNavigation: "false" }));
+  });
+
   it("fill: requires selector + string value (empty allowed)", () => {
     expectInvalid(() => parseChromeFillArgs({ selector: ".foo" }));        // missing value
     expectInvalid(() => parseChromeFillArgs({ value: "x" }));               // missing selector

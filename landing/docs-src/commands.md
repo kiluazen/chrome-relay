@@ -97,6 +97,7 @@ Sequential execution in the extension, bail-on-error by default (`--no-bail` to 
 
 ```sh
 chrome-relay click @e12                          # ref (preferred)
+chrome-relay click @e12 --no-wait                # skip the delayed-navigation check
 chrome-relay click 'button.save' --tab 42        # CSS selector
 chrome-relay click --x 540 --y 320 --tab 42      # coordinates
 chrome-relay fill @e14 "value"                   # input/textarea/select — atomic write
@@ -105,6 +106,8 @@ chrome-relay keys "Cmd+K" --tab 42               # single key or chord
 chrome-relay hover @e3                           # pointer move only; fires :hover
 chrome-relay click-ax --node 4837 --tab 42       # deprecated — raw backendNodeId
 ```
+
+`click --no-wait` still dispatches trusted input and checks for immediate navigation, but skips the default 120 ms grace period for delayed navigation. Use it when the next step explicitly verifies the result, for example `wait --text "Saved" --tab 42` or `snapshot --tab 42 --diff`. Its response includes `navigationCheck: "immediate"`; the absence of `navigated` does not rule out later navigation. In a batch, set `waitForNavigation: false` on the click's wire args and follow with the appropriate wait. Older extensions ignore this field and retain their usual delay.
 
 ## Evaluate JavaScript
 

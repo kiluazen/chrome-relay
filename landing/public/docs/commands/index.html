@@ -247,6 +247,7 @@ cat commands.json | chrome-relay batch --stdin
 <p>Sequential execution in the extension, bail-on-error by default (<code>--no-bail</code> to continue). Uses wire tool names. Amortizes process startup and the bridge hop across N actions; nested batches are rejected.</p>
 <h2 id="act">Act<a class="anchor" href="#act" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay click @e12                          # ref (preferred)
+chrome-relay click @e12 --no-wait                # skip the delayed-navigation check
 chrome-relay click &#39;button.save&#39; --tab 42        # CSS selector
 chrome-relay click --x 540 --y 320 --tab 42      # coordinates
 chrome-relay fill @e14 &quot;value&quot;                   # input/textarea/select — atomic write
@@ -255,6 +256,7 @@ chrome-relay keys &quot;Cmd+K&quot; --tab 42               # single key or chord
 chrome-relay hover @e3                           # pointer move only; fires :hover
 chrome-relay click-ax --node 4837 --tab 42       # deprecated — raw backendNodeId
 </code></pre>
+<p><code>click --no-wait</code> still dispatches trusted input and checks for immediate navigation, but skips the default 120 ms grace period for delayed navigation. Use it when the next step explicitly verifies the result, for example <code>wait --text &quot;Saved&quot; --tab 42</code> or <code>snapshot --tab 42 --diff</code>. Its response includes <code>navigationCheck: &quot;immediate&quot;</code>; the absence of <code>navigated</code> does not rule out later navigation. In a batch, set <code>waitForNavigation: false</code> on the click&#39;s wire args and follow with the appropriate wait. Older extensions ignore this field and retain their usual delay.</p>
 <h2 id="evaluate-javascript">Evaluate JavaScript<a class="anchor" href="#evaluate-javascript" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay js --tab 42 &quot;return document.title&quot;
 chrome-relay js --tab 42 &quot;const r = await fetch(&#39;/api/me&#39;); return await r.json()&quot;

@@ -35,7 +35,9 @@ import { resolveTarget, requireTabId, type ToolHandler } from "./target";
 // the agent should know NOW — in the click's own response — instead of one
 // wasted stale_ref call later. Check immediately, then once more after
 // 120ms (JS click handlers often navigate a tick later). Best effort.
-async function detectNavigation(tabId: number, urlBefore: string | undefined): Promise<boolean> {
+// Fast callers opt out of the grace period and verify the next state with
+// wait/snapshot. Input dispatch and the immediate navigation check still run.
+async function detectNavigation(tabId: number, urlBefore: string | undefined, waitForNavigation = true): Promise<boolean> {
   const check = async (): Promise<boolean> => {
     try {
       const t = await chrome.tabs.get(tabId);
@@ -45,6 +47,7 @@ async function detectNavigation(tabId: number, urlBefore: string | undefined): P
     }
   };
   if (await check()) return true;
+  if (!waitForNavigation) return false;
   await new Promise((r) => setTimeout(r, 120));
   return check();
 }
@@ -88,13 +91,14 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
       const r = await resolveRefCenter(TOOL_NAMES.CLICK, parsed.ref, parsed);
       const urlBefore = (await chrome.tabs.get(r.tabId).catch(() => undefined))?.url;
       await dispatchClick(r.tabId, r.x, r.y);
-      const navigated = await detectNavigation(r.tabId, urlBefore);
+      const navigated = await detectNavigation(r.tabId, urlBefore, parsed.waitForNavigation);
       return {
         clicked: true,
         x: r.x,
         y: r.y,
         ref: parsed.ref,
         tabId: r.tabId,
+        ...(parsed.waitForNavigation === false ? { navigationCheck: "immediate" } : {}),
         ...(r.healed ? { healed: true } : {}),
         ...(navigated ? { navigated: true, note: NAVIGATED_NOTE } : {})
       };
@@ -119,11 +123,12 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
 
     const urlBefore = tab.url;
     await dispatchClick(tabId, x, y);
-    const navigated = await detectNavigation(tabId, urlBefore);
+    const navigated = await detectNavigation(tabId, urlBefore, parsed.waitForNavigation);
 
     return {
       clicked: true,
       x, y,
+      ...(parsed.waitForNavigation === false ? { navigationCheck: "immediate" } : {}),
       ...(parsed.kind === "selector" ? { selector: parsed.selector } : {}),
       ...(navigated ? { navigated: true, note: NAVIGATED_NOTE } : {})
     };
