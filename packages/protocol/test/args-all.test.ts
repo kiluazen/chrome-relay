@@ -127,9 +127,9 @@ describe("simple-tool parsers", () => {
   it("switch_tab: requires numeric tabId", () => {
     expectInvalid(() => parseChromeSwitchTabArgs({}));
     expectInvalid(() => parseChromeSwitchTabArgs({ tabId: "abc" }));
-    expect(parseChromeSwitchTabArgs({ tabId: 42 })).toEqual({ tabId: 42 });
+    expect(expectInvalid(() => parseChromeSwitchTabArgs({ tabId: 42 })).phase).toBe("background_only");
     // string-numeric coerces (back-compat with shell quoting)
-    expect(parseChromeSwitchTabArgs({ tabId: "42" })).toEqual({ tabId: 42 });
+    expect(expectInvalid(() => parseChromeSwitchTabArgs({ tabId: "42" })).phase).toBe("background_only");
   });
 
   it("close_tabs: requires non-empty numeric array", () => {

@@ -51,6 +51,15 @@ export function parseChromeNavigateArgs(input: unknown): ChromeNavigateArgs {
   const newTab = optBool(obj, "newTab", TOOL_NAMES.NAVIGATE);
   if (newTab !== undefined) out.newTab = newTab;
   const active = optBool(obj, "active", TOOL_NAMES.NAVIGATE);
+  if (active === true) {
+    throw new RelayError({
+      code: "invalid_arguments",
+      message: "Chrome Relay operates in the background. Remove active:true and target the tab by tabId instead.",
+      tool: TOOL_NAMES.NAVIGATE,
+      phase: "background_only",
+      retryable: false
+    });
+  }
   if (active !== undefined) out.active = active;
   const allowPartial = optBool(obj, "allowPartial", TOOL_NAMES.NAVIGATE);
   if (allowPartial !== undefined) out.allowPartial = allowPartial;

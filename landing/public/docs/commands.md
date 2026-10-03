@@ -22,16 +22,17 @@ One connected instance routes implicitly. With several, an unscoped command fail
 | Command | Does |
 |---|---|
 | `tabs` | List all windows and tabs with ids, titles, URLs |
-| `switch <tabId>` | Activate a tab (steals focus — that's its job) |
+| `switch <tabId>` | Rejected; use `--tab <id>` on the next command to keep working in the background |
 | `close <tabIds...>` | Close tabs |
 
 ## Navigate
 
 ```sh
 chrome-relay navigate "https://chrome-relay.kushalsm.com" --new        # background tab (default for --new)
-chrome-relay navigate "https://chrome-relay.kushalsm.com" --new --active  # foreground
 chrome-relay navigate "https://chrome-relay.kushalsm.com" --tab 42     # retarget an existing tab
 ```
+
+All navigation stays in the background. Legacy `--active` requests are rejected before navigation, including raw calls and batches.
 
 ## Read the page
 
@@ -134,7 +135,7 @@ chrome-relay screencast start --tab 42 --quality 80 --max-width 900
 chrome-relay screencast stop --tab 42 --out /tmp/rec --gif
 ```
 
-Paint-driven recording (catches CSS transitions and hover states). Requires the tab to be **active** — Chrome doesn't paint background tabs. With `--gif`/`--mp4` and ffmpeg on PATH, frames get stitched; consecutive identical frames are deduped.
+Records sampled screenshots in the background at up to 15fps. It never selects the tab; changes between samples may be missed. `--every-nth N` multiplies the sampling interval. With `--gif`/`--mp4` and ffmpeg on PATH, frames get stitched; consecutive identical frames are deduped.
 
 ## Observe
 

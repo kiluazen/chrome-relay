@@ -39,14 +39,10 @@ export const navigationHandlers: Partial<Record<string, ToolHandler>> = {
     const parsed = parseChromeNavigateArgs(args);
     const { url } = parsed;
     const newTab = parsed.newTab === true;
-    // 0.5.20: background is the default. Agent must explicitly set
-    // active:true to steal focus — aligning with chrome-relay's
-    // "operate without stealing focus" promise (see docs/cli-philosophy.md).
-    const active = parsed.active === true;
     const allowPartial = parsed.allowPartial === true;
 
     if (newTab) {
-      const createOpts: chrome.tabs.CreateProperties = { url, active };
+      const createOpts: chrome.tabs.CreateProperties = { url, active: false };
       let joinTabGroupName: string | undefined;
       if (parsed.tabId !== undefined) {
         try {
@@ -110,21 +106,14 @@ export const navigationHandlers: Partial<Record<string, ToolHandler>> = {
     const tabId = requireTabId(current);
 
     await send(tabId, "Page.navigate", { url });
-    if (active) {
-      await chrome.tabs.update(tabId, { active: true });
-    }
 
     return { tabId, windowId: current.windowId, url };
   },
 
   async [TOOL_NAMES.SWITCH_TAB](args) {
-    const { tabId } = parseChromeSwitchTabArgs(args);
-    const tab = await chrome.tabs.get(tabId);
-    if (typeof tab.windowId === "number") {
-      await chrome.windows.update(tab.windowId, { focused: true });
-    }
-    await chrome.tabs.update(tabId, { active: true });
-    return { tabId: tab.id, windowId: tab.windowId, active: true };
+    // Legacy command: validate, then reject in the shared parser before
+    // touching Chrome. The CLI uses the same gate, including raw calls.
+    parseChromeSwitchTabArgs(args);
   },
 
   async [TOOL_NAMES.CLOSE_TABS](args) {

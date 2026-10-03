@@ -299,9 +299,8 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
     return { hovered: true, x, y, selector: parsed.kind === "selector" ? parsed.selector : null };
   },
 
-  // Screencast — start/stop a CDP screencast stream. Frames are buffered
-  // in the SW and returned on stop. Requires an active tab (Chrome doesn't
-  // paint backgrounded tabs).
+  // Background recording — sampled screenshots buffered in the SW until
+  // stop. Does not depend on foreground compositor events.
   async [TOOL_NAMES.SCREENCAST](args) {
     const parsed = parseChromeScreencastArgs(args);
     const tab = await resolveTarget(parsed);

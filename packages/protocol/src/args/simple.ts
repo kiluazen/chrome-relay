@@ -241,7 +241,15 @@ export function parseChromeSwitchTabArgs(input: unknown): ChromeSwitchTabArgs {
       retryable: false
     });
   }
-  return { tabId: coerceTabId(obj.tabId, TOOL_NAMES.SWITCH_TAB) };
+  const tabId = coerceTabId(obj.tabId, TOOL_NAMES.SWITCH_TAB);
+  throw new RelayError({
+    code: "invalid_arguments",
+    message: `Chrome Relay operates in the background. Use --tab ${tabId} on the next command instead of switching tabs.`,
+    tool: TOOL_NAMES.SWITCH_TAB,
+    phase: "background_only",
+    details: { tabId },
+    retryable: false
+  });
 }
 
 // ---------------------------------------------------------------------------

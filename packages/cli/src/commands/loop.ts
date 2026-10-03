@@ -4,6 +4,7 @@
 import { readFileSync } from "node:fs";
 import {
   MAX_BATCH_BYTES,
+  parseChromeBatchArgs,
   parseRefToken,
   RelayError,
   TOOL_NAMES
@@ -208,7 +209,9 @@ startup across N actions. Nested batches are rejected.
             retryable: false
           });
         }
-        const result = await callTool(TOOL_NAMES.BATCH, { commands, bail: opts.bail !== false });
+        const args = { commands, bail: opts.bail !== false };
+        parseChromeBatchArgs(args);
+        const result = await callTool(TOOL_NAMES.BATCH, args);
         process.stdout.write(JSON.stringify(result, null, 2) + "\n");
         const failed = (result as { results?: { ok: boolean }[] }).results?.some((r) => !r.ok);
         if (failed) process.exit(1);

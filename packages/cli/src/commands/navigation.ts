@@ -25,7 +25,7 @@ export function registerNavigation(ctx: CommandContext): void {
       .command("navigate <url>")
       .description("Navigate a tab to a URL. Use --tab <id> to target an existing tab.")
       .option("--new", "open in a new tab")
-      .option("--active", "activate the tab after navigating (default: background, no focus theft)")
+      .option("--active", "unsupported: Chrome Relay operates in the background")
       .addHelpText(
         "after",
         `
@@ -34,18 +34,15 @@ Examples:
   chrome-relay navigate "https://chrome-relay.kushalsm.com"                    # navigate current tab
   chrome-relay navigate --tab 123 "https://chrome-relay.kushalsm.com"          # navigate an existing tab
   chrome-relay navigate "https://chrome-relay.kushalsm.com" --new              # open in a new background tab
-  chrome-relay navigate "https://chrome-relay.kushalsm.com" --new --active     # open new tab AND show it to the user
 
-By default chrome-relay never steals focus. Navigated tabs (new or
-existing) stay in whatever state they're in. Pass --active when you
-actually want the user looking at the page.
+Chrome Relay operates in the background. Use --tab to target an existing
+tab without selecting it. --active is rejected before navigation.
 `
       )
   ).action(async (url: string, opts) => {
     if (/^\d+$/.test(url)) {
       process.stderr.write(
         `navigate expects a URL, but "${url}" looks like a tab ID.\n` +
-          `Use "chrome-relay switch ${url}" to activate that tab, or ` +
           `"chrome-relay navigate --tab ${url} https://chrome-relay.kushalsm.com" to navigate it.\n`
       );
       process.exit(1);
@@ -53,14 +50,14 @@ actually want the user looking at the page.
 
     const extras: Record<string, unknown> = { url };
     if (opts.new) extras.newTab = true;
-    // 0.5.20: background is the default. Agent opts into focus via --active.
+    // Keep legacy flag parsing so the shared validator explains the policy.
     if (opts.active) extras.active = true;
     await run("chrome_navigate", withBase(opts, extras));
   });
 
   program
     .command("switch <tabId>")
-    .description("Activate a tab by ID.")
+    .description("Unsupported: use --tab <id> on a command to work in the background.")
     .action(async (tabId: string) => {
       await run("chrome_switch_tab", { tabId: Number(tabId) });
     });

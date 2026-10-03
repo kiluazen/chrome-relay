@@ -65,7 +65,7 @@ chrome-relay hover @e12       # the micro-interaction you're capturing
 chrome-relay screencast stop --tab 42 --out /tmp/rec --gif
 ```
 
-Paint-driven frame capture — it sees CSS transitions, fade-ins, and hover states that screenshot polling misses. Two constraints: the tab must be **active** (Chrome doesn't paint background tabs), and `--gif`/`--mp4` stitching needs ffmpeg on PATH (fails with `external_dependency_missing` if absent, or pass `--allow-missing-ffmpeg` to keep the raw frames). Consecutive identical frames are deduped by hash before stitching.
+Records sampled screenshots at up to 15fps without selecting the tab or raising its window. Changes between samples may be missed. `--gif`/`--mp4` stitching needs ffmpeg on PATH (fails with `external_dependency_missing` if absent, or pass `--allow-missing-ffmpeg` to keep the raw frames). Consecutive identical frames are deduped by hash before stitching.
 
 ## What stays on your machine
 

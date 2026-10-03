@@ -32,7 +32,10 @@ export const test = base.extend<TestFixtures, WorkerFixtures>({
     async ({}, use) => {
       const userDataDir = mkdtempSync(join(tmpdir(), "chrome-relay-e2e-"));
       const context = await chromium.launchPersistentContext(userDataDir, {
-        headless: false,
+        // Full Chromium supports MV3 in headless mode. Never open a test
+        // window on the user's desktop, including during local runs.
+        channel: "chromium",
+        headless: true,
         args: [
           `--disable-extensions-except=${EXTENSION_PATH}`,
           `--load-extension=${EXTENSION_PATH}`,

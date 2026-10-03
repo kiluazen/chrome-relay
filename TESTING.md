@@ -54,11 +54,11 @@ pnpm --filter chrome-relay-extension test:e2e:install
 # Run all e2e specs
 pnpm test:e2e
 
-# Open the Playwright UI for debugging
-pnpm --filter chrome-relay-extension test:e2e:ui
 ```
 
-The e2e suite boots Chromium with the unpacked extension via Playwright `launchPersistentContext` and reaches into the extension's service worker with `serviceWorker.evaluate(...)` to call `runTool` directly. No need to set up native messaging or a CLI bridge in tests.
+The E2E suite and two-profile benchmark run full Chromium with `channel: "chromium", headless: true` and isolated temporary profiles. They must never open test windows, activate desktop apps, or launch Playwright UI. Extension loading works in this headless Chromium channel. Inspect saved traces and reports without opening a viewer automatically.
+
+The suite reaches into the extension's service worker with `serviceWorker.evaluate(...)` to call `runTool` directly. No need to set up native messaging or a CLI bridge in tests. Tab-selection assertions inside the test browser do not prove preservation of macOS desktop focus.
 
 ### Adding a fixture
 
