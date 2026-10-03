@@ -6,6 +6,7 @@ import {
   type ProfileStamp,
   type ToolName
 } from "@chrome-relay/protocol";
+import { httpRequest } from "./http.js";
 import { resolveRoute } from "./route.js";
 
 // Once per process, suppress duplicate stderr notices so a chatty subcommand
@@ -92,7 +93,7 @@ export async function callToolWithMeta(
 
   const route = await resolveRoute(profile, args);
 
-  const response = await fetch(`${route.baseUrl}/call`, {
+  const response = await httpRequest(`${route.baseUrl}/call`, {
     method: "POST",
     headers: {
       "content-type": "application/json",

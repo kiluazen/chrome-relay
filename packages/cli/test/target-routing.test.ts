@@ -8,6 +8,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { buildProgram } from "../src/program";
 
+// The CLI's hot path uses a fetch-shaped node:http client (client/http.ts);
+// route it to the stubbed global fetch so these tests keep one seam.
+vi.mock("../src/client/http.js", () => ({
+  httpRequest: (url: string, init?: unknown) => (globalThis.fetch as (u: string, i?: unknown) => unknown)(url, init)
+}));
+
 type FetchSpy = ReturnType<typeof vi.fn>;
 
 let fetchSpy: FetchSpy;

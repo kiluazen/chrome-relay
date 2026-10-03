@@ -15,6 +15,7 @@ import {
   parseChromeScreenshotArgs,
   parseChromeSnapshotArgs,
   RelayError,
+  SNAPSHOT_READY_TIMEOUT_MS,
   TOOL_NAMES
 } from "@chrome-relay/protocol";
 import { evalExpression, evalInTab, send } from "../cdp";
@@ -22,6 +23,7 @@ import { clickAxNode } from "../a11y";
 import { mapPageError, resolveRefCenter, resolveRefObjectId } from "../element";
 import { locateForClick } from "../page-actions";
 import { buildSnapshot } from "../snapshot";
+import { isDocumentLoading, waitForDocument } from "../readiness";
 import { startScreencast, stopScreencast } from "../screencast";
 import { resolveTarget, requireTabId, invalidArg, type ToolHandler } from "./target";
 
@@ -142,7 +144,14 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
     const parsed = parseChromeSnapshotArgs(args);
     const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
-    return buildSnapshot(tabId, parsed);
+    // Never describe a document that is about to be replaced: its refs
+    // would die on arrival. Ready pages pay one cheap probe.
+    let loading = false;
+    if (parsed.waitForReady !== false && (await isDocumentLoading(tabId))) {
+      loading = !(await waitForDocument(tabId, "domcontentloaded", SNAPSHOT_READY_TIMEOUT_MS)).ready;
+    }
+    const data = await buildSnapshot(tabId, parsed);
+    return loading ? { ...data, loading: true } : data;
   },
 
   // chrome_get (adoption-spec Change 6) — one value without a snapshot.

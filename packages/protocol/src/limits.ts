@@ -39,6 +39,9 @@ export const MAX_WAIT_TIMEOUT_MS = 25_000;
 export const WAIT_POLL_INTERVAL_MS = 100;
 /** chrome_wait --load networkidle: quiet window with no new resources. */
 export const NETWORKIDLE_QUIET_MS = 500;
+/** chrome_snapshot: longest it waits for a pending navigation to reach
+ *  DOMContentLoaded before reading the tree anyway (flagged loading). */
+export const SNAPSHOT_READY_TIMEOUT_MS = 10_000;
 
 /** chrome_batch: max commands per batch. */
 export const MAX_BATCH_COMMANDS = 50;

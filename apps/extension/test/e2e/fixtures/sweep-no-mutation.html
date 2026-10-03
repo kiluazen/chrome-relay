@@ -1,0 +1,13 @@
+<!doctype html>
+<html>
+<head><title>Sweep fixture</title></head>
+<body>
+  <div class="card" style="cursor:pointer; width:200px; height:40px">Open card A</div>
+  <div class="card" style="cursor:pointer; width:200px; height:40px">Open card B</div>
+  <script>
+    window.__mutations = 0;
+    new MutationObserver((records) => { window.__mutations += records.length; })
+      .observe(document.documentElement, { subtree: true, attributes: true, childList: true });
+  </script>
+</body>
+</html>

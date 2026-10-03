@@ -27,6 +27,7 @@ import {
   readInstanceDescriptors,
   removeInstanceDescriptor
 } from "../registry.js";
+import { httpRequest } from "./http.js";
 
 const PING_TIMEOUT_MS = 1_000;
 
@@ -74,7 +75,7 @@ async function pingDescriptor(desc: InstanceDescriptor): Promise<PingResponse | 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
   try {
-    const response = await fetch(`http://127.0.0.1:${desc.port}/ping`, { signal: controller.signal });
+    const response = await httpRequest(`http://127.0.0.1:${desc.port}/ping`, { signal: controller.signal });
     if (!response.ok) return null;
     return (await response.json()) as PingResponse;
   } catch {

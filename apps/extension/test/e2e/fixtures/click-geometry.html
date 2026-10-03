@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+<title>Click geometry fixture</title>
+<style>
+  body { margin: 0; font: 14px sans-serif; }
+  header { position: sticky; top: 0; height: 80px; background: #eee; z-index: 10; }
+  table { width: 100%; }
+  .row { height: 40px; }
+</style>
+</head>
+<body>
+  <header>Sticky header</header>
+  <button id="top-target" onclick="window.__log.push('top')">Top target</button>
+  <div id="rows"></div>
+  <!-- HN-style: an inline link in a full-width cell, far below the fold. -->
+  <table><tr><td class="title"><a id="more" href="#more" onclick="window.__log.push('more'); return false">More</a></td></tr></table>
+  <script>
+    window.__log = [];
+    const rows = document.getElementById("rows");
+    for (let i = 0; i < 60; i++) {
+      const d = document.createElement("div");
+      d.className = "row";
+      d.innerHTML = '<a href="#r' + i + '" onclick="window.__log.push(\'row' + i + '\'); return false">Story ' + i + '</a>';
+      rows.appendChild(d);
+    }
+    window.__diag = () => ({ log: window.__log.slice(), scrollY: window.scrollY });
+  </script>
+</body>
+</html>

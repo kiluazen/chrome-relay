@@ -2,17 +2,41 @@
 //   GET_WINDOWS_AND_TABS, NAVIGATE, SWITCH_TAB, CLOSE_TABS
 
 import {
+  DEFAULT_WAIT_TIMEOUT_MS,
   parseChromeCloseTabsArgs,
   parseChromeNavigateArgs,
   parseChromeSwitchTabArgs,
   parseGetWindowsAndTabsArgs,
   RelayError,
-  TOOL_NAMES
+  TOOL_NAMES,
+  type ChromeNavigateArgs
 } from "@chrome-relay/protocol";
-import { send } from "../cdp";
+import { ensureAttached, send } from "../cdp";
+import { waitForDocument } from "../readiness";
 import { addToTabGroup, resolveTabGroupTarget } from "../tab-groups";
 import { resolveWorkspaceTarget } from "../workspaces";
 import { resolveTarget, requireTabId, type ToolHandler } from "./target";
+
+// waitUntil support: report readiness on the navigate result itself, so the
+// agent's next command (snapshot, click) reads the page it asked for.
+// Slowness is reported (ready:false), never thrown — the tab exists and
+// the navigation is under way; the caller decides what to do next.
+async function settle(
+  tabId: number,
+  parsed: ChromeNavigateArgs,
+  errorText?: string
+): Promise<Record<string, unknown>> {
+  const level = parsed.waitUntil;
+  if (!level || level === "none") return errorText ? { loadFailed: true, errorText } : {};
+  const r = await waitForDocument(tabId, level, parsed.waitTimeoutMs ?? DEFAULT_WAIT_TIMEOUT_MS);
+  return {
+    url: r.url,
+    ready: r.ready,
+    ...(r.readyState ? { readyState: r.readyState } : {}),
+    waitedMs: r.waitedMs,
+    ...(errorText || r.errorPage ? { loadFailed: true, ...(errorText ? { errorText } : {}) } : {})
+  };
+}
 
 export const navigationHandlers: Partial<Record<string, ToolHandler>> = {
   async [TOOL_NAMES.GET_WINDOWS_AND_TABS](args) {
@@ -69,6 +93,12 @@ export const navigationHandlers: Partial<Record<string, ToolHandler>> = {
         if (typeof wsTab.windowId === "number") createOpts.windowId = wsTab.windowId;
       }
       const tab = await chrome.tabs.create(createOpts);
+      // Attach while the first navigation is still in flight so the
+      // visibility shim (cdp.ts) is registered before the page's own
+      // scripts run; best effort — settle() attaches on demand anyway.
+      if (parsed.waitUntil && parsed.waitUntil !== "none" && typeof tab.id === "number") {
+        await ensureAttached(tab.id).catch(() => {});
+      }
       const warnings: Array<{ code: string; message: string }> = [];
       if (joinTabGroupName && typeof tab.id === "number") {
         try {
@@ -94,7 +124,12 @@ export const navigationHandlers: Partial<Record<string, ToolHandler>> = {
           });
         }
       }
-      const result: Record<string, unknown> = { tabId: tab.id, windowId: tab.windowId, url: tab.url };
+      const result: Record<string, unknown> = {
+        tabId: tab.id,
+        windowId: tab.windowId,
+        url: tab.pendingUrl ?? tab.url,
+        ...(typeof tab.id === "number" ? await settle(tab.id, parsed) : {})
+      };
       if (warnings.length > 0) {
         result.partial = true;
         result.warnings = warnings;
@@ -105,9 +140,9 @@ export const navigationHandlers: Partial<Record<string, ToolHandler>> = {
     const current = await resolveTarget(parsed);
     const tabId = requireTabId(current);
 
-    await send(tabId, "Page.navigate", { url });
+    const nav = await send<{ errorText?: string }>(tabId, "Page.navigate", { url });
 
-    return { tabId, windowId: current.windowId, url };
+    return { tabId, windowId: current.windowId, url, ...(await settle(tabId, parsed, nav?.errorText || undefined)) };
   },
 
   async [TOOL_NAMES.SWITCH_TAB](args) {

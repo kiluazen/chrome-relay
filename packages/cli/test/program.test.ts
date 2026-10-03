@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { buildProgram } from "../src/program";
 
+// The CLI's hot path uses a fetch-shaped node:http client (client/http.ts);
+// route it to the stubbed global fetch so these tests keep one seam.
+vi.mock("../src/client/http.js", () => ({
+  httpRequest: (url: string, init?: unknown) => (globalThis.fetch as (u: string, i?: unknown) => unknown)(url, init)
+}));
+
 type FetchSpy = ReturnType<typeof vi.fn>;
 
 let fetchSpy: FetchSpy;
@@ -62,12 +68,25 @@ describe("CLI argument parsing", () => {
   });
 
   describe("navigate", () => {
-    it("posts chrome_navigate with url", async () => {
+    it("posts chrome_navigate with url, waiting for DOMContentLoaded by default", async () => {
       await runArgs("navigate", "https://example.com");
       expect(lastBody()).toEqual({
         name: "chrome_navigate",
-        args: { url: "https://example.com" }
+        args: { url: "https://example.com", waitUntil: "domcontentloaded" }
       });
+    });
+
+    it("--wait and --timeout pass through; --wait none opts out", async () => {
+      await runArgs("navigate", "https://example.com", "--new", "--wait", "load", "--timeout", "5000");
+      expect(lastBody().args).toMatchObject({ newTab: true, waitUntil: "load", waitTimeoutMs: 5000 });
+      await runArgs("navigate", "https://example.com", "--wait", "none");
+      expect(lastBody().args).toMatchObject({ waitUntil: "none" });
+    });
+
+    it("rejects an unknown --wait state before calling the bridge", async () => {
+      await runArgs("navigate", "https://example.com", "--wait", "idle");
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
     it("includes tabId when --tab is passed", async () => {
@@ -247,6 +266,13 @@ describe("CLI argument parsing", () => {
       const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join("");
       expect(out).toContain('- button "Save" [ref=e1]');
       expect(out).not.toContain("backendNodeId"); // refs map stays off stdout in text mode
+    });
+
+    it("snapshot --no-wait sends waitForReady:false; default sends nothing", async () => {
+      await runArgs("snapshot", "--tab", "1", "--no-wait");
+      expect(lastBody().args).toMatchObject({ tabId: 1, waitForReady: false });
+      await runArgs("snapshot", "--tab", "1");
+      expect(lastBody().args.waitForReady).toBeUndefined();
     });
 
     it("--json prints the structured envelope instead", async () => {

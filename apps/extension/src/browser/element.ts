@@ -1,9 +1,9 @@
 // Ref → element resolution for actions (adoption-spec Change 2).
 //
 // Resolution path per action:
-//   1. Fast path: cached backendNodeId → scrollIntoViewIfNeeded →
-//      DOM.getBoxModel → center. The box-model fetch IS the staleness
-//      verification — never skipped.
+//   1. Fast path: cached backendNodeId → DOM.resolveNode → in-page locate
+//      (scroll if needed, client-rect center, hit test). Resolving and
+//      locating the node IS the staleness verification — never skipped.
 //   2. Stale path: node gone → re-query the AX tree by role+name+nth,
 //      HEAL the map entry (our addition — agent-browser re-finds every
 //      time), and retry the box.
@@ -81,89 +81,114 @@ export async function resolveRefTarget(
   return entry;
 }
 
-interface BoxModel { content: number[] }
-
-async function boxCenter(tabId: number, backendNodeId: number): Promise<{ x: number; y: number }> {
-  try {
-    await send(tabId, "DOM.scrollIntoViewIfNeeded", { backendNodeId });
-  } catch {
-    // Not available on every target version — proceed; getBoxModel decides.
-  }
-  const resp = await send<{ model: BoxModel }>(tabId, "DOM.getBoxModel", { backendNodeId });
-  const q = resp.model.content;
-  return {
-    x: Math.round((q[0] + q[2] + q[4] + q[6]) / 4),
-    y: Math.round((q[1] + q[3] + q[5] + q[7]) / 4)
+// In-page locate: scroll into view if needed, pick the click point from the
+// element's own client rects, and (optionally) hit-test that point — all in
+// one Runtime.callFunctionOn on the resolved node.
+//
+// Why in-page instead of DOM.getBoxModel + DOM.getNodeForLocation: measured
+// on a scrolled background tab (HN's "More" link, after scrolling it into
+// view), getNodeForLocation hit-tested the viewport point as if the page
+// had not scrolled — it named a story link 500px up as the interceptor and
+// refused a correct click, while document.elementFromPoint at the same
+// point returned the link. Any ref below the fold could hit this. In-page
+// it is also 2 CDP round trips instead of up to 7.
+//
+// Coordinates come back in main-frame viewport space: same-process iframe
+// offsets are added walking up frameElement (OOPIFs are out of scope — CDP
+// routes by tabId). Returns { noBox } for hidden/detached nodes, which the
+// caller treats as stale (heal path), or { intercepted } naming the element
+// that owns the point.
+const LOCATE_FN = `function (hitTest) {
+  const el = this;
+  if (!el.isConnected) return { noBox: true };
+  const doc = el.ownerDocument;
+  const view = doc.defaultView;
+  const root = el.getRootNode();
+  const hitRoot = typeof root.elementFromPoint === "function" ? root : doc;
+  const centerOf = () => {
+    const rects = Array.from(el.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
+    if (rects.length === 0) return null;
+    const pts = rects.map((r) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 }));
+    return pts.find((p) => p.x >= 0 && p.y >= 0 && p.x < view.innerWidth && p.y < view.innerHeight) || null;
   };
+  const owner = (p) => {
+    const hit = hitRoot.elementFromPoint(p.x, p.y);
+    return hit && hit !== el && !el.contains(hit) && !hit.contains(el) ? hit : null;
+  };
+  const center = () => el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+  if (Array.from(el.getClientRects()).every((r) => r.width === 0 || r.height === 0)) return { noBox: true };
+  let p = centerOf();
+  if (!p) { center(); p = centerOf(); }
+  if (!p) return { noBox: true };
+  let blocker = hitTest ? owner(p) : null;
+  if (blocker) {
+    // A sticky header or a nested scroller often covers an element that is
+    // merely near an edge: center it once before calling it intercepted.
+    center();
+    p = centerOf() || p;
+    blocker = owner(p);
+  }
+  let x = p.x, y = p.y;
+  for (let w = view; w !== w.top; w = w.parent) {
+    let frame;
+    try { frame = w.frameElement; } catch (e) { frame = null; }
+    if (!frame) break;
+    const fr = frame.getBoundingClientRect();
+    x += fr.left + frame.clientLeft;
+    y += fr.top + frame.clientTop;
+  }
+  if (blocker) {
+    const attrs = [];
+    for (const a of Array.from(blocker.attributes).slice(0, 6)) attrs.push(a.name, a.value.slice(0, 200));
+    return { x: Math.round(x), y: Math.round(y), intercepted: { nodeName: blocker.nodeName, attributes: attrs } };
+  }
+  return { x: Math.round(x), y: Math.round(y) };
+}`;
+
+interface LocateResult {
+  x?: number;
+  y?: number;
+  noBox?: true;
+  intercepted?: { nodeName: string; attributes: string[] };
 }
 
-// Hit-test the resolved click point and refuse to click through an
-// unrelated element (overlay, sticky header, modal). The spec's Change 2
-// step 3, mirroring agent-browser's check_node_interception. Rules:
-//   - the hit node being the target, a descendant of it (inner span/text),
-//    or an ancestor of it (label wrapping an input) is fine;
-//   - anything else throws click_intercepted with the interceptor named.
-// Best effort: if the hit-test itself fails (iframe boundaries, old CDP),
-// we proceed rather than block — a skipped check beats a false positive.
-async function assertNotIntercepted(
-  tool: ToolName,
-  ref: string,
+/** Resolve a backendNodeId to a live objectId and its click point. Throws
+ *  a plain Error when the node is gone or has no box (caller heals). */
+async function locate(
   tabId: number,
   backendNodeId: number,
+  hitTest: boolean
+): Promise<{ objectId: string; x: number; y: number; intercepted?: LocateResult["intercepted"] }> {
+  const resolved = await send<{ object: { objectId?: string } }>(tabId, "DOM.resolveNode", { backendNodeId });
+  const objectId = resolved.object?.objectId;
+  if (!objectId) throw new Error(`node ${backendNodeId} did not resolve`);
+  const resp = await send<{ result: { value?: LocateResult }; exceptionDetails?: unknown }>(tabId, "Runtime.callFunctionOn", {
+    objectId,
+    functionDeclaration: LOCATE_FN,
+    arguments: [{ value: hitTest }],
+    returnByValue: true
+  });
+  const v = resp.result?.value;
+  if (resp.exceptionDetails || !v || v.noBox || typeof v.x !== "number" || typeof v.y !== "number") {
+    throw new Error(`node ${backendNodeId} has no box`);
+  }
+  return { objectId, x: v.x, y: v.y, intercepted: v.intercepted };
+}
+
+// Refuse to click through an unrelated element (overlay, sticky header,
+// modal): the spec's Change 2 step 3, mirroring agent-browser's
+// check_node_interception. The target, its descendants (inner span/text)
+// and its ancestors (label wrapping an input) all count as the target.
+function interceptedError(
+  tool: ToolName,
+  ref: string,
   x: number,
-  y: number
-): Promise<void> {
-  let hitBackendNodeId: number;
-  try {
-    const hit = await send<{ backendNodeId: number }>(tabId, "DOM.getNodeForLocation", {
-      x,
-      y,
-      includeUserAgentShadowDOM: false
-    });
-    hitBackendNodeId = hit.backendNodeId;
-  } catch {
-    return; // hit-test unavailable — proceed
-  }
-  if (hitBackendNodeId === backendNodeId) return;
-
-  try {
-    const a = await send<{ object: { objectId?: string } }>(tabId, "DOM.resolveNode", { backendNodeId });
-    const b = await send<{ object: { objectId?: string } }>(tabId, "DOM.resolveNode", {
-      backendNodeId: hitBackendNodeId
-    });
-    if (!a.object?.objectId || !b.object?.objectId) return;
-    const rel = await send<{ result: { value?: boolean } }>(tabId, "Runtime.callFunctionOn", {
-      objectId: a.object.objectId,
-      functionDeclaration:
-        "function (other) { return this === other || this.contains(other) || other.contains(this); }",
-      arguments: [{ objectId: b.object.objectId }],
-      returnByValue: true
-    });
-    if (rel.result?.value === true) return; // same lineage — fine
-  } catch {
-    return; // relationship check failed — proceed, best effort
-  }
-
-  // Name the interceptor so the agent can act on it (dismiss the modal,
-  // scroll past the sticky header) instead of guessing.
-  let interceptor: Record<string, unknown> = { backendNodeId: hitBackendNodeId };
-  try {
-    const desc = await send<{ node: { nodeName: string; attributes?: string[] } }>(
-      tabId,
-      "DOM.describeNode",
-      { backendNodeId: hitBackendNodeId }
-    );
-    interceptor = {
-      backendNodeId: hitBackendNodeId,
-      nodeName: desc.node.nodeName,
-      attributes: desc.node.attributes?.slice(0, 12)
-    };
-  } catch {
-    /* description is optional */
-  }
-  throw new RelayError({
+  y: number,
+  interceptor: { nodeName: string; attributes: string[] }
+): RelayError {
+  return new RelayError({
     code: "click_intercepted",
-    message: `${tool}: @${ref} resolved, but an unrelated <${String(interceptor.nodeName ?? "?").toLowerCase()}> owns the click point (${x}, ${y}) — an overlay, sticky header, or modal is covering it. Dismiss it or scroll, then retry.`,
+    message: `${tool}: @${ref} resolved, but an unrelated <${interceptor.nodeName.toLowerCase()}> owns the click point (${x}, ${y}) — an overlay, sticky header, or modal is covering it. Dismiss it or scroll, then retry.`,
     tool,
     phase: "hit_test",
     details: { ref, x, y, interceptor },
@@ -180,16 +205,16 @@ export async function resolveRefCenter(
   ref: string,
   target: TargetArgs,
   opts: { hitTest?: boolean } = {}
-): Promise<ResolvedRef & { x: number; y: number }> {
+): Promise<ResolvedRef & { x: number; y: number; objectId: string }> {
   const hitTest = opts.hitTest !== false;
   const entry = await resolveRefTarget(tool, ref, target);
   const tabId = entry.tabId;
 
-  // Fast path — the box fetch verifies the cached id is still live.
+  // Fast path — locating the cached id verifies it is still live.
   try {
-    const { x, y } = await boxCenter(tabId, entry.backendNodeId);
-    if (hitTest) await assertNotIntercepted(tool, ref, tabId, entry.backendNodeId, x, y);
-    return { tabId, backendNodeId: entry.backendNodeId, entry, healed: false, x, y };
+    const l = await locate(tabId, entry.backendNodeId, hitTest);
+    if (l.intercepted) throw interceptedError(tool, ref, l.x, l.y, l.intercepted);
+    return { tabId, backendNodeId: entry.backendNodeId, entry, healed: false, x: l.x, y: l.y, objectId: l.objectId };
   } catch (e) {
     if (e instanceof RelayError) throw e; // interception is a verdict, not staleness
     // fall through to heal
@@ -200,10 +225,10 @@ export async function resolveRefCenter(
     throw staleRef(tool, ref, "no longer resolves (node gone, and no same-role/name replacement found)");
   }
   try {
-    const { x, y } = await boxCenter(tabId, fresh);
-    if (hitTest) await assertNotIntercepted(tool, ref, tabId, fresh, x, y);
+    const l = await locate(tabId, fresh, hitTest);
+    if (l.intercepted) throw interceptedError(tool, ref, l.x, l.y, l.intercepted);
     await healRefEntry(ref, fresh);
-    return { tabId, backendNodeId: fresh, entry: { ...entry, backendNodeId: fresh }, healed: true, x, y };
+    return { tabId, backendNodeId: fresh, entry: { ...entry, backendNodeId: fresh }, healed: true, x: l.x, y: l.y, objectId: l.objectId };
   } catch (e) {
     if (e instanceof RelayError) throw e;
     throw staleRef(tool, ref, "resolved to a replacement node with no box (hidden or detached)");
@@ -217,13 +242,7 @@ export async function resolveRefObjectId(
   target: TargetArgs
 ): Promise<{ tabId: number; objectId: string; healed: boolean }> {
   const resolved = await resolveRefCenter(tool, ref, target, { hitTest: false }); // verify+heal, no pointer check
-  const resp = await send<{ object: { objectId?: string } }>(resolved.tabId, "DOM.resolveNode", {
-    backendNodeId: resolved.backendNodeId
-  });
-  if (!resp.object?.objectId) {
-    throw staleRef(tool, ref, "could not be resolved to a live JS object");
-  }
-  return { tabId: resolved.tabId, objectId: resp.object.objectId, healed: resolved.healed };
+  return { tabId: resolved.tabId, objectId: resolved.objectId, healed: resolved.healed };
 }
 
 // ---------------------------------------------------------------------------

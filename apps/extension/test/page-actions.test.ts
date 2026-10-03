@@ -4,8 +4,8 @@ import {
   fillElement,
   focusSelector,
   locateForClick,
-  markCursorInteractive,
-  unmarkCursorInteractive
+  describeSweepElements,
+  findCursorInteractive
 } from "../src/browser/page-actions";
 
 beforeEach(() => {
@@ -29,22 +29,38 @@ function makeRect(el: HTMLElement, rect: Partial<DOMRect>) {
   el.getBoundingClientRect = () => full;
 }
 
-describe("markCursorInteractive / unmarkCursorInteractive", () => {
+describe("findCursorInteractive / describeSweepElements", () => {
   // jsdom has no layout: getComputedStyle().cursor is "" by default, so we
   // drive clickability via inline cursor styles + onclick/tabindex attrs.
   function styleClickable(el: HTMLElement) {
     el.style.cursor = "pointer";
   }
 
-  it("marks a cursor-pointer div and returns tag + trimmed text", () => {
+  it("finds a cursor-pointer div; describe returns tag + trimmed text", () => {
     document.body.innerHTML = `<div id="card">  Open   thing  </div>`;
     const card = document.getElementById("card") as HTMLElement;
     makeRect(card, { width: 100, height: 30 });
     styleClickable(card);
 
-    const items = markCursorInteractive(50);
-    expect(items).toEqual([{ i: 0, tag: "div", text: "Open thing" }]);
-    expect(card.getAttribute("data-cr-sweep")).toBe("0");
+    const found = findCursorInteractive(50);
+    expect(found).toEqual([card]);
+    expect(describeSweepElements(found)).toEqual([{ tag: "div", text: "Open thing" }]);
+  });
+
+  it("never writes to the page's DOM", () => {
+    document.body.innerHTML = `<div id="card">x</div>`;
+    const card = document.getElementById("card") as HTMLElement;
+    makeRect(card, { width: 100, height: 30 });
+    styleClickable(card);
+    const before = document.body.innerHTML;
+    const mutations: MutationRecord[] = [];
+    const observer = new MutationObserver((m) => mutations.push(...m));
+    observer.observe(document.body, { subtree: true, attributes: true, childList: true });
+    expect(findCursorInteractive(50).length).toBe(1);
+    mutations.push(...observer.takeRecords());
+    observer.disconnect();
+    expect(mutations).toEqual([]);
+    expect(document.body.innerHTML).toBe(before);
   });
 
   it("skips native interactive elements and their wrappers", () => {
@@ -58,11 +74,10 @@ describe("markCursorInteractive / unmarkCursorInteractive", () => {
       makeRect(el as HTMLElement, { width: 100, height: 30 });
       styleClickable(el as HTMLElement);
     }
-    const items = markCursorInteractive(50);
-    expect(items).toEqual([]); // wrapper contains a button; link IS native
+    expect(findCursorInteractive(50)).toEqual([]); // wrapper contains a button; link IS native
   });
 
-  it("dedupes to the topmost clickable (children of a marked ancestor skip)", () => {
+  it("dedupes to the topmost clickable (descendants of a match skip)", () => {
     document.body.innerHTML = `
       <div id="row"><span id="inner">child text</span></div>
     `;
@@ -73,10 +88,7 @@ describe("markCursorInteractive / unmarkCursorInteractive", () => {
     styleClickable(row);
     styleClickable(inner); // cursor:pointer inherits in real pages
 
-    const items = markCursorInteractive(50);
-    expect(items.length).toBe(1);
-    expect(row.hasAttribute("data-cr-sweep")).toBe(true);
-    expect(inner.hasAttribute("data-cr-sweep")).toBe(false);
+    expect(findCursorInteractive(50)).toEqual([row]);
   });
 
   it("skips invisible and tiny elements", () => {
@@ -92,7 +104,7 @@ describe("markCursorInteractive / unmarkCursorInteractive", () => {
     makeRect(tiny, { width: 2, height: 2 });
     styleClickable(tiny);
 
-    expect(markCursorInteractive(50)).toEqual([]);
+    expect(findCursorInteractive(50)).toEqual([]);
   });
 
   it("respects maxItems and counts tabindex/onclick as clickable", () => {
@@ -104,19 +116,21 @@ describe("markCursorInteractive / unmarkCursorInteractive", () => {
     for (const el of Array.from(document.body.children)) {
       makeRect(el as HTMLElement, { width: 100, height: 30 });
     }
-    const items = markCursorInteractive(2);
-    expect(items.length).toBe(2);
+    expect(findCursorInteractive(2).length).toBe(2);
   });
 
-  it("unmark removes every sweep attribute", () => {
-    document.body.innerHTML = `<div id="card">x</div>`;
-    const card = document.getElementById("card") as HTMLElement;
-    makeRect(card, { width: 100, height: 30 });
-    card.style.cursor = "pointer";
-    markCursorInteractive(50);
-    expect(document.querySelectorAll("[data-cr-sweep]").length).toBe(1);
-    unmarkCursorInteractive();
-    expect(document.querySelectorAll("[data-cr-sweep]").length).toBe(0);
+  it("scope bounds the sweep to one subtree (the scope element included)", () => {
+    document.body.innerHTML = `
+      <section id="scope"><div id="in">in</div></section>
+      <div id="out">out</div>
+    `;
+    for (const id of ["in", "out"]) {
+      const el = document.getElementById(id) as HTMLElement;
+      makeRect(el, { width: 100, height: 30 });
+      styleClickable(el);
+    }
+    const scope = document.getElementById("scope") as HTMLElement;
+    expect(findCursorInteractive(50, scope)).toEqual([document.getElementById("in")]);
   });
 });
 

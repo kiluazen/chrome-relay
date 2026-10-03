@@ -343,6 +343,11 @@ export interface ChromeSnapshotArgs extends TargetArgs {
   /** Default true: long runs (>20) of identical-shape siblings keep the
    *  first 10 + one loud marker line. false = print everything. */
   elide?: boolean;
+  /** Default true: if a navigation is pending or the document is still
+   *  parsing, wait (bounded) for DOMContentLoaded before reading the tree,
+   *  so a snapshot never describes a document that is about to be replaced.
+   *  false = read whatever is there right now. */
+  waitForReady?: boolean;
 }
 export function parseChromeSnapshotArgs(input: unknown): ChromeSnapshotArgs {
   const obj = asObject(input, TOOL_NAMES.SNAPSHOT);
@@ -357,6 +362,8 @@ export function parseChromeSnapshotArgs(input: unknown): ChromeSnapshotArgs {
   if (urls !== undefined) out.urls = urls;
   const diff = optBool(obj, "diff", TOOL_NAMES.SNAPSHOT);
   if (diff !== undefined) out.diff = diff;
+  const waitForReady = optBool(obj, "waitForReady", TOOL_NAMES.SNAPSHOT);
+  if (waitForReady !== undefined) out.waitForReady = waitForReady;
   const elide = optBool(obj, "elide", TOOL_NAMES.SNAPSHOT);
   if (elide !== undefined) out.elide = elide;
   return out;

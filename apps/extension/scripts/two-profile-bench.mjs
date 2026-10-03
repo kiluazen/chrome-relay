@@ -24,6 +24,14 @@ import http from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
+
+function extensionIdFromManifest(manifestPath) {
+  const { key } = JSON.parse(readFileSync(manifestPath, "utf8"));
+  if (!key) throw new Error("extension build has no manifest key; build it in development mode (NODE_ENV=development npx wxt build)");
+  const hex = createHash("sha256").update(Buffer.from(key, "base64")).digest("hex").slice(0, 32);
+  return [...hex].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join("");
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..", "..");
@@ -31,9 +39,9 @@ const EXT_PATH = path.join(ROOT, "apps", "extension", "build", "chrome-mv3");
 const HOST_JS = path.join(ROOT, "packages", "cli", "dist", "native-host.js");
 const CLI_JS = path.join(ROOT, "packages", "cli", "dist", "cli.js");
 const FIXTURE = path.join(ROOT, "apps", "extension", "test", "e2e", "fixtures", "upload.html");
-// Pinned by the manifest key in wxt.config; see LOCAL_UNPACKED_EXTENSION_ID
-// in packages/protocol/src/index.ts.
-const EXTENSION_ID = "cleiodnaklknhhfopegimjelfibjmbkc";
+// Derived from the built manifest's key (wxt.config DEV_KEY), so the
+// native-host manifest always allows the extension that actually loads.
+const EXTENSION_ID = extensionIdFromManifest(path.join(EXT_PATH, "manifest.json"));
 const HOST_NAME = "dev.chrome_relay.native_host";
 
 const HOME = mkdtempSync(path.join(tmpdir(), "chrome-relay-bench-home-"));

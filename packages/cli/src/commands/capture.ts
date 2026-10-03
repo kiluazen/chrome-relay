@@ -2,7 +2,6 @@
 // structural capture commands.
 
 import { writeFileSync } from "node:fs";
-import { structuredPatch } from "diff";
 import { renderSnapshot, RelayError, type SnapshotData } from "@chrome-relay/protocol";
 import { tabOpt, type CommandContext } from "./shared.js";
 import { callTool } from "../client/call.js";
@@ -10,7 +9,8 @@ import { callTool } from "../client/call.js";
 // snapshot --diff (adoption-spec Change 4): print only what changed since
 // the previous snapshot of this tab. The full snapshot was still taken and
 // the ref map refreshed. Refs in the diff are current and clickable.
-function printSnapshotDiff(current: string, prevText: string | null): void {
+// `diff` loads on demand: every other command would pay its import cost.
+async function printSnapshotDiff(current: string, prevText: string | null): Promise<void> {
   if (prevText === null) {
     process.stderr.write("[chrome-relay] no previous snapshot for this tab. Showing full output.\n");
     process.stdout.write(current + "\n");
@@ -20,6 +20,7 @@ function printSnapshotDiff(current: string, prevText: string | null): void {
     process.stdout.write("no changes since last snapshot\n");
     return;
   }
+  const { structuredPatch } = await import("diff");
   const patch = structuredPatch("prev", "current", prevText, current, "", "", { context: 3 });
   let added = 0;
   let removed = 0;
@@ -68,6 +69,7 @@ export function registerCapture(ctx: CommandContext): void {
       .option("-u, --urls", "include link hrefs as url= attrs")
       .option("--diff", "print only what changed since the previous snapshot of this tab (~100 tokens instead of a re-read)")
       .option("--no-elide", "print every row of long identical-shape runs (default keeps 10 + a count marker)")
+      .option("--no-wait", "read the page as-is, even mid-navigation (default waits up to 10s for a pending navigation to reach DOMContentLoaded)")
       .option("--json", "structured output: { title, url, tabId, nodes, refs }")
       .addHelpText(
         "after",
@@ -93,11 +95,12 @@ error.code = stale_ref, which means: re-run snapshot.
     if (opts.urls) extras.urls = true;
     if (opts.diff) extras.diff = true;
     if (opts.elide === false) extras.elide = false;
+    if (opts.wait === false) extras.waitForReady = false;
     try {
       const result = await callTool("chrome_snapshot", withBase(opts, extras));
       if (opts.diff && !opts.json) {
         const data = result as SnapshotData;
-        printSnapshotDiff(renderSnapshot(data), data.prevText ?? null);
+        await printSnapshotDiff(renderSnapshot(data), data.prevText ?? null);
         return;
       }
       printSnapshot(result, opts.json === true);

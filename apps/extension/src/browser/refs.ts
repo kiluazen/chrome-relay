@@ -119,12 +119,19 @@ export function assignRef(entry: SnapshotRefEntry, prior: Map<number, string>): 
 
 /** Allocate the next global ref id for an entry. Returns "eN". */
 export function allocateRef(entry: SnapshotRefEntry): string {
-  // Evict oldest entries (lowest counter = front of insertion order) when
-  // over cap. Map preserves insertion order, so the first keys are oldest.
+  // Evict the oldest OTHER-tab entries when over cap (Map iteration order
+  // is insertion order, so the first keys are oldest). Never this tab's:
+  // beginTabSnapshot already cleared its previous refs, so every remaining
+  // entry for this tab belongs to the snapshot being built — evicting one
+  // would hand the agent a ref that is dead on arrival (a 1,500-row page
+  // used to lose its header links, the ones agents click first). A single
+  // snapshot larger than the cap is allowed to exceed it. This snapshot's
+  // entries were all (re)inserted after beginTabSnapshot, so they sit at
+  // the back: stopping at the first own-tab entry keeps this O(1).
   while (entries.size >= MAX_ENTRIES) {
-    const oldest = entries.keys().next().value;
-    if (oldest === undefined) break;
-    entries.delete(oldest);
+    const oldest = entries.entries().next().value;
+    if (!oldest || oldest[1].tabId === entry.tabId) break;
+    entries.delete(oldest[0]);
   }
   counter += 1;
   const ref = `e${counter}`;
