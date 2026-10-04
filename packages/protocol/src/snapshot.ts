@@ -74,6 +74,9 @@ export interface SnapshotData {
    *  rendered text for this tab (null when there is none). The CLI diffs;
    *  the wire carries both, stdout carries only the changes. */
   prevText?: string | null;
+  /** The document was still loading when the read deadline passed; the
+   *  tree may be partial. Absent when the page was ready. */
+  loading?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -200,7 +203,9 @@ function renderNode(node: SnapshotNode, depth: number, out: string[]): void {
 
 export function renderSnapshot(data: SnapshotData): string {
   const nodes = data.nodes ?? [];
-  const out: string[] = [`Page: ${data.title ?? ""}`, `URL: ${data.url ?? ""}`, `Tab: ${data.tabId ?? "?"}`, ""];
+  const out: string[] = [`Page: ${data.title ?? ""}`, `URL: ${data.url ?? ""}`, `Tab: ${data.tabId ?? "?"}`];
+  if (data.loading) out.push("Loading: page was still loading at read time; this tree may be partial. Re-run snapshot, or wait for an element first.");
+  out.push("");
   for (const node of nodes) renderNode(node, 0, out);
   if (nodes.length === 0) out.push("(empty snapshot — page may still be loading)");
   return out.join("\n");

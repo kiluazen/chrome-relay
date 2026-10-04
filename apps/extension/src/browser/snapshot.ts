@@ -21,8 +21,8 @@ import type {
   SnapshotRefEntry
 } from "@chrome-relay/protocol";
 import { RelayError, renderSnapshot, qualifyRefId, TOOL_NAMES } from "@chrome-relay/protocol";
-import { evalInTab, send } from "./cdp";
-import { markCursorInteractive, unmarkCursorInteractive } from "./page-actions";
+import { send } from "./cdp";
+import { describeSweepElements, findCursorInteractive } from "./page-actions";
 import { assignRef as registerRef, beginTabSnapshot } from "./refs";
 import { getWireRefPrefix } from "./identity";
 
@@ -73,16 +73,6 @@ interface RawAXNode {
   properties?: RawAXProperty[];
   childIds?: string[];
   backendDOMNodeId?: number;
-}
-
-interface RawDomNode {
-  nodeId: number;
-  backendNodeId: number;
-  nodeName: string;
-  attributes?: string[];
-  children?: RawDomNode[];
-  shadowRoots?: RawDomNode[];
-  contentDocument?: RawDomNode;
 }
 
 // Internal tree node — SnapshotNode plus the backendNodeId we need for ref
@@ -198,51 +188,87 @@ function buildAxTree(raw: RawAXNode[], includeUrls: boolean): BuildNode[] {
 }
 
 // ---------------------------------------------------------------------------
-// Cursor-interactive sweep — backendNodeId resolution via one DOM.getDocument
+// Cursor-interactive sweep — element handles → backendNodeIds via CDP
 
-// Collect sweep-tagged backendNodeIds. When `scopeBackendId` is set, only
-// nodes inside that subtree count — `snapshot -s "#modal"` must not hand
-// out actionable refs for cursor-pointer elements elsewhere on the page.
-function collectSweepBackendIds(
-  root: RawDomNode,
-  out: Map<number, number>,
-  scopeBackendId: number | undefined,
-  inScope: boolean
-): void {
-  const nowInScope = inScope || scopeBackendId === undefined || root.backendNodeId === scopeBackendId;
-  const attrs = root.attributes;
-  if (nowInScope && attrs) {
-    for (let i = 0; i + 1 < attrs.length; i += 2) {
-      if (attrs[i] === "data-cr-sweep") {
-        const idx = Number(attrs[i + 1]);
-        if (Number.isFinite(idx)) out.set(idx, root.backendNodeId);
-      }
-    }
-  }
-  for (const c of root.children ?? []) collectSweepBackendIds(c, out, scopeBackendId, nowInScope);
-  for (const s of root.shadowRoots ?? []) collectSweepBackendIds(s, out, scopeBackendId, nowInScope);
-  if (root.contentDocument) collectSweepBackendIds(root.contentDocument, out, scopeBackendId, nowInScope);
+interface RemoteObjectResponse {
+  result: { objectId?: string; value?: unknown };
+  exceptionDetails?: { text: string; exception?: { description?: string } };
 }
 
+// The finder runs in the page and hands back the elements themselves (an
+// array RemoteObject); each element's backendNodeId comes from
+// DOM.describeNode on its handle. The page is never written to, and the
+// cost scales with the matches (<= SWEEP_MAX) instead of the whole DOM —
+// the previous mark-and-walk needed a full DOM.getDocument (141ms of a
+// 550ms Wikipedia snapshot). Handles live in one object group, released
+// in finally.
 async function runSweep(
   tabId: number,
   scopeBackendId?: number
 ): Promise<{ backendNodeId: number; tag: string; text: string }[]> {
-  const items = await evalInTab(tabId, markCursorInteractive, [SWEEP_MAX]);
+  const objectGroup = "chrome-relay-sweep";
+  const finder = `(${findCursorInteractive.toString()})`;
   try {
-    if (!items || items.length === 0) return [];
-    const doc = await send<{ root: RawDomNode }>(tabId, "DOM.getDocument", { depth: -1, pierce: true });
-    const byIdx = new Map<number, number>();
-    collectSweepBackendIds(doc.root, byIdx, scopeBackendId, false);
-    const out: { backendNodeId: number; tag: string; text: string }[] = [];
-    for (const item of items) {
-      const backendNodeId = byIdx.get(item.i);
-      if (backendNodeId !== undefined) out.push({ backendNodeId, tag: item.tag, text: item.text });
+    let found: RemoteObjectResponse;
+    if (scopeBackendId !== undefined) {
+      const scope = await send<{ object: { objectId?: string } }>(tabId, "DOM.resolveNode", {
+        backendNodeId: scopeBackendId,
+        objectGroup
+      });
+      if (!scope.object?.objectId) return [];
+      found = await send<RemoteObjectResponse>(tabId, "Runtime.callFunctionOn", {
+        objectId: scope.object.objectId,
+        functionDeclaration: `function (max) { return ${finder}(max, this); }`,
+        arguments: [{ value: SWEEP_MAX }],
+        objectGroup
+      });
+    } else {
+      found = await send<RemoteObjectResponse>(tabId, "Runtime.evaluate", {
+        expression: `${finder}(${SWEEP_MAX}, null)`,
+        objectGroup
+      });
     }
+    const arrayId = found.result?.objectId;
+    if (found.exceptionDetails || !arrayId) return [];
+
+    const [meta, props] = await Promise.all([
+      send<RemoteObjectResponse>(tabId, "Runtime.callFunctionOn", {
+        objectId: arrayId,
+        functionDeclaration: `function () { return (${describeSweepElements.toString()})(this); }`,
+        returnByValue: true,
+        objectGroup
+      }),
+      send<{ result: { name: string; value?: { objectId?: string } }[] }>(tabId, "Runtime.getProperties", {
+        objectId: arrayId,
+        ownProperties: true
+      })
+    ]);
+    const labels = (meta.result?.value ?? []) as { tag: string; text: string }[];
+    if (labels.length === 0) return [];
+
+    const handles: (string | undefined)[] = [];
+    for (const p of props.result ?? []) {
+      const i = Number(p.name);
+      if (Number.isInteger(i) && i >= 0 && i < labels.length) handles[i] = p.value?.objectId;
+    }
+    const described = await Promise.all(
+      labels.map((_, i) =>
+        handles[i]
+          ? send<{ node: { backendNodeId: number } }>(tabId, "DOM.describeNode", { objectId: handles[i] })
+              .then((d) => d.node.backendNodeId)
+              .catch(() => undefined)
+          : Promise.resolve(undefined)
+      )
+    );
+    const out: { backendNodeId: number; tag: string; text: string }[] = [];
+    labels.forEach((label, i) => {
+      const backendNodeId = described[i];
+      if (backendNodeId !== undefined) out.push({ backendNodeId, tag: label.tag, text: label.text });
+    });
     return out;
   } finally {
-    await evalInTab(tabId, unmarkCursorInteractive, []).catch(() => {
-      /* cleanup is best-effort; attribute leaks are inert */
+    await send(tabId, "Runtime.releaseObjectGroup", { objectGroup }).catch(() => {
+      /* best effort — the group dies with the document anyway */
     });
   }
 }
@@ -388,11 +414,6 @@ export async function buildSnapshot(
   tabId: number,
   opts: Pick<ChromeSnapshotArgs, "interactiveOnly" | "depth" | "scope" | "urls" | "diff" | "elide">
 ): Promise<SnapshotData> {
-  await send(tabId, "Accessibility.enable", {});
-  const response = await send<{ nodes: RawAXNode[] }>(tabId, "Accessibility.getFullAXTree", { depth: -1 });
-
-  let tree = buildAxTree(response.nodes ?? [], opts.urls === true);
-
   // --scope <css>: resolve the scope element FIRST so both the AX subtree
   // filter AND the sweep are bounded by it — a scoped snapshot must never
   // hand out actionable refs for elements outside the scope.
@@ -417,11 +438,20 @@ export async function buildSnapshot(
       nodeId: match.nodeId
     });
     scopeBackendId = described.node.backendNodeId;
+  }
+
+  // The AX tree and the sweep are independent reads: overlap them.
+  await send(tabId, "Accessibility.enable", {});
+  const [response, sweepItems] = await Promise.all([
+    send<{ nodes: RawAXNode[] }>(tabId, "Accessibility.getFullAXTree", { depth: -1 }),
+    runSweep(tabId, scopeBackendId)
+  ]);
+
+  let tree = buildAxTree(response.nodes ?? [], opts.urls === true);
+  if (scopeBackendId !== undefined) {
     const subtree = findScopeSubtree(tree, scopeBackendId);
     tree = subtree ? [subtree] : [];
   }
-
-  const sweepItems = await runSweep(tabId, scopeBackendId);
 
   if (opts.interactiveOnly) tree = pruneToRefBearing(tree);
   if (opts.depth !== undefined) tree = truncateDepth(tree, opts.depth);

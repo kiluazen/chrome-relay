@@ -1,7 +1,7 @@
 // tabs / navigate / switch / close / call: the tab-lifecycle and raw
 // pass-through commands.
 
-import { tabOpt, type CommandContext } from "./shared.js";
+import { snapshotOpt, tabOpt, type CommandContext } from "./shared.js";
 
 export function registerNavigation(ctx: CommandContext): void {
   const { program, withBase, run } = ctx;
@@ -20,12 +20,18 @@ export function registerNavigation(ctx: CommandContext): void {
       await run("get_windows_and_tabs", {});
     });
 
-  tabOpt(
+  snapshotOpt(tabOpt(
     program
       .command("navigate <url>")
       .description("Navigate a tab to a URL. Use --tab <id> to target an existing tab.")
       .option("--new", "open in a new tab")
       .option("--active", "unsupported: Chrome Relay operates in the background")
+      .option(
+        "--wait <state>",
+        "return once the page reaches: domcontentloaded (default) | load | commit | none",
+        "domcontentloaded"
+      )
+      .option("--timeout <ms>", "max wait for --wait (default 10000, capped 25000)", (v) => Number(v))
       .addHelpText(
         "after",
         `
@@ -34,12 +40,20 @@ Examples:
   chrome-relay navigate "https://chrome-relay.kushalsm.com"                    # navigate current tab
   chrome-relay navigate --tab 123 "https://chrome-relay.kushalsm.com"          # navigate an existing tab
   chrome-relay navigate "https://chrome-relay.kushalsm.com" --new              # open in a new background tab
+  chrome-relay navigate "https://chrome-relay.kushalsm.com" --new --wait load  # also wait for images/subresources
+  chrome-relay navigate "https://chrome-relay.kushalsm.com" --new --snapshot   # open, then print the page's refs
 
 Chrome Relay operates in the background. Use --tab to target an existing
 tab without selecting it. --active is rejected before navigation.
+
+navigate returns when the new document is usable (DOMContentLoaded), so the
+next snapshot reads the page you asked for. The result reports ready,
+readyState and waitedMs; a slow page returns ready:false instead of failing.
+A network error page returns loadFailed:true. --wait none returns as soon
+as Chrome accepts the navigation.
 `
       )
-  ).action(async (url: string, opts) => {
+  )).action(async (url: string, opts) => {
     if (/^\d+$/.test(url)) {
       process.stderr.write(
         `navigate expects a URL, but "${url}" looks like a tab ID.\n` +
@@ -52,7 +66,15 @@ tab without selecting it. --active is rejected before navigation.
     if (opts.new) extras.newTab = true;
     // Keep legacy flag parsing so the shared validator explains the policy.
     if (opts.active) extras.active = true;
-    await run("chrome_navigate", withBase(opts, extras));
+    const waitUntil = String(opts.wait);
+    if (!["none", "commit", "domcontentloaded", "load"].includes(waitUntil)) {
+      process.stderr.write(`--wait must be one of: domcontentloaded, load, commit, none (got "${waitUntil}").\n`);
+      process.exit(1);
+      return;
+    }
+    extras.waitUntil = waitUntil;
+    if (typeof opts.timeout === "number" && Number.isFinite(opts.timeout)) extras.waitTimeoutMs = opts.timeout;
+    await run("chrome_navigate", withBase(opts, extras), opts.snapshot ? { settle: false } : undefined);
   });
 
   program

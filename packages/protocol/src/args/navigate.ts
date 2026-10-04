@@ -1,5 +1,5 @@
 // chrome_navigate arg schema.
-import { RelayError, TOOL_NAMES } from "./../index";
+import { MAX_WAIT_TIMEOUT_MS, RelayError, TOOL_NAMES } from "./../index";
 import {
   asObject,
   optBool,
@@ -15,7 +15,16 @@ export interface ChromeNavigateArgs extends TargetArgs {
   newTab?: boolean;
   active?: boolean;
   allowPartial?: boolean;
+  /** Return once the new document reaches this state (bounded by
+   *  waitTimeoutMs; a slow page returns ready:false, never an error).
+   *  Omitted = "none": return as soon as Chrome accepts the navigation —
+   *  the pre-0.9 behavior, kept for callers that don't send the field. */
+  waitUntil?: NavigateWaitUntil;
+  waitTimeoutMs?: number;
 }
+
+export type NavigateWaitUntil = "none" | "commit" | "domcontentloaded" | "load";
+const WAIT_UNTIL_VALUES: readonly NavigateWaitUntil[] = ["none", "commit", "domcontentloaded", "load"];
 
 export function parseChromeNavigateArgs(input: unknown): ChromeNavigateArgs {
   const obj = asObject(input, TOOL_NAMES.NAVIGATE);
@@ -63,6 +72,21 @@ export function parseChromeNavigateArgs(input: unknown): ChromeNavigateArgs {
   if (active !== undefined) out.active = active;
   const allowPartial = optBool(obj, "allowPartial", TOOL_NAMES.NAVIGATE);
   if (allowPartial !== undefined) out.allowPartial = allowPartial;
-  void optString; // imported for parity with other parsers; unused here
+  const waitUntil = optString(obj, "waitUntil", TOOL_NAMES.NAVIGATE);
+  if (waitUntil !== undefined) {
+    if (!(WAIT_UNTIL_VALUES as readonly string[]).includes(waitUntil)) {
+      throw new RelayError({
+        code: "invalid_arguments",
+        message: `chrome_navigate: waitUntil must be one of ${WAIT_UNTIL_VALUES.join(" | ")} (got ${JSON.stringify(waitUntil)}).`,
+        tool: TOOL_NAMES.NAVIGATE,
+        phase: "parse_arguments",
+        details: { field: "waitUntil", received: waitUntil },
+        retryable: false
+      });
+    }
+    out.waitUntil = waitUntil as NavigateWaitUntil;
+  }
+  const waitTimeoutMs = optNumber(obj, "waitTimeoutMs", TOOL_NAMES.NAVIGATE);
+  if (waitTimeoutMs !== undefined) out.waitTimeoutMs = Math.max(0, Math.min(waitTimeoutMs, MAX_WAIT_TIMEOUT_MS));
   return out;
 }

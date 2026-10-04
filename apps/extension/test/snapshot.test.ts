@@ -50,14 +50,46 @@ async function load() {
 type Raw = Record<string, unknown>;
 const ax = (nodes: Raw[]) => ({ nodes });
 
-function scriptCdp(axNodes: Raw[], domRoot?: Raw, scope?: { matchNodeId: number; backendNodeId: number }) {
-  sendMock.mockImplementation(async (_tabId: number, method: string) => {
+interface SweepItem { backendNodeId: number; tag: string; text: string; outsideScope?: boolean }
+
+// Scripts the CDP surface buildSnapshot touches. The sweep is modeled the
+// way the extension drives it: the finder returns an array handle, labels
+// come back by value, each element handle describes to a backendNodeId.
+function scriptCdp(
+  axNodes: Raw[],
+  opts: { sweep?: SweepItem[]; scope?: { matchNodeId: number; backendNodeId: number } } = {}
+) {
+  const sweep = opts.sweep ?? [];
+  let found: SweepItem[] = [];
+  sendMock.mockImplementation(async (_tabId: number, method: string, params: Record<string, any> = {}) => {
     switch (method) {
       case "Accessibility.enable": return {};
       case "Accessibility.getFullAXTree": return ax(axNodes);
-      case "DOM.getDocument": return { root: domRoot ?? { nodeId: 1, backendNodeId: 1, nodeName: "HTML" } };
-      case "DOM.querySelector": return { nodeId: scope?.matchNodeId ?? 0 };
-      case "DOM.describeNode": return { node: { backendNodeId: scope?.backendNodeId ?? 0 } };
+      case "DOM.getDocument": return { root: { nodeId: 1, backendNodeId: 1, nodeName: "HTML" } };
+      case "DOM.querySelector": return { nodeId: opts.scope?.matchNodeId ?? 0 };
+      case "DOM.resolveNode": return { object: { objectId: "scope-obj" } };
+      case "DOM.describeNode":
+        if (typeof params.objectId === "string" && params.objectId.startsWith("sweep-el-")) {
+          return { node: { backendNodeId: found[Number(params.objectId.slice(9))].backendNodeId } };
+        }
+        return { node: { backendNodeId: opts.scope?.backendNodeId ?? 0 } };
+      case "Runtime.evaluate":
+        found = sweep;
+        return { result: { objectId: "sweep-arr" } };
+      case "Runtime.callFunctionOn":
+        if (params.objectId === "scope-obj") {
+          found = sweep.filter((i) => !i.outsideScope);
+          return { result: { objectId: "sweep-arr" } };
+        }
+        return { result: { value: found.map(({ tag, text }) => ({ tag, text })) } };
+      case "Runtime.getProperties":
+        return {
+          result: [
+            ...found.map((_, i) => ({ name: String(i), value: { objectId: `sweep-el-${i}` } })),
+            { name: "length", value: { type: "number", value: found.length } }
+          ]
+        };
+      case "Runtime.releaseObjectGroup": return {};
       default: throw new Error(`unscripted CDP method ${method}`);
     }
   });
@@ -126,24 +158,13 @@ describe("buildSnapshot", () => {
   });
 
   it("merges sweep extras as 'clickable' nodes with refs, deduped by backendNodeId", async () => {
-    // Sweep marks two elements; one (backendNodeId 103) already has an AX ref.
-    evalInTabMock.mockImplementation(async (_tabId: number, fn: { name?: string }) => {
-      if (fn?.name === "markCursorInteractive") {
-        return [
-          { i: 0, tag: "div", text: "Open card" },
-          { i: 1, tag: "span", text: "Dup of Save" }
-        ];
-      }
-      return { cleaned: true };
-    });
-    const domRoot: Raw = {
-      nodeId: 1, backendNodeId: 1, nodeName: "HTML",
-      children: [
-        { nodeId: 2, backendNodeId: 200, nodeName: "DIV", attributes: ["data-cr-sweep", "0"] },
-        { nodeId: 3, backendNodeId: 103, nodeName: "SPAN", attributes: ["data-cr-sweep", "1"] }
+    // Sweep finds two elements; one (backendNodeId 103) already has an AX ref.
+    scriptCdp(FIXTURE, {
+      sweep: [
+        { backendNodeId: 200, tag: "div", text: "Open card" },
+        { backendNodeId: 103, tag: "span", text: "Dup of Save" }
       ]
-    };
-    scriptCdp(FIXTURE, domRoot);
+    });
     const m = await load();
     const data = await m.buildSnapshot(42, {});
 
@@ -153,30 +174,29 @@ describe("buildSnapshot", () => {
     expect(data.refs[sweepNodes[0].ref!]).toMatchObject({ tabId: 42, backendNodeId: 200, role: "clickable" });
   });
 
+  it("sweep reads element handles: no full DOM walk, nothing written to the page, handles released", async () => {
+    scriptCdp(FIXTURE, { sweep: [{ backendNodeId: 200, tag: "div", text: "Open card" }] });
+    const m = await load();
+    await m.buildSnapshot(42, {});
+    const calls = sendMock.mock.calls.map((c) => [c[1], c[2]] as [string, Record<string, unknown>]);
+    expect(calls.some(([method, p]) => method === "DOM.getDocument" && p?.depth === -1)).toBe(false);
+    expect(evalInTabMock).not.toHaveBeenCalled(); // no mark/unmark scripts
+    const evaluated = calls.filter(([method]) => method === "Runtime.evaluate").map(([, p]) => String(p.expression));
+    expect(evaluated.some((e) => e.includes("setAttribute"))).toBe(false);
+    expect(calls.some(([method]) => method === "Runtime.releaseObjectGroup")).toBe(true);
+  });
+
   it("scope bounds BOTH the AX subtree and the sweep — no actionable refs outside it", async () => {
-    // Sweep marks one element inside the scoped subtree and one outside.
-    evalInTabMock.mockImplementation(async (_tabId: number, fn: { name?: string }) => {
-      if (fn?.name === "markCursorInteractive") {
-        return [
-          { i: 0, tag: "div", text: "Inside scope" },
-          { i: 1, tag: "div", text: "Outside scope" }
-        ];
-      }
-      return { cleaned: true };
+    // Sweep finds one element inside the scoped subtree and one outside; the
+    // scoped finder runs on the scope element's handle and returns only the
+    // inside one.
+    scriptCdp(FIXTURE, {
+      sweep: [
+        { backendNodeId: 300, tag: "div", text: "Inside scope" },
+        { backendNodeId: 301, tag: "div", text: "Outside scope", outsideScope: true }
+      ],
+      scope: { matchNodeId: 5, backendNodeId: 101 }
     });
-    // DOM: scope element (backendNodeId 101 = the heading) contains sweep #0;
-    // sweep #1 lives elsewhere on the page.
-    const domRoot: Raw = {
-      nodeId: 1, backendNodeId: 1, nodeName: "HTML",
-      children: [
-        {
-          nodeId: 5, backendNodeId: 101, nodeName: "H1",
-          children: [{ nodeId: 6, backendNodeId: 300, nodeName: "DIV", attributes: ["data-cr-sweep", "0"] }]
-        },
-        { nodeId: 7, backendNodeId: 301, nodeName: "DIV", attributes: ["data-cr-sweep", "1"] }
-      ]
-    };
-    scriptCdp(FIXTURE, domRoot, { matchNodeId: 5, backendNodeId: 101 });
     const m = await load();
     const data = await m.buildSnapshot(42, { scope: "#whatever" });
 
@@ -187,6 +207,8 @@ describe("buildSnapshot", () => {
     expect(sweepNames).toEqual(["Inside scope"]);
     const sweepEntries = Object.values(data.refs).filter((e) => e.role === "clickable");
     expect(sweepEntries.map((e) => e.backendNodeId)).toEqual([300]);
+    // The scoped sweep ran on the scope element, not the whole document.
+    expect(sendMock.mock.calls.some((c) => c[1] === "Runtime.callFunctionOn" && c[2]?.objectId === "scope-obj")).toBe(true);
   });
 
   it("elides long runs of identical-shape siblings: keep 10 + loud marker, refs only for kept", async () => {

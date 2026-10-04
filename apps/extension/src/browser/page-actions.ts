@@ -12,50 +12,53 @@
 // cursor-pointer spans/divs with no role; pure AX filtering hides them all
 // (dash.cloudflare.com, by contrast, measured 0 — it's semantically clean).
 //
-// Tags each match with data-cr-sweep="<i>" so the caller can batch-resolve
-// backendNodeIds via one DOM.getDocument walk, then MUST call
-// unmarkCursorInteractive to clean up. Dedupe is "topmost clickable":
-// cursor:pointer inherits, so children of a marked ancestor are skipped
-// (ancestors come first in document order), as are wrappers around native
-// interactive elements.
-export function markCursorInteractive(maxItems: number) {
+// Returns the matching elements themselves (the caller evaluates this with
+// returnByValue:false and resolves each element's backendNodeId through
+// CDP), so the sweep never writes to the page's DOM: no attribute churn for
+// MutationObservers to react to, nothing to clean up. Dedupe is "topmost
+// clickable": cursor:pointer inherits, so descendants of a match are
+// skipped (ancestors come first in document order), as are wrappers around
+// native interactive elements. `scope` bounds the sweep to one subtree.
+export function findCursorInteractive(maxItems: number, scope?: Element | null) {
   const NATIVE =
     "a,button,input,select,textarea,summary," +
     "[role=button],[role=link],[role=menuitem],[role=tab],[role=checkbox]," +
     "[role=combobox],[role=option],[role=switch],[role=radio],[role=textbox]";
-  const out: { i: number; tag: string; text: string }[] = [];
-  let i = 0;
-  for (const el of Array.from(document.querySelectorAll("*"))) {
-    if (i >= maxItems) break;
+  const candidates = scope
+    ? [scope, ...Array.from(scope.querySelectorAll("*"))]
+    : Array.from(document.querySelectorAll("*"));
+  const picked = new Set<Element>();
+  const out: HTMLElement[] = [];
+  for (const el of candidates) {
+    if (out.length >= maxItems) break;
     if (!(el instanceof HTMLElement)) continue;
-    const rect = el.getBoundingClientRect();
-    if (rect.width < 3 || rect.height < 3) continue;
-    const style = window.getComputedStyle(el);
-    if (style.display === "none" || style.visibility === "hidden") continue;
     if (el.matches(NATIVE)) continue;
-    const cursorClickable = style.cursor === "pointer";
     const otherClickable =
       el.hasAttribute("onclick") || el.tabIndex >= 0 || el.isContentEditable;
-    if (!cursorClickable && !otherClickable) continue;
+    const style = window.getComputedStyle(el);
+    if (style.cursor !== "pointer" && !otherClickable) continue;
+    if (style.display === "none" || style.visibility === "hidden") continue;
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 3 || rect.height < 3) continue;
     if (el.closest(NATIVE)) continue;
-    if (el.parentElement?.closest("[data-cr-sweep]")) continue;
+    let covered = false;
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      if (picked.has(p)) { covered = true; break; }
+    }
+    if (covered) continue;
     if (el.querySelector("a,button,input,select,textarea,summary")) continue;
-    el.setAttribute("data-cr-sweep", String(i));
-    out.push({
-      i,
-      tag: el.tagName.toLowerCase(),
-      text: (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 80)
-    });
-    i += 1;
+    picked.add(el);
+    out.push(el);
   }
   return out;
 }
 
-export function unmarkCursorInteractive() {
-  for (const el of Array.from(document.querySelectorAll("[data-cr-sweep]"))) {
-    el.removeAttribute("data-cr-sweep");
-  }
-  return { cleaned: true };
+// Per-element label for sweep results: tag + trimmed visible text.
+export function describeSweepElements(elements: Element[]) {
+  return elements.map((el) => ({
+    tag: el.tagName.toLowerCase(),
+    text: ((el as HTMLElement).innerText || el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 80)
+  }));
 }
 
 export function locateForClick(selector: string) {
@@ -75,6 +78,29 @@ export function locateForClick(selector: string) {
     y: Math.round(rect.top + rect.height / 2),
     width: Math.round(rect.width),
     height: Math.round(rect.height)
+  };
+}
+
+// Element rect in DOCUMENT coordinates, for Page.captureScreenshot's clip
+// (captureBeyondViewport reads the clip relative to the document, not the
+// viewport — a viewport rect captured the wrong region on any scrolled
+// page). Scrolls the element into view first so a scrolled-away overflow
+// container still shows it.
+export function locateForScreenshot(selector: string) {
+  const element = document.querySelector(selector);
+  if (!(element instanceof HTMLElement)) {
+    throw new Error(`Element not found for selector: ${selector}`);
+  }
+  element.scrollIntoView({ block: "center", inline: "center" });
+  const rect = element.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) {
+    throw new Error(`Element has zero size and cannot be clicked: ${selector}`);
+  }
+  return {
+    x: rect.left + window.scrollX,
+    y: rect.top + window.scrollY,
+    width: rect.width,
+    height: rect.height
   };
 }
 

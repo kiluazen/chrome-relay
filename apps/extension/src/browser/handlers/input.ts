@@ -19,6 +19,7 @@ import {
 import { evalExpression, evalInTab, send } from "../cdp";
 import { resolveRefCenter, resolveRefObjectId, mapPageError } from "../element";
 import { pressKey } from "../keyboard";
+import { armSettle } from "../settle";
 import { fillElement, focusSelector, locateForClick } from "../page-actions";
 import { resolveTarget, requireTabId, type ToolHandler } from "./target";
 
@@ -90,6 +91,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
       // default) is deliberately not consulted.
       const r = await resolveRefCenter(TOOL_NAMES.CLICK, parsed.ref, parsed);
       const urlBefore = (await chrome.tabs.get(r.tabId).catch(() => undefined))?.url;
+      if (parsed.settle) await armSettle(r.tabId);
       await dispatchClick(r.tabId, r.x, r.y);
       const navigated = await detectNavigation(r.tabId, urlBefore, parsed.waitForNavigation);
       return {
@@ -122,6 +124,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
     }
 
     const urlBefore = tab.url;
+    if (parsed.settle) await armSettle(tabId);
     await dispatchClick(tabId, x, y);
     const navigated = await detectNavigation(tabId, urlBefore, parsed.waitForNavigation);
 
@@ -139,6 +142,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
 
     if (parsed.kind === "ref") {
       const r = await resolveRefObjectId(TOOL_NAMES.FILL, parsed.ref, parsed);
+      if (parsed.settle) await armSettle(r.tabId);
       // Same semantics as the in-page fillElement, applied to the resolved
       // node: native prototype setter (bypasses React's value tracker so
       // onChange fires), then input + change events.
@@ -184,6 +188,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
     }
 
     const tab = await resolveTarget(parsed);
+    if (parsed.settle) await armSettle(requireTabId(tab));
     try {
       return await evalInTab(requireTabId(tab), fillElement, [parsed.selector, parsed.value]);
     } catch (e) {
@@ -195,6 +200,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
     const parsed = parseChromeKeyboardArgs(args);
     const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
+    if (parsed.settle) await armSettle(tabId);
     await pressKey(tabId, parsed.keys);
     return { sent: true, keys: parsed.keys };
   },
@@ -207,6 +213,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
       // backendNodeId — no CSS round-trip. No hit-test: focusing a covered
       // element is legitimate (pointer never moves).
       const r = await resolveRefCenter(TOOL_NAMES.TYPE, parsed.ref, parsed, { hitTest: false });
+      if (parsed.settle) await armSettle(r.tabId);
       await send(r.tabId, "DOM.focus", { backendNodeId: r.backendNodeId });
       await send(r.tabId, "Input.insertText", { text: parsed.text });
       return {
@@ -221,6 +228,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
     const tab = await resolveTarget(parsed);
     const tabId = requireTabId(tab);
 
+    if (parsed.settle) await armSettle(tabId);
     let focused: { selector: string } | null = null;
     if (parsed.selector) {
       try {

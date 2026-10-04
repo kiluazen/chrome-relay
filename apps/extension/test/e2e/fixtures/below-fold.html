@@ -1,0 +1,19 @@
+<html>
+<head><title>Below the fold fixture</title><style>body { margin: 0; font: 14px sans-serif; } .row { height: 40px; }</style></head>
+<body>
+  <!-- HN-shaped: no doctype (quirks mode, like HN), a plain table of story
+       links, "More" at the very bottom, no sticky elements. -->
+  <table id="stories"></table>
+  <table><tr><td class="title"><a id="more" href="#more" onmouseenter="window.__log.push('hover')" onclick="window.__log.push('more'); return false">More</a></td></tr></table>
+  <script>
+    window.__log = [];
+    const t = document.getElementById("stories");
+    for (let i = 0; i < 60; i++) {
+      const tr = t.insertRow();
+      tr.className = "row";
+      tr.insertCell().innerHTML = '<a href="#r' + i + '" onclick="window.__log.push(\'row' + i + '\'); return false">Story ' + i + '</a>';
+    }
+    window.__diag = () => ({ log: window.__log.slice(), scrollY: window.scrollY });
+  </script>
+</body>
+</html>

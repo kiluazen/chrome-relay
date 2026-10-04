@@ -33,6 +33,10 @@ export async function startFixtureServer(fixturesDir?: string): Promise<FixtureS
         res.end("not found");
         return;
       }
+      // ?delay=<ms> holds the response, for navigation-readiness specs that
+      // need a document slower than the tab's initial about:blank.
+      const delay = Number(url.searchParams.get("delay") ?? "0");
+      if (delay > 0) await new Promise((r) => setTimeout(r, Math.min(delay, 10_000)));
       const body = await readFile(filePath);
       res.statusCode = 200;
       res.setHeader("content-type", MIME[extname(filePath)] ?? "application/octet-stream");

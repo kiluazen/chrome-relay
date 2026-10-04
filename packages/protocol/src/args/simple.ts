@@ -62,10 +62,18 @@ export function parseChromeReadPageArgs(input: unknown): ChromeReadPageArgs {
 // canvas/SVG chart internals — the agent supplies (x, y) from a prior
 // `getBoundingClientRect()` read via `js`, or from a known screenshot pixel.
 
-export type ChromeClickArgs = { waitForNavigation?: boolean } & (
+export type ChromeClickArgs = { waitForNavigation?: boolean; settle?: boolean } & (
   | (TargetArgs & { kind: "ref"; ref: string })
   | (TargetArgs & { kind: "selector"; selector: string })
   | (TargetArgs & { kind: "coords"; x: number; y: number }));
+
+// Shared by click/fill/keys/type: `settle: true` means a settled snapshot
+// will follow, so the extension starts watching the page's reaction (DOM
+// mutations, requests) BEFORE dispatching the input. Additive: an
+// extension that predates it ignores the field.
+function settleArg(obj: Record<string, unknown>, tool: ToolName): { settle?: true } {
+  return optBool(obj, "settle", tool) === true ? { settle: true } : {};
+}
 
 // Shared by click/fill/type/hover: reject more than one addressing mode in
 // the same call — silent precedence would hide agent mistakes.
@@ -94,7 +102,7 @@ export function parseChromeClickArgs(input: unknown): ChromeClickArgs {
   const obj = asObject(input, TOOL_NAMES.CLICK);
   const target = parseTargetArgs(obj, TOOL_NAMES.CLICK);
   const waitForNavigation = optBool(obj, "waitForNavigation", TOOL_NAMES.CLICK);
-  const wait = waitForNavigation === undefined ? {} : { waitForNavigation };
+  const wait = { ...(waitForNavigation === undefined ? {} : { waitForNavigation }), ...settleArg(obj, TOOL_NAMES.CLICK) };
   const x = optNumber(obj, "x", TOOL_NAMES.CLICK);
   const y = optNumber(obj, "y", TOOL_NAMES.CLICK);
   // Strict: x without y (or vice versa) — same partial-coords rejection
@@ -137,9 +145,9 @@ export function parseChromeClickArgs(input: unknown): ChromeClickArgs {
 // Two addressing shapes — ref OR selector (no coords: filling needs the
 // semantic element). Discriminated like click.
 
-export type ChromeFillArgs =
+export type ChromeFillArgs = { settle?: boolean } & (
   | (TargetArgs & { kind: "ref"; ref: string; value: string })
-  | (TargetArgs & { kind: "selector"; selector: string; value: string });
+  | (TargetArgs & { kind: "selector"; selector: string; value: string }));
 
 export function parseChromeFillArgs(input: unknown): ChromeFillArgs {
   const obj = asObject(input, TOOL_NAMES.FILL);
@@ -159,11 +167,13 @@ export function parseChromeFillArgs(input: unknown): ChromeFillArgs {
   const ref = optString(obj, "ref", TOOL_NAMES.FILL);
   const selector = optString(obj, "selector", TOOL_NAMES.FILL);
   rejectMixedAddressing(TOOL_NAMES.FILL, obj, { ref, selector });
+  const settle = settleArg(obj, TOOL_NAMES.FILL);
   if (ref) {
-    return { ...target, kind: "ref", ref, value: obj.value };
+    return { ...target, ...settle, kind: "ref", ref, value: obj.value };
   }
   return {
     ...target,
+    ...settle,
     kind: "selector",
     selector: requireString(obj, "selector", TOOL_NAMES.FILL),
     value: obj.value
@@ -175,12 +185,14 @@ export function parseChromeFillArgs(input: unknown): ChromeFillArgs {
 
 export interface ChromeKeyboardArgs extends TargetArgs {
   keys: string;
+  settle?: boolean;
 }
 export function parseChromeKeyboardArgs(input: unknown): ChromeKeyboardArgs {
   const obj = asObject(input, TOOL_NAMES.KEYBOARD);
   return {
     keys: requireString(obj, "keys", TOOL_NAMES.KEYBOARD),
-    ...parseTargetArgs(obj)
+    ...parseTargetArgs(obj),
+    ...settleArg(obj, TOOL_NAMES.KEYBOARD)
   };
 }
 
@@ -191,12 +203,14 @@ export interface ChromeTypeArgs extends TargetArgs {
   text: string;
   selector?: string;
   ref?: string; // focus this @ref before inserting (adoption-spec Change 2)
+  settle?: boolean;
 }
 export function parseChromeTypeArgs(input: unknown): ChromeTypeArgs {
   const obj = asObject(input, TOOL_NAMES.TYPE);
   const out: ChromeTypeArgs = {
     text: requireString(obj, "text", TOOL_NAMES.TYPE),
-    ...parseTargetArgs(obj)
+    ...parseTargetArgs(obj),
+    ...settleArg(obj, TOOL_NAMES.TYPE)
   };
   const selector = optString(obj, "selector");
   const ref = optString(obj, "ref", TOOL_NAMES.TYPE);
@@ -343,6 +357,15 @@ export interface ChromeSnapshotArgs extends TargetArgs {
   /** Default true: long runs (>20) of identical-shape siblings keep the
    *  first 10 + one loud marker line. false = print everything. */
   elide?: boolean;
+  /** Default true: if a navigation is pending or the document is still
+   *  parsing, wait (bounded) for DOMContentLoaded before reading the tree,
+   *  so a snapshot never describes a document that is about to be replaced.
+   *  false = read whatever is there right now. */
+  waitForReady?: boolean;
+  /** Wait (bounded) until the DOM has been quiet briefly before reading:
+   *  for a snapshot taken right after an action, so it shows the page's
+   *  reaction rather than the frame before it. Default false. */
+  settle?: boolean;
 }
 export function parseChromeSnapshotArgs(input: unknown): ChromeSnapshotArgs {
   const obj = asObject(input, TOOL_NAMES.SNAPSHOT);
@@ -357,6 +380,10 @@ export function parseChromeSnapshotArgs(input: unknown): ChromeSnapshotArgs {
   if (urls !== undefined) out.urls = urls;
   const diff = optBool(obj, "diff", TOOL_NAMES.SNAPSHOT);
   if (diff !== undefined) out.diff = diff;
+  const waitForReady = optBool(obj, "waitForReady", TOOL_NAMES.SNAPSHOT);
+  if (waitForReady !== undefined) out.waitForReady = waitForReady;
+  const settle = optBool(obj, "settle", TOOL_NAMES.SNAPSHOT);
+  if (settle !== undefined) out.settle = settle;
   const elide = optBool(obj, "elide", TOOL_NAMES.SNAPSHOT);
   if (elide !== undefined) out.elide = elide;
   return out;

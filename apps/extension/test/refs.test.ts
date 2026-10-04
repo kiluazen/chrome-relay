@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 // In-memory chrome.storage.session + tabs mock. The RefMap module registers
 // a tabs.onRemoved listener at import time and persists via storage.session.
@@ -33,6 +33,13 @@ beforeEach(() => {
   };
 });
 
+// refs.ts persists on a 50ms debounce. Let each test's pending write land
+// in its OWN storage mock: a timer that fires after the next beforeEach
+// would seed that test's storage.session with this test's counter.
+afterEach(async () => {
+  await new Promise((r) => setTimeout(r, 60));
+});
+
 async function load() {
   return await import("../src/browser/refs");
 }
@@ -45,6 +52,21 @@ const entry = (tabId: number, backendNodeId: number) => ({
 });
 
 describe("RefMap", () => {
+  it("a snapshot bigger than the cap never evicts its own refs; other tabs go first", async () => {
+    const m = await load();
+    // Another tab's refs exist first (oldest in insertion order).
+    for (let i = 0; i < 10; i++) m.allocateRef(entry(1, i));
+    const prior = await m.beginTabSnapshot(2);
+    const own: string[] = [];
+    for (let i = 0; i < 2500; i++) own.push(m.assignRef(entry(2, 1000 + i), prior));
+    // The first refs of this snapshot (page header links) are still live.
+    expect((await m.getRefEntry(own[0]))?.backendNodeId).toBe(1000);
+    expect((await m.getRefEntry(own[2499]))?.backendNodeId).toBe(3499);
+    // The other tab's entries were the ones evicted.
+    expect(await m.getRefEntry("e1")).toBeUndefined();
+    expect(m.refMapSize()).toBe(2500);
+  });
+
   it("allocates globally monotonic refs that carry tab identity", async () => {
     const m = await load();
     const r1 = m.allocateRef(entry(10, 100));
