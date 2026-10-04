@@ -5,6 +5,13 @@ nav: Overview
 order: 0
 ---
 
+## 0.9 release status
+
+The new browsing loop requires **CLI/native host 0.9.0 and extension 0.9.0**. The extension update is awaiting Chrome Web Store submission. Check `chrome-relay --version` and the `hostVersion` / `extensionVersion` from `chrome-relay profile list` before using it.
+
+If your extension is still 0.8.2, CLI 0.9 rejects readiness navigation, composite `--snapshot`, settle and new recording starts before acting. Use `navigate <url> --new --wait none`, wait for the specific element or text you need, then take a separate snapshot. `chrome-relay update` refreshes the CLI/native host; Chrome updates each extension separately.
+
+
 Chrome Relay lets a terminal agent operate your real Chrome.
 
 Claude Code, Codex, anything that runs shell commands.

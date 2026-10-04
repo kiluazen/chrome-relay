@@ -145,7 +145,10 @@ blockquote p { margin: 0; }
   <main>
     <h1>Chrome Relay docs</h1>
     <p class="page-desc">Your agent drives the Chrome you're signed into. It reads pages, clicks buttons, and fills forms. Nothing leaves the machine.</p>
-    <p>Chrome Relay lets a terminal agent operate your real Chrome.</p>
+    <h2 id="09-release-status">0.9 release status<a class="anchor" href="#09-release-status" aria-hidden="true">#</a></h2>
+<p>The new browsing loop requires <strong>CLI/native host 0.9.0 and extension 0.9.0</strong>. The extension update is awaiting Chrome Web Store submission. Check <code>chrome-relay --version</code> and the <code>hostVersion</code> / <code>extensionVersion</code> from <code>chrome-relay profile list</code> before using it.</p>
+<p>If your extension is still 0.8.2, CLI 0.9 rejects readiness navigation, composite <code>--snapshot</code>, settle and new recording starts before acting. Use <code>navigate &lt;url&gt; --new --wait none</code>, wait for the specific element or text you need, then take a separate snapshot. <code>chrome-relay update</code> refreshes the CLI/native host; Chrome updates each extension separately.</p>
+<p>Chrome Relay lets a terminal agent operate your real Chrome.</p>
 <p>Claude Code, Codex, anything that runs shell commands.</p>
 <p>Not a headless automation browser with an empty profile. The actual browser you&#39;re signed into, with your cookies, SSO sessions, extensions, and localhost tabs.</p>
 <p>It works on background tabs without stealing focus, so you keep browsing while the agent works.</p>

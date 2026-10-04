@@ -2,6 +2,10 @@
 
 Prepared on 2026-10-04. Public npm `latest` and the Chrome Web Store listing were both verified as 0.8.2. Merging code does not distribute a new CLI, extension, or installed skill.
 
+## Execution authorization — 2026-10-05
+
+The user retained Chrome Web Store submission and authorized the remaining merges, CLI publication and site/skill updates. The canonical guide and site may publish ahead of the extension with explicit version requirements and the site's pending-extension notice. The verified upload zip is also copied to `/Users/kushalsm/Downloads/chrome-relay-extension-0.9.0-chrome.zip`. New features remain gated until the connected extension is 0.9.0.
+
 ## Merge order
 
 The current stack is linear: #5 (`multi-profile-upload`) → #7 (`perf/fast-background-clicks`) → #8 (`perf/agent-loop`) → #9 (`feat/agent-cursor`). Release preparation (`release/0.9.0`) is based on #9 and includes the complete stack; merge it after #9. The canonical guide is prepared in [kstack PR #2](https://github.com/kiluazen/kstack/pull/2), held for publication after both components are live.
