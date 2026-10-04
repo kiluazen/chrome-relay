@@ -80,17 +80,28 @@ describe("CLI argument parsing", () => {
       expect(lastBody().args).toMatchObject({ newTab: true });
     });
 
-    // 0.5.20: background is the default. --active is the opt-in to steal focus.
-    // (--inactive flag removed; was always the default after the flip so it
-    // was dead code.)
     it("does NOT set active by default — chrome-relay never steals focus on its own", async () => {
       await runArgs("navigate", "https://example.com");
       expect(lastBody().args).not.toHaveProperty("active");
     });
 
-    it("sets active=true with --active", async () => {
+    it("rejects --active locally before contacting any browser", async () => {
       await runArgs("navigate", "https://example.com", "--active");
-      expect(lastBody().args).toMatchObject({ active: true });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(stderrSpy.mock.calls.map((c) => c[0]).join("\n")).toContain("background_only");
+    });
+
+    it("rejects foreground requests in raw calls and batches even with an older extension", async () => {
+      for (const command of [
+        { name: "chrome_navigate", args: { url: "https://example.com", active: true } },
+        { name: "chrome_switch_tab", args: { tabId: 42 } }
+      ]) {
+        await runArgs("call", command.name, JSON.stringify(command.args));
+        await runArgs("batch", JSON.stringify([command]), "--no-bail");
+      }
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
     it("rejects bare numeric URL with helpful stderr message", async () => {
@@ -507,6 +518,13 @@ describe("CLI argument parsing", () => {
       });
     });
 
+    it("forwards --no-wait as an explicit fast click for refs, selectors and coordinates", async () => {
+      for (const argv of [["@e3"], ["#go"], ["--x", "10", "--y", "20"]]) {
+        await runArgs("click", ...argv, "--no-wait", "--tab", "9");
+        expect(lastBody().args).toMatchObject({ waitForNavigation: false, tabId: 9 });
+      }
+    });
+
     it("forwards --tab", async () => {
       await runArgs("click", "--tab", "9", "#go");
       expect(lastBody().args).toEqual({ selector: "#go", tabId: 9 });
@@ -624,12 +642,32 @@ describe("CLI argument parsing", () => {
   });
 
   describe("switch", () => {
-    it("posts chrome_switch_tab with numeric tabId", async () => {
+    it("rejects switch locally before contacting any browser", async () => {
       await runArgs("switch", "987654");
-      expect(lastBody()).toEqual({
-        name: "chrome_switch_tab",
-        args: { tabId: 987654 }
-      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      expect(stderrSpy.mock.calls.map((c) => c[0]).join("\n")).toContain("--tab 987654");
+    });
+  });
+
+  describe("background recording failures", () => {
+    it("saves partial frames but exits with an error when sampling stopped early", async () => {
+      const { mkdtempSync, readFileSync, rmSync } = await import("node:fs");
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
+      const dir = mkdtempSync(join(tmpdir(), "chrome-relay-recording-test-"));
+      try {
+        mockBridgeResponse({ ok: true, data: {
+          frames: [{ data: Buffer.from("saved frame").toString("base64"), timestamp: 1, width: 1, height: 1 }],
+          frameCount: 1, durationMs: 10, mode: "sampled", captureError: "target disconnected"
+        } });
+        await runArgs("screencast", "stop", "--tab", "42", "--out", dir);
+        expect(readFileSync(join(dir, "frame_0001.jpg"), "utf8")).toBe("saved frame");
+        expect(exitSpy).toHaveBeenCalledWith(1);
+        expect(stderrSpy.mock.calls.map((c) => c[0]).join("\n")).toContain("target disconnected");
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     });
   });
 

@@ -24,12 +24,14 @@ export function registerInput(ctx: CommandContext): void {
       .description("Click an element. Pass a @ref from `snapshot`, a CSS selector, OR --x/--y coordinates.")
       .option("--x <px>", "explicit x coordinate (CSS pixels); requires --y", (v) => Number(v))
       .option("--y <px>", "explicit y coordinate (CSS pixels); requires --x", (v) => Number(v))
+      .option("--no-wait", "skip the 120ms delayed-navigation check; follow with wait or snapshot to verify the result")
       .addHelpText(
         "after",
         `
 
 Examples:
   chrome-relay click @e12
+  chrome-relay click @e12 --no-wait   # fast input; verify the next state yourself
   chrome-relay click 'button[aria-label="Save"]'
   chrome-relay click --tab 123 --x 1327 --y 771
 
@@ -46,6 +48,7 @@ where no DOM handle exists. See docs/clicking-strategies.md.
     // agent sees the typo instead of a silent fallback to selector mode.
     if (typeof opts.x === "number") extras.x = opts.x;
     if (typeof opts.y === "number") extras.y = opts.y;
+    if (opts.wait === false) extras.waitForNavigation = false;
     await run("chrome_click_element", withBase(opts, extras));
   });
 

@@ -80,6 +80,16 @@ describe("simple-tool parsers", () => {
     expectInvalid(() => parseChromeClickArgs({ ref: "e3", selector: ".foo" }));
   });
 
+  it("click: preserves an explicit navigation wait choice in every addressing mode", () => {
+    for (const address of [{ ref: "e3" }, { selector: "#btn" }, { x: 10, y: 20 }]) {
+      expect(parseChromeClickArgs({ ...address, waitForNavigation: false }))
+        .toMatchObject({ ...address, waitForNavigation: false });
+      expect(parseChromeClickArgs({ ...address, waitForNavigation: true }))
+        .toMatchObject({ ...address, waitForNavigation: true });
+    }
+    expectInvalid(() => parseChromeClickArgs({ selector: "#btn", waitForNavigation: "false" }));
+  });
+
   it("fill: requires selector + string value (empty allowed)", () => {
     expectInvalid(() => parseChromeFillArgs({ selector: ".foo" }));        // missing value
     expectInvalid(() => parseChromeFillArgs({ value: "x" }));               // missing selector
@@ -117,9 +127,9 @@ describe("simple-tool parsers", () => {
   it("switch_tab: requires numeric tabId", () => {
     expectInvalid(() => parseChromeSwitchTabArgs({}));
     expectInvalid(() => parseChromeSwitchTabArgs({ tabId: "abc" }));
-    expect(parseChromeSwitchTabArgs({ tabId: 42 })).toEqual({ tabId: 42 });
+    expect(expectInvalid(() => parseChromeSwitchTabArgs({ tabId: 42 })).phase).toBe("background_only");
     // string-numeric coerces (back-compat with shell quoting)
-    expect(parseChromeSwitchTabArgs({ tabId: "42" })).toEqual({ tabId: 42 });
+    expect(expectInvalid(() => parseChromeSwitchTabArgs({ tabId: "42" })).phase).toBe("background_only");
   });
 
   it("close_tabs: requires non-empty numeric array", () => {

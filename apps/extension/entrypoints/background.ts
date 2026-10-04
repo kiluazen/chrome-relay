@@ -13,7 +13,7 @@ export default defineBackground(() => {
   // not on update/reload.
   chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === "install") {
-      chrome.tabs.create({ url: WELCOME_URL });
+      chrome.tabs.create({ url: WELCOME_URL, active: false });
     }
   });
 

@@ -83,6 +83,33 @@ async function load() {
   return tools.runTool;
 }
 
+describe("background-only navigation", () => {
+  it("rejects activation before creating or navigating a tab", async () => {
+    vi.mocked(chrome.tabs.create).mockResolvedValue({ id: 43, windowId: 1 } as chrome.tabs.Tab);
+    vi.mocked(chrome.tabs.get).mockResolvedValue({ id: 42, windowId: 1 } as chrome.tabs.Tab);
+    const runTool = await load();
+    for (const newTab of [true, false]) {
+      await expect(runTool("chrome_navigate", { url: "https://example.com", tabId: 42, newTab, active: true }))
+        .rejects.toMatchObject({ code: "invalid_arguments", phase: "background_only" });
+    }
+    const { send } = await import("../src/browser/cdp");
+    expect(send).not.toHaveBeenCalled();
+    expect(chrome.tabs.create).not.toHaveBeenCalled();
+    expect(chrome.tabs.update).not.toHaveBeenCalled();
+    expect(chrome.windows.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects switch without focusing a window or selecting a tab", async () => {
+    vi.mocked(chrome.tabs.get).mockResolvedValue({ id: 42, windowId: 1 } as chrome.tabs.Tab);
+    const runTool = await load();
+    await expect(runTool("chrome_switch_tab", { tabId: 42 }))
+      .rejects.toMatchObject({ code: "invalid_arguments", phase: "background_only" });
+    expect(chrome.tabs.get).not.toHaveBeenCalled();
+    expect(chrome.tabs.update).not.toHaveBeenCalled();
+    expect(chrome.windows.update).not.toHaveBeenCalled();
+  });
+});
+
 describe("chrome_navigate --new --tab <id> strict behavior", () => {
   it("throws target_not_found when the reference tab doesn't exist", async () => {
     (globalThis as any).chrome.tabs.get.mockRejectedValueOnce(new Error("No tab with id: 999"));

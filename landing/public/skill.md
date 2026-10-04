@@ -7,6 +7,8 @@ description: Use when an agent needs to operate the user's real Chrome session: 
 
 Drives the user's real Chrome through a Chrome extension + local native host. Prefer it when logged-in browser state (auth cookies, sessions, installed extensions) matters.
 
+Keep all automation in the background. Target tabs with `--tab` or qualified refs; never activate a tab, raise a window, or use foreground input as a fallback. `--active` and `switch` are rejected. Run tests and benchmarks only in isolated headless Chromium. Recordings sample screenshots and may miss changes between samples.
+
 ## Setup
 
 1. [Chrome extension](https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb)
@@ -58,7 +60,7 @@ Snapshot output is compact indented text, usually 1 to 15 KB for most pages. Rea
 | Command | What it does |
 |---|---|
 | `tabs` | List windows + tabs with their `tabId`s |
-| `navigate <url>` | Open in current tab. `--new` opens in a **background** tab (default). `--active` brings it to foreground. `--tab <id>` retargets an existing tab. |
+| `navigate <url>` | Open in current tab. `--new` opens in a **background** tab. `--active` is rejected. `--tab <id>` retargets an existing tab without selecting it. |
 | `snapshot --tab <id> -i` | Page snapshot with actionable `@refs`: accessibility tree plus cursor-interactive sweep, one ref space, compact text. `-d N` depth cap, `-s <css>` scope to subtree, `-u` include hrefs, `--diff` print only changes since the last snapshot, `--json` structured envelope with the refs map. |
 | `wait <css\|@ref>` / `wait --text` / `--url <glob>` / `--load networkidle` / `--fn <js>` | Block until a condition holds (one per call, default 10s, max 25s). `wait 1500` just sleeps. On timeout the error includes current page state. |
 | `get text\|value\|attr\|count\|title\|url <target>` | One value, plain to stdout. No full snapshot. `get text @e12`, `get attr @e7 href`, `get count ".row"`. |
@@ -72,12 +74,12 @@ Snapshot output is compact indented text, usually 1 to 15 KB for most pages. Rea
 | `keys <chord> --tab <id>` | Single key or chord: `Enter`, `Tab`, `Escape`, `Cmd+K`, `Shift+ArrowDown`. |
 | `js <code> --tab <id>` | `Runtime.evaluate` in MAIN world. Use `return` for the value. Top-level `await` works. |
 | `screenshot --tab <id> -o <path>` | PNG. `--full` captures beyond viewport. `--max-edge N` resizes. |
-| `screencast --tab <id> -o <path>` | Record a tab via CDP (paint-driven). Requires an active tab. |
+| `screencast start --tab <id>` / `screencast stop --tab <id> --out <path>` | Record sampled screenshots in the background, up to 15fps. |
 | `network --tab <id>` | HTTP request/response ring buffer, last 200 per tab. `network body <requestId>` fetches a body while Chrome still has it. `network har --with-bodies` exports a HAR with bodies. |
 | `console --tab <id>` | `console.log/warn/error` + page exceptions, last 200. |
 | `viewport` | Emulate device viewport, DPR, mobile flag, touch, UA. |
 | `workspace` / `group` | Manage named windows / tab-groups so multiple agents can drive separate windows. |
-| `switch <tabId>` / `close <tabIds...>` | Activate or close tabs |
+| `switch <tabId>` / `close <tabIds...>` | Switch is rejected; use `--tab` to target a tab. Close removes tabs. |
 | `self-reload` | Restart the extension's service worker after a rebuild |
 | `release-notes --since <ver>` / `update` | Queryable changelog; agent-readable JSON. |
 | `call <tool> [json]` | Raw pass-through for any internal tool. |

@@ -221,17 +221,16 @@ Notes:
     await run("chrome_click_ax", withBase(opts, { node: opts.node }));
   });
 
-  // ---------- screencast (Page.startScreencast / stopScreencast) ----------
-  // Paint-driven JPEG frame capture. Catches CSS transitions, fade-ins,
-  // hover tooltips, everything Page.captureScreenshot polling misses.
-  // REQUIRES an active tab (Chrome doesn't paint backgrounded tabs).
+  // ---------- screencast (background screenshot sampling) ----------
+  // Samples at up to 15fps without activating a tab. May miss animations
+  // between samples; returns actual capture timestamps for analysis.
   // CLI shape: start returns immediately, stop returns frames JSON or
   // writes them to disk + invokes ffmpeg if --out is given. Stop runs a
   // SHA-256 dedupe pass by default; pass --no-dedupe to keep raw frames.
   // See docs/recording.md.
   const screencast = program
     .command("screencast")
-    .description("Record a tab via CDP (paint-driven). Requires an active tab.")
+    .description("Record sampled screenshots in the background without selecting the tab.")
     .addHelpText(
       "after",
       `
@@ -246,8 +245,8 @@ Examples:
   # the frames at /tmp/recording.gif.
 
 Notes:
-  Frames buffer in the extension service worker. A 10-second capture at
-  default settings (jpeg q=60, ~15fps, full viewport) lands ~2-3 MB.
+  Frames buffer in the extension service worker, sampled at up to 15fps.
+  This works on background tabs and can miss changes between samples.
   Pass --max-width to downscale and lighten the buffer.
   Each frame is base64 JPEG; the CLI decodes them when --out is given.
 `
@@ -261,7 +260,7 @@ Notes:
       .option("--quality <n>",  "jpeg quality 0-100 (default 80)", (v) => Number(v))
       .option("--max-width <px>",  "downscale; aspect preserved", (v) => Number(v))
       .option("--max-height <px>", "downscale; aspect preserved", (v) => Number(v))
-      .option("--every-nth <n>",   "throttle: keep 1 in N frames (default 1)", (v) => Number(v))
+      .option("--every-nth <n>",   "multiply the 67ms sampling interval by N (default 1)", (v) => Number(v))
   ).action(async (opts) => {
     const extras: Record<string, unknown> = { action: "start" };
     if (opts.format)                       extras.format = opts.format;
@@ -289,10 +288,20 @@ Notes:
         frameCount: number;
         durationMs: number;
         frames: Array<{ data: string; timestamp: number; width: number; height: number }>;
+        captureError?: string;
       };
+      const captureFailure = result.captureError ? new RelayError({
+        code: "internal_error",
+        message: `Background recording stopped early: ${result.captureError}`,
+        tool: "chrome_screencast",
+        phase: "capture_samples",
+        details: { frameCount: result.frameCount, ...(opts.out ? { savedTo: opts.out } : {}) },
+        retryable: false
+      }) : undefined;
       if (!opts.out) {
         const { frames, ...summary } = result;
         process.stdout.write(JSON.stringify({ ...summary, framesOmitted: frames.length, hint: "pass --out <dir> to save" }, null, 2) + "\n");
+        if (captureFailure) throw captureFailure;
         return;
       }
       const { mkdirSync, writeFileSync: wf, renameSync, unlinkSync } = await import("node:fs");
@@ -304,6 +313,8 @@ Notes:
         wf(path.join(opts.out, name), Buffer.from(f.data, "base64"));
       });
       process.stdout.write(`Wrote ${result.frames.length} frames to ${opts.out}\n`);
+      // Preserve evidence, but do not silently stitch an incomplete recording.
+      if (captureFailure) throw captureFailure;
 
       // Dedupe: SHA-256 each frame, drop those whose hash matches the
       // previous one, renumber survivors so ffmpeg's image2 reader stays
@@ -394,6 +405,9 @@ Notes:
       process.stderr.write(
         (error instanceof Error ? error.message : String(error)) + "\n"
       );
+      if (error instanceof RelayError) {
+        process.stderr.write(JSON.stringify({ relayError: error.toBridgeError() }, null, 2) + "\n");
+      }
       process.exit(1);
     }
   });

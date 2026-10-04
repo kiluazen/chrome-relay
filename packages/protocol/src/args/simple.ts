@@ -62,10 +62,10 @@ export function parseChromeReadPageArgs(input: unknown): ChromeReadPageArgs {
 // canvas/SVG chart internals — the agent supplies (x, y) from a prior
 // `getBoundingClientRect()` read via `js`, or from a known screenshot pixel.
 
-export type ChromeClickArgs =
+export type ChromeClickArgs = { waitForNavigation?: boolean } & (
   | (TargetArgs & { kind: "ref"; ref: string })
   | (TargetArgs & { kind: "selector"; selector: string })
-  | (TargetArgs & { kind: "coords"; x: number; y: number });
+  | (TargetArgs & { kind: "coords"; x: number; y: number }));
 
 // Shared by click/fill/type/hover: reject more than one addressing mode in
 // the same call — silent precedence would hide agent mistakes.
@@ -93,6 +93,8 @@ export function rejectMixedAddressing(
 export function parseChromeClickArgs(input: unknown): ChromeClickArgs {
   const obj = asObject(input, TOOL_NAMES.CLICK);
   const target = parseTargetArgs(obj, TOOL_NAMES.CLICK);
+  const waitForNavigation = optBool(obj, "waitForNavigation", TOOL_NAMES.CLICK);
+  const wait = waitForNavigation === undefined ? {} : { waitForNavigation };
   const x = optNumber(obj, "x", TOOL_NAMES.CLICK);
   const y = optNumber(obj, "y", TOOL_NAMES.CLICK);
   // Strict: x without y (or vice versa) — same partial-coords rejection
@@ -111,13 +113,13 @@ export function parseChromeClickArgs(input: unknown): ChromeClickArgs {
   const selector = optString(obj, "selector", TOOL_NAMES.CLICK);
   rejectMixedAddressing(TOOL_NAMES.CLICK, obj, { ref, selector, coords: x !== undefined });
   if (ref) {
-    return { ...target, kind: "ref", ref };
+    return { ...target, ...wait, kind: "ref", ref };
   }
   if (x !== undefined && y !== undefined) {
-    return { ...target, kind: "coords", x, y };
+    return { ...target, ...wait, kind: "coords", x, y };
   }
   if (selector) {
-    return { ...target, kind: "selector", selector };
+    return { ...target, ...wait, kind: "selector", selector };
   }
   throw new RelayError({
     code: "invalid_arguments",
@@ -239,7 +241,15 @@ export function parseChromeSwitchTabArgs(input: unknown): ChromeSwitchTabArgs {
       retryable: false
     });
   }
-  return { tabId: coerceTabId(obj.tabId, TOOL_NAMES.SWITCH_TAB) };
+  const tabId = coerceTabId(obj.tabId, TOOL_NAMES.SWITCH_TAB);
+  throw new RelayError({
+    code: "invalid_arguments",
+    message: `Chrome Relay operates in the background. Use --tab ${tabId} on the next command instead of switching tabs.`,
+    tool: TOOL_NAMES.SWITCH_TAB,
+    phase: "background_only",
+    details: { tabId },
+    retryable: false
+  });
 }
 
 // ---------------------------------------------------------------------------

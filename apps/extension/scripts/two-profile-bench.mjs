@@ -100,7 +100,8 @@ async function launchProfile(tag) {
   );
 
   const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
+    channel: "chromium",
+    headless: true,
     args: [
       `--disable-extensions-except=${EXT_PATH}`,
       `--load-extension=${EXT_PATH}`,

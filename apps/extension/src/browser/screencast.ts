@@ -1,145 +1,132 @@
-// Screencast — wraps CDP Page.startScreencast / Page.stopScreencast.
-//
-// Why screencast (vs the existing Page.captureScreenshot loop):
-// captureScreenshot is a *pull*: you get whatever frame the compositor has
-// committed at the moment of the call. Between two calls, Chrome can paint
-// dozens of intermediate frames you never see — fade-ins, focus-ring fades,
-// tooltip pop-ins, any CSS transition under ~300ms. startScreencast is a
-// *push*: every compositor frame is shoved down the CDP channel, so the
-// agent (or the recording) gets a paint-faithful timeline.
-//
-// IMPORTANT: screencast requires the tab to be ACTIVE. Chrome doesn't run
-// paint loops on backgrounded tabs, so startScreencast on a non-active tab
-// returns 0 frames. This is a real limitation, not a bug. Use chrome.tabs.
-// update({active:true}) before starting if needed. (chrome_screenshot does
-// work on backgrounded tabs — CDP forces a paint when you ask for one.)
-//
-// Buffering: frames stream in via chrome.debugger.onEvent (Page.screencastFrame)
-// and we accumulate them per-tab until stopScreencast is called. Each frame
-// must be ACK'd via Page.screencastFrameAck or the stream pauses. Frames
-// are base64 JPEG strings, ~5-30 KB each at quality 80; a 10s capture at
-// 15fps lands around 2-5 MB in SW memory. Acceptable. Dedupe happens in
-// the CLI's screencast stop, after frames are written to disk — keeps the
-// raw stream intact for callers that pass --no-dedupe.
-
+// Background recording samples Page.captureScreenshot rather than depending
+// on compositor events, which stop when a tab is covered or backgrounded.
+// Capture never selects a tab, raises a window, or moves the user's pointer.
 import { RelayError, TOOL_NAMES } from "@chrome-relay/protocol";
-import { ensureAttached, send } from "./cdp";
+import { send } from "./cdp";
 
 export interface ScreencastFrame {
-  data: string;       // base64 JPEG (no data: URL prefix)
-  timestamp: number;  // CDP wall-clock seconds (multiply by 1000 for ms)
+  data: string;
+  timestamp: number;
   width: number;
   height: number;
 }
 
+export interface StartOptions {
+  format?: "jpeg" | "png";
+  quality?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  everyNthFrame?: number;
+}
+
 interface TabSession {
   frames: ScreencastFrame[];
-  listener: (source: chrome.debugger.Debuggee, method: string, params: unknown) => void;
   startedAt: number;
+  stopped: boolean;
+  timer?: ReturnType<typeof setTimeout>;
+  pending?: Promise<void>;
+  captureError?: string;
 }
 
 const sessions = new Map<number, TabSession>();
 
-export interface StartOptions {
-  format?: "jpeg" | "png";   // default jpeg (smaller)
-  quality?: number;          // 0-100, jpeg only; default 80
-  maxWidth?: number;         // cap; CDP picks aspect-preserving height
-  maxHeight?: number;
-  everyNthFrame?: number;    // throttle the stream; default 1
+async function captureFrame(tabId: number, opts: StartOptions): Promise<ScreencastFrame> {
+  const format = opts.format ?? "jpeg";
+  const { data } = await send<{ data: string }>(tabId, "Page.captureScreenshot", {
+    format,
+    ...(format === "jpeg" ? { quality: opts.quality ?? 80 } : {}),
+    captureBeyondViewport: false
+  });
+  const timestamp = Date.now() / 1000;
+  const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
+  const bitmap = await createImageBitmap(new Blob([bytes], { type: `image/${format}` }));
+  try {
+    const scale = Math.min(1, (opts.maxWidth ?? bitmap.width) / bitmap.width,
+      (opts.maxHeight ?? bitmap.height) / bitmap.height);
+    const width = Math.max(1, Math.floor(bitmap.width * scale));
+    const height = Math.max(1, Math.floor(bitmap.height * scale));
+    if (scale === 1) return { data, timestamp, width, height };
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("OffscreenCanvas 2d context unavailable");
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    const blob = await canvas.convertToBlob({ type: `image/${format}`, quality: (opts.quality ?? 80) / 100 });
+    const scaled = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    for (let i = 0; i < scaled.length; i += 8192) {
+      binary += String.fromCharCode(...scaled.subarray(i, i + 8192));
+    }
+    return { data: btoa(binary), timestamp, width, height };
+  } finally {
+    bitmap.close();
+  }
 }
 
-interface RawScreencastFrame {
-  data: string;
-  sessionId: number;
-  metadata: {
-    timestamp?: number;
-    deviceWidth?: number;
-    deviceHeight?: number;
-  };
-}
-
-export async function startScreencast(tabId: number, opts: StartOptions = {}): Promise<{ started: boolean }> {
+export async function startScreencast(tabId: number, opts: StartOptions = {}): Promise<{
+  started: boolean; mode: "sampled"; intervalMs: number;
+}> {
   if (sessions.has(tabId)) {
     throw new RelayError({
       code: "invalid_arguments",
       message: `Screencast already running on tab ${tabId}. Call screencast stop --tab ${tabId} first.`,
-      tool: TOOL_NAMES.SCREENCAST,
-      phase: "start_screencast",
-      details: { tabId },
-      retryable: false
+      tool: TOOL_NAMES.SCREENCAST, phase: "start_screencast", details: { tabId }, retryable: false
     });
   }
-  await ensureAttached(tabId);
-  await send(tabId, "Page.enable", {});
-
-  const frames: ScreencastFrame[] = [];
-
-  // Single chrome.debugger.onEvent listener per session. Routes Page.screencastFrame
-  // for this tab into our buffer + ACKs to keep the stream flowing.
-  const listener = (source: chrome.debugger.Debuggee, method: string, params: unknown) => {
-    if (source.tabId !== tabId) return;
-    if (method !== "Page.screencastFrame") return;
-    const frame = params as RawScreencastFrame;
-    frames.push({
-      data: frame.data,
-      timestamp: frame.metadata?.timestamp ?? Date.now() / 1000,
-      width: frame.metadata?.deviceWidth ?? 0,
-      height: frame.metadata?.deviceHeight ?? 0
-    });
-    // Must ACK or CDP throttles us down to nothing within a second or two.
-    send(tabId, "Page.screencastFrameAck", { sessionId: frame.sessionId }).catch(() => {
-      // ACK failures usually mean the SW lost the debugger session — the
-      // outer listener will be removed when stopScreencast runs; nothing to do here.
-    });
+  const session: TabSession = { frames: [], startedAt: Date.now(), stopped: false };
+  sessions.set(tabId, session);
+  const intervalMs = Math.round(1000 / 15 * (opts.everyNthFrame ?? 1));
+  const capture = async () => {
+    const frame = await captureFrame(tabId, opts);
+    if (!session.stopped) session.frames.push(frame);
   };
-  chrome.debugger.onEvent.addListener(listener);
-
-  await send(tabId, "Page.startScreencast", {
-    format: opts.format ?? "jpeg",
-    quality: opts.quality ?? 80,
-    maxWidth: opts.maxWidth,
-    maxHeight: opts.maxHeight,
-    everyNthFrame: opts.everyNthFrame ?? 1
-  });
-
-  sessions.set(tabId, { frames, listener, startedAt: Date.now() });
-  return { started: true };
+  const tick = async () => {
+    const started = Date.now();
+    session.pending = capture();
+    try {
+      await session.pending;
+    } catch (error) {
+      session.captureError = error instanceof Error ? error.message : String(error);
+      session.stopped = true;
+    }
+    if (!session.stopped) session.timer = setTimeout(tick, Math.max(0, intervalMs - (Date.now() - started)));
+  };
+  try {
+    session.pending = capture();
+    await session.pending;
+    if (!session.stopped) session.timer = setTimeout(tick, intervalMs);
+  } catch (error) {
+    session.stopped = true;
+    sessions.delete(tabId);
+    throw error;
+  }
+  return { started: true, mode: "sampled", intervalMs };
 }
 
 export async function stopScreencast(tabId: number): Promise<{
-  frameCount: number;
-  durationMs: number;
-  frames: ScreencastFrame[];
+  frameCount: number; durationMs: number; frames: ScreencastFrame[]; mode: "sampled"; captureError?: string;
 }> {
   const session = sessions.get(tabId);
   if (!session) {
     throw new RelayError({
-      code: "target_not_found",
-      message: `No screencast running on tab ${tabId}.`,
-      tool: TOOL_NAMES.SCREENCAST,
-      phase: "stop_screencast",
-      details: { tabId },
-      retryable: false
+      code: "target_not_found", message: `No screencast running on tab ${tabId}.`,
+      tool: TOOL_NAMES.SCREENCAST, phase: "stop_screencast", details: { tabId }, retryable: false
     });
   }
-  try {
-    await send(tabId, "Page.stopScreencast", {});
-  } catch {
-    // Tab may have closed; we still want to return whatever frames we buffered.
-  }
-  chrome.debugger.onEvent.removeListener(session.listener);
+  session.stopped = true;
+  if (session.timer) clearTimeout(session.timer);
+  await session.pending?.catch(() => {});
   sessions.delete(tabId);
   return {
-    frameCount: session.frames.length,
-    durationMs: Date.now() - session.startedAt,
-    frames: session.frames
+    frameCount: session.frames.length, durationMs: Date.now() - session.startedAt,
+    frames: session.frames, mode: "sampled",
+    ...(session.captureError ? { captureError: session.captureError } : {})
   };
 }
 
-// Auto-clean on tab close — leftover sessions would leak the listener.
 chrome.tabs.onRemoved.addListener((tabId) => {
   const session = sessions.get(tabId);
   if (!session) return;
-  chrome.debugger.onEvent.removeListener(session.listener);
+  session.stopped = true;
+  if (session.timer) clearTimeout(session.timer);
   sessions.delete(tabId);
 });

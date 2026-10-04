@@ -7,6 +7,8 @@ import {
   MAX_WAIT_TIMEOUT_MS
 } from "../limits";
 import { RelayError, TOOL_NAMES, type ToolArguments, type ToolName } from "./../index";
+import { parseChromeNavigateArgs } from "./navigate";
+import { parseChromeSwitchTabArgs } from "./simple";
 import {
   asObject,
   optBool,
@@ -132,7 +134,13 @@ export function parseChromeBatchArgs(input: unknown): ChromeBatchArgs {
         retryable: false
       });
     }
-    return { name: name as ToolName, args: (cmd.args as ToolArguments) ?? {} };
+    const args = (cmd.args as ToolArguments) ?? {};
+    // Reject foreground operations before transmitting a batch, even when
+    // the connected extension predates this policy. Other per-command errors
+    // still belong to the executor so bail/no-bail behavior is preserved.
+    if (name === TOOL_NAMES.NAVIGATE && args.active === true) parseChromeNavigateArgs(args);
+    if (name === TOOL_NAMES.SWITCH_TAB) parseChromeSwitchTabArgs(args);
+    return { name: name as ToolName, args };
   });
   return { commands, bail: optBool(obj, "bail", TOOL_NAMES.BATCH) ?? true };
 }

@@ -187,7 +187,7 @@ chrome-relay screenshot --tab 42 --max-edge 800 -o small.png # downscale for vis
 chrome-relay hover @e12       # the micro-interaction you&#39;re capturing
 chrome-relay screencast stop --tab 42 --out /tmp/rec --gif
 </code></pre>
-<p>Paint-driven frame capture — it sees CSS transitions, fade-ins, and hover states that screenshot polling misses. Two constraints: the tab must be <strong>active</strong> (Chrome doesn&#39;t paint background tabs), and <code>--gif</code>/<code>--mp4</code> stitching needs ffmpeg on PATH (fails with <code>external_dependency_missing</code> if absent, or pass <code>--allow-missing-ffmpeg</code> to keep the raw frames). Consecutive identical frames are deduped by hash before stitching.</p>
+<p>Records sampled screenshots at up to 15fps without selecting the tab or raising its window. Changes between samples may be missed. <code>--gif</code>/<code>--mp4</code> stitching needs ffmpeg on PATH (fails with <code>external_dependency_missing</code> if absent, or pass <code>--allow-missing-ffmpeg</code> to keep the raw frames). Consecutive identical frames are deduped by hash before stitching.</p>
 <h2 id="what-stays-on-your-machine">What stays on your machine<a class="anchor" href="#what-stays-on-your-machine" aria-hidden="true">#</a></h2>
 <p>All of it. Buffers live in the extension&#39;s memory, capped, per tab, dropped when the tab closes. Nothing is uploaded anywhere — there is nowhere to upload to.</p>
 
