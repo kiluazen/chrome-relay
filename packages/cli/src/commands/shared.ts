@@ -191,7 +191,12 @@ async function runToolImpl(name: string, args: Record<string, unknown>, then?: T
     // happens after the follow-up snapshot call arrives.
     if (then?.settle) args = { ...args, settle: true };
     if (isToolName(name)) parseToolArgs(name, args);
-    const { data: result, profile: stamp } = await callToolWithMeta(name, args, { profile });
+    const requiresNewExtension = Boolean(then) ||
+      (name === "chrome_navigate" && args.waitUntil && args.waitUntil !== "none") ||
+      args.settle === true;
+    const { data: result, profile: stamp } = await callToolWithMeta(name, args, {
+      profile, ...(requiresNewExtension ? { minimumExtensionVersion: "0.9.0" } : {})
+    });
     if (typeof result === "string") {
       process.stdout.write(result + "\n");
     } else {

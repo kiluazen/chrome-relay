@@ -12,7 +12,7 @@
 
 import type { Command } from "commander";
 import { instancePrefix, RelayError } from "@chrome-relay/protocol";
-import { discoverInstances, type VerifiedInstance } from "../client/route.js";
+import { discoverInstances, matchByProfileArg, type VerifiedInstance } from "../client/route.js";
 import { loadLabels, saveLabels, withLabelsLock } from "../registry.js";
 import type { CommandContext } from "./shared.js";
 
@@ -69,12 +69,7 @@ function pickTarget(verified: VerifiedInstance[], profileArg: string | undefined
     );
   }
   if (profileArg !== undefined) {
-    const needle = profileArg.replace(/-/g, "").toLowerCase();
-    const matches = verified.filter(
-      (v) =>
-        v.label === profileArg ||
-        v.descriptor.instanceId.replace(/-/g, "").toLowerCase().startsWith(needle)
-    );
+    const matches = matchByProfileArg(verified, profileArg);
     if (matches.length === 1) return matches[0];
     fail(
       new RelayError({

@@ -12,7 +12,7 @@ import { RelayError, type InstanceDescriptor } from "@chrome-relay/protocol";
 import { RelayHttpServer } from "../src/http/server";
 import type { ExtensionBridge } from "../src/native/bridge";
 import { readInstanceDescriptors, writeInstanceDescriptor } from "../src/registry";
-import { discoverInstances, resolveRoute } from "../src/client/route";
+import { discoverInstances, matchByProfileArg, resolveRoute } from "../src/client/route";
 import { callToolWithMeta } from "../src/client/call";
 
 const ID_A = "aaaa1111-0000-4000-8000-000000000000"; // prefix aaaa
@@ -21,10 +21,11 @@ const DEAD_PID = 2 ** 30; // far above any real pid space in use
 
 let home: string;
 let servers: RelayHttpServer[] = [];
+let bridges: ExtensionBridge[] = [];
 
-function stubBridge(instanceId: string): ExtensionBridge {
+function stubBridge(instanceId: string, extensionVersion = "0.7.1"): ExtensionBridge {
   return {
-    getExtensionVersion: () => "0.7.1",
+    getExtensionVersion: () => extensionVersion,
     getExtensionId: () => "ext-id",
     getInstanceId: () => instanceId,
     getFileSchemeAccess: () => true,
@@ -38,7 +39,9 @@ async function bootHost(
 ): Promise<InstanceDescriptor> {
   const token = `tok-${instanceId.slice(0, 4)}`;
   const generationId = `gen-${instanceId.slice(0, 4)}`;
-  const server = new RelayHttpServer(stubBridge(instanceId), { port: 0, token, generationId });
+  const bridge = stubBridge(instanceId, overrides.extensionVersion);
+  const server = new RelayHttpServer(bridge, { port: 0, token, generationId });
+  bridges.push(bridge);
   await server.start();
   servers.push(server);
   const descriptor: InstanceDescriptor = {
@@ -72,11 +75,14 @@ async function relayCode(fn: () => Promise<unknown>): Promise<string> {
 beforeEach(() => {
   home = mkdtempSync(path.join(os.tmpdir(), "chrome-relay-route-"));
   process.env.CHROME_RELAY_HOME = home;
+  process.env.CHROME_RELAY_NO_LEGACY_PORT = "1";
   servers = [];
+  bridges = [];
 });
 
 afterEach(async () => {
   delete process.env.CHROME_RELAY_HOME;
+  delete process.env.CHROME_RELAY_NO_LEGACY_PORT;
   await Promise.all(servers.map((s) => s.stop().catch(() => undefined)));
   rmSync(home, { recursive: true, force: true });
   vi.restoreAllMocks();
@@ -453,11 +459,86 @@ describe("end-to-end call over the routed transport", () => {
 
   it("routed errors still carry the profile stamp (post-routing invariant)", async () => {
     const desc = await bootHost(ID_A);
+    vi.mocked(bridges[0].callTool).mockRejectedValueOnce(new Error("target disappeared"));
     const response = await fetch(`http://127.0.0.1:${desc.port}/call`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${desc.token}` },
-      body: JSON.stringify({ name: 42 }) // malformed on purpose? no — missing name string
+      body: JSON.stringify({ name: "chrome_click_element", args: { selector: "#go" } })
     });
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(500);
+    expect((await response.json()).profile.instanceId).toBe(ID_A);
   });
+});
+
+
+describe("release compatibility", () => {
+  it("rejects new readiness and composite semantics before an old extension receives input", async () => {
+    await bootHost(ID_A, { extensionVersion: "0.8.2" });
+    for (const [name, args] of [
+      ["chrome_navigate", { url: "https://example.com", waitUntil: "domcontentloaded" }],
+      ["chrome_click_element", { selector: "#go", settle: true }],
+      ["chrome_screencast", { action: "start", tabId: 41 }],
+      ["chrome_batch", { commands: [{ name: "chrome_navigate", args: { url: "https://example.com", waitUntil: "load" } }] }]
+    ] as const) {
+      await expect(callToolWithMeta(name, args)).rejects.toMatchObject({ code: "unsupported_tool", phase: "extension_compatibility" });
+    }
+    expect(bridges[0].callTool).not.toHaveBeenCalled();
+  });
+
+  it("allows legacy navigation without readiness and new semantics after extension update", async () => {
+    await bootHost(ID_A, { extensionVersion: "0.8.2" });
+    await expect(callToolWithMeta("chrome_navigate", { url: "https://example.com", waitUntil: "none" })).resolves.toBeDefined();
+    vi.spyOn(bridges[0], "getExtensionVersion").mockReturnValue("0.9.0");
+    await expect(callToolWithMeta("chrome_navigate", { url: "https://example.com", waitUntil: "domcontentloaded" })).resolves.toBeDefined();
+    expect(bridges[0].callTool).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not narrow a shared profile prefix just because one matching host is unreachable", async () => {
+    const desc = await bootHost(ID_A);
+    writeInstanceDescriptor({ ...desc, instanceId: "aaaa2222-0000-4000-8000-000000000000", generationId: "other", port: 1 });
+    await expect(resolveRoute("aaaa", {})).rejects.toMatchObject({ code: "profile_ambiguous" });
+  });
+
+  it("gives an exact legal hex label precedence over another profile's ID prefix", () => {
+    const candidates = [
+      { descriptor: { instanceId: ID_A } as InstanceDescriptor, label: "bbbb", fileSchemeAccess: true },
+      { descriptor: { instanceId: ID_B } as InstanceDescriptor, label: null, fileSchemeAccess: true }
+    ];
+    expect(matchByProfileArg(candidates, "bbbb").map(v => v.descriptor.instanceId)).toEqual([ID_A]);
+  });
+
+  it("legacy snapshot consumers receive bare refs; authenticated consumers retain qualified refs", async () => {
+    const bridge = stubBridge(ID_A, "0.9.0");
+    const snapshot = { prevText: 'Page: old\n- button [ref=aaaa:e1]', tabId: 41, nodes: [{ role: "button", ref: "aaaa:e1", children: [{ role: "link", ref: "aaaa:e2" }] }], refs: { "aaaa:e1": { tabId: 41 }, "aaaa:e2": { tabId: 41 } } };
+    for (const batch of [false, true]) {
+    vi.mocked(bridge.callTool).mockResolvedValue(batch ? { results: [{ ok: true, data: snapshot }] } : snapshot);
+    for (const token of [undefined, "token"]) {
+      const server = new RelayHttpServer(bridge, { port: 0, token });
+      await server.start(); servers.push(server);
+      const response = await fetch(`http://127.0.0.1:${server.getBoundPort()}/call`, { method: "POST", headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ name: batch ? "chrome_batch" : "chrome_snapshot", args: {} }) });
+      const payload = await response.json();
+      const data = batch ? payload.data.results[0].data : payload.data;
+      expect(data.prevText).toContain(token ? "[ref=aaaa:e1]" : "[ref=e1]");
+      expect(data.nodes[0].ref).toBe(token ? "aaaa:e1" : "e1");
+      expect(data.nodes[0].children[0].ref).toBe(token ? "aaaa:e2" : "e2");
+      expect(Object.keys(data.refs)).toEqual(token ? ["aaaa:e1", "aaaa:e2"] : ["e1", "e2"]);
+    }
+    }
+  });
+});
+
+
+it("does not silently choose a v2 profile when a legacy profile is also connected", async () => {
+  await bootHost(ID_A);
+  delete process.env.CHROME_RELAY_NO_LEGACY_PORT;
+  const http = await import("../src/client/http.js");
+  const original = http.httpRequest;
+  vi.spyOn(http, "httpRequest").mockImplementation(async (url, init) => {
+    if (url === "http://127.0.0.1:12122/ping") {
+      return { ok: true, status: 200, json: async () => ({ ok: true, extensionVersion: "0.7.1", instanceId: null }) };
+    }
+    return original(url, init);
+  });
+  await expect(resolveRoute(undefined, {})).rejects.toMatchObject({ code: "profile_ambiguous" });
+  expect((await resolveRoute("aaaa", {})).instanceId).toBe(ID_A);
 });

@@ -7,6 +7,12 @@ vi.mock("../src/client/http.js", () => ({
   httpRequest: (url: string, init?: unknown) => (globalThis.fetch as (u: string, i?: unknown) => unknown)(url, init)
 }));
 
+// Argv tests isolate routing; version-skew is exercised against real HTTP
+// hosts in route.test.ts.
+vi.mock("../src/client/route.js", () => ({
+  resolveRoute: vi.fn(async () => ({ baseUrl: "http://127.0.0.1:12122", extensionVersion: "0.9.0" }))
+}));
+
 type FetchSpy = ReturnType<typeof vi.fn>;
 
 let fetchSpy: FetchSpy;

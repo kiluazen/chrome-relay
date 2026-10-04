@@ -22,8 +22,10 @@ export default defineBackground(() => {
   // scripts. simulateHello lets the e2e harness (which drives runTool
   // directly, no native host) act as a v2 host so qualified-ref paths are
   // exercised; the real hello arrives over native messaging in production.
-  (globalThis as { __chromeRelay?: unknown }).__chromeRelay = {
-    runTool,
-    simulateHello: (protocolVersion: number) => setHostProtocolVersion(protocolVersion)
-  };
+  if (import.meta.env.MODE === "development") {
+    (globalThis as { __chromeRelay?: unknown }).__chromeRelay = {
+      runTool,
+      simulateHello: (protocolVersion: number) => setHostProtocolVersion(protocolVersion)
+    };
+  }
 });

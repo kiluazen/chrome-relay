@@ -133,6 +133,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
 
     return {
       clicked: true,
+      tabId,
       x, y,
       ...(parsed.waitForNavigation === false ? { navigationCheck: "immediate" } : {}),
       ...(parsed.kind === "selector" ? { selector: parsed.selector } : {}),
@@ -191,11 +192,12 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
       };
     }
 
-    const tab = await resolveTarget(parsed);
-    await pulseCursor(requireTabId(tab), "type");
-    if (parsed.settle) await armSettle(requireTabId(tab));
+    const tabId = requireTabId(await resolveTarget(parsed));
+    await pulseCursor(tabId, "type");
+    if (parsed.settle) await armSettle(tabId);
     try {
-      return await evalInTab(requireTabId(tab), fillElement, [parsed.selector, parsed.value]);
+      const result = await evalInTab(tabId, fillElement, [parsed.selector, parsed.value]);
+      return { ...result, tabId };
     } catch (e) {
       mapPageError(e, TOOL_NAMES.FILL, "fill_selector");
     }
@@ -208,7 +210,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
     await pulseCursor(tabId, "hover");
     if (parsed.settle) await armSettle(tabId);
     await pressKey(tabId, parsed.keys);
-    return { sent: true, keys: parsed.keys };
+    return { sent: true, keys: parsed.keys, tabId };
   },
 
   async [TOOL_NAMES.TYPE](args) {
@@ -249,7 +251,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
 
     await send(tabId, "Input.insertText", { text: parsed.text });
 
-    return { typed: true, length: parsed.text.length, focused };
+    return { typed: true, length: parsed.text.length, focused, tabId };
   },
 
   async [TOOL_NAMES.EVALUATE](args) {

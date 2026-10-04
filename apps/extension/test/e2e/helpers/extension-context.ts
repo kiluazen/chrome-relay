@@ -8,11 +8,11 @@ import { startFixtureServer, type FixtureServer } from "./fixture-server";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const EXTENSION_PATH = resolve(__dirname, "..", "..", "..", "build", "chrome-mv3");
+const EXTENSION_PATH = resolve(__dirname, "..", "..", "..", "build", "chrome-mv3-dev");
 
 if (!existsSync(EXTENSION_PATH)) {
   throw new Error(
-    `Built extension not found at ${EXTENSION_PATH}. Run \`pnpm --filter chrome-relay-extension build\` first.`
+    `Built extension not found at ${EXTENSION_PATH}. Run \`pnpm --filter chrome-relay-extension exec wxt build --mode development\` first.`
   );
 }
 

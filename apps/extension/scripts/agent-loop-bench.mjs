@@ -12,7 +12,7 @@
 // no legacy port. Never touches the developer's real Chrome or desktop focus.
 //
 // Run:  node apps/extension/scripts/agent-loop-bench.mjs [--iterations 8] [--real] [--json out.json]
-// Prereqs: pnpm build (extension build/chrome-mv3 + cli dist).
+// Prereqs: pnpm build:cli; pnpm --filter chrome-relay-extension exec wxt build --mode development.
 
 import { chromium } from "@playwright/test";
 import { execFile } from "node:child_process";
@@ -25,14 +25,14 @@ import { createHash } from "node:crypto";
 
 function extensionIdFromManifest(manifestPath) {
   const { key } = JSON.parse(readFileSync(manifestPath, "utf8"));
-  if (!key) throw new Error("extension build has no manifest key; build it in development mode (NODE_ENV=development npx wxt build)");
+  if (!key) throw new Error("extension build has no manifest key; build it in development mode (pnpm --filter chrome-relay-extension exec wxt build --mode development)");
   const hex = createHash("sha256").update(Buffer.from(key, "base64")).digest("hex").slice(0, 32);
   return [...hex].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join("");
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..", "..");
-const EXT_PATH = path.join(ROOT, "apps", "extension", "build", "chrome-mv3");
+const EXT_PATH = path.join(ROOT, "apps", "extension", "build", "chrome-mv3-dev");
 const HOST_JS = path.join(ROOT, "packages", "cli", "dist", "native-host.js");
 const CLI_JS = path.join(ROOT, "packages", "cli", "dist", "cli.js");
 // Derived from the built manifest's key (wxt.config DEV_KEY), so the
@@ -66,7 +66,7 @@ function cli(args) {
     execFile(
       process.execPath,
       [CLI_JS, ...args],
-      { env: { ...process.env, CHROME_RELAY_HOME: HOME }, timeout: 60_000, maxBuffer: 64 * 1024 * 1024 },
+      { env: { ...process.env, CHROME_RELAY_HOME: HOME, CHROME_RELAY_NO_LEGACY_PORT: "1" }, timeout: 60_000, maxBuffer: 64 * 1024 * 1024 },
       (error, stdout, stderr) => {
         resolve({
           ms: performance.now() - started,
@@ -246,19 +246,31 @@ function splitComposite(stdout) {
   return { json: JSON.parse(stdout.slice(0, i)), snapshot: stdout.slice(i + 1) };
 }
 
+function requireDocument(snapshot, requestedUrl, label) {
+  const actual = snapshot.split("\n").find(line => line.startsWith("URL: "))?.slice(5).trim();
+  const requested = new URL(requestedUrl);
+  if (!actual || new URL(actual).hostname !== requested.hostname ||
+      (label.startsWith("fixture-") && new URL(actual).href !== requested.href) || /(?:^|\n)Loading:/.test(snapshot)) {
+    throw new Error(`${label}: snapshot did not describe the requested ready document`);
+  }
+}
+
 async function compositeLoop(label, url, nextPattern) {
   const t0 = performance.now();
   const nav = await mustCli(["navigate", url, "--new", "--snapshot", ...NAV_ARGS]);
   record(`${label}: navigate --snapshot`, nav.ms);
   const { json, snapshot } = splitComposite(nav.stdout);
+  if (json.ready === false || json.loadFailed) throw new Error(`${label}: navigation not ready`);
+  requireDocument(snapshot, url, label);
   record(`${label}: snapshot bytes`, snapshot.length);
   const ref = nextPattern ? findRef(snapshot, nextPattern) : null;
+  if (nextPattern && !ref) throw new Error(`${label}: required action target missing from snapshot`);
   if (ref) {
     const c = await mustCli(["click", `@${ref}`, "--snapshot"]);
     record(`${label}: click --snapshot`, c.ms);
     const after = splitComposite(c.stdout).snapshot;
     const urlLine = (t) => t.split("\n").find((l) => l.startsWith("URL:"));
-    if (urlLine(after) === urlLine(snapshot)) record(`${label}: STALE after click`, 1);
+    if (urlLine(after) === urlLine(snapshot)) throw new Error(`${label}: stale snapshot after click`);
   }
   record(`${label}: LOOP TOTAL`, performance.now() - t0);
   await cli(["close", String(json.tabId)]);
@@ -278,11 +290,13 @@ async function agentLoop(label, url, nextPattern) {
   }
 
   const snap = await mustCli(["snapshot", "--tab", String(tabId), "-i"]);
+  requireDocument(snap.stdout, url, label);
   if (process.env.BENCH_DUMP) console.log(`--- ${label} snapshot head:\n${snap.stdout.slice(0, 300)}`);
   record(`${label}: snapshot -i`, snap.ms);
   record(`${label}: snapshot bytes`, snap.stdout.length);
 
   const ref = nextPattern ? findRef(snap.stdout, nextPattern) : null;
+  if (nextPattern && !ref) throw new Error(`${label}: required action target missing from snapshot`);
   if (ref) {
     const c = await mustCli(["click", `@${ref}`]);
     record(`${label}: click @ref`, c.ms);
@@ -295,7 +309,7 @@ async function agentLoop(label, url, nextPattern) {
     // Correctness, not just speed: the click navigated, so the second
     // snapshot must describe the new document, not a stale read of the old.
     const urlLine = (t) => t.split("\n").find((l) => l.startsWith("URL:"));
-    if (urlLine(s2.stdout) === urlLine(snap.stdout)) record(`${label}: STALE after click`, 1);
+    if (urlLine(s2.stdout) === urlLine(snap.stdout)) throw new Error(`${label}: stale snapshot after click`);
   }
   record(`${label}: LOOP TOTAL`, performance.now() - t0);
   await cli(["close", String(tabId)]);
@@ -334,11 +348,13 @@ async function main() {
 
   const fixture = `${base}/page?n=1&items=200&slow=1200`;
   const bigFixture = `${base}/page?n=1&items=1500&slow=300`;
+  let failures = 0;
   for (let i = 0; i < ITERATIONS; i++) {
     for (const [label, url] of [["fixture-200", fixture], ["fixture-1500", bigFixture]]) {
       try {
         await agentLoop(label, url, /link "Next page"/);
       } catch (e) {
+        failures += 1;
         record(`${label}: FAILED`, 1);
         if (i === 0) console.log(`  ${label}: ${e.message.split("\n").slice(0, 2).join(" | ")}`);
       }
@@ -356,6 +372,7 @@ async function main() {
         try {
           await agentLoop(label, url, next);
         } catch (e) {
+          failures += 1;
           console.log(`  ${label}: ${e.message.split("\n")[0]}`);
         }
       }
@@ -375,6 +392,7 @@ async function main() {
     console.log(`${r.step.padEnd(width)}  ${String(r.median).padStart(6)}${unit}  ${String(r.p90).padStart(6)}${unit}  ${r.n}`);
   }
   if (JSON_OUT) writeFileSync(JSON_OUT, JSON.stringify(rows, null, 2));
+  if (failures) throw new Error(`${failures} benchmark loops failed correctness checks`);
 }
 
 main()

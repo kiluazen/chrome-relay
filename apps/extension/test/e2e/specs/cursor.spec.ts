@@ -27,7 +27,7 @@ test.describe("agent cursor", () => {
     await runTool("chrome_cursor", { enabled: true });
   });
 
-  test("glides to the click point; the page can't see it and the click still lands", async ({ runTool, openFixture, serviceWorker }) => {
+  test("glides to the click point; its API and shadow tree are hidden and the click still lands", async ({ runTool, openFixture, serviceWorker }) => {
     const { tabId } = await openFixture("cursor.html");
     const snap = await runTool<SnapshotResult>("chrome_snapshot", { tabId, interactiveOnly: true });
     const go = Object.entries(snap.refs).find(([, r]) => r.name === "Go")?.[0];

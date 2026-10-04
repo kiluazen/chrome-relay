@@ -169,7 +169,10 @@ async function main(): Promise<void> {
     cleanupDescriptor();
   });
 
-  void writeDescriptorWhenReady();
+  void writeDescriptorWhenReady().catch(() => {
+    // Registry failure must not kill a host whose listeners already bound.
+    process.stderr.write("[chrome-relay host] registry descriptor write failed — profile discovery unavailable; check CHROME_RELAY_HOME permissions.\n");
+  });
 }
 
 main().catch(async (error) => {

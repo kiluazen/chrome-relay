@@ -30,6 +30,32 @@ interface TabSession {
 
 const sessions = new Map<number, TabSession>();
 
+// Read encoded dimensions without allocating a decoded pixel buffer for
+// every unscaled frame. Unknown headers fall back to the browser decoder.
+function encodedSize(bytes: Uint8Array, format: "jpeg" | "png"): { width: number; height: number } | undefined {
+  if (format === "png" && bytes.length >= 24 && bytes[0] === 137 &&
+      String.fromCharCode(...bytes.subarray(1, 4)) === "PNG" &&
+      String.fromCharCode(...bytes.subarray(12, 16)) === "IHDR") {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    return { width: view.getUint32(16), height: view.getUint32(20) };
+  }
+  if (format !== "jpeg" || bytes[0] !== 255 || bytes[1] !== 216) return;
+  for (let pos = 2; pos < bytes.length;) {
+    if (bytes[pos++] !== 255) return;
+    while (bytes[pos] === 255) pos++;
+    const marker = bytes[pos++];
+    if (marker === 217 || marker === 218) return;
+    if (marker === 1 || (marker >= 208 && marker <= 216)) continue;
+    if (pos + 1 >= bytes.length) return;
+    const length = (bytes[pos] << 8) | bytes[pos + 1];
+    if (length < 2 || pos + length > bytes.length) return;
+    if (marker >= 192 && marker <= 207 && ![196, 200, 204].includes(marker) && length >= 8) {
+      return { height: (bytes[pos + 3] << 8) | bytes[pos + 4], width: (bytes[pos + 5] << 8) | bytes[pos + 6] };
+    }
+    pos += length;
+  }
+}
+
 async function captureFrame(tabId: number, opts: StartOptions): Promise<ScreencastFrame> {
   const format = opts.format ?? "jpeg";
   const { data } = await send<{ data: string }>(tabId, "Page.captureScreenshot", {
@@ -39,6 +65,11 @@ async function captureFrame(tabId: number, opts: StartOptions): Promise<Screenca
   });
   const timestamp = Date.now() / 1000;
   const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
+  const size = encodedSize(bytes, format);
+  if (size && size.width > 0 && size.height > 0 &&
+      (!opts.maxWidth || size.width <= opts.maxWidth) && (!opts.maxHeight || size.height <= opts.maxHeight)) {
+    return { data, timestamp, ...size };
+  }
   const bitmap = await createImageBitmap(new Blob([bytes], { type: `image/${format}` }));
   try {
     const scale = Math.min(1, (opts.maxWidth ?? bitmap.width) / bitmap.width,
