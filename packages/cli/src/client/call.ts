@@ -6,6 +6,7 @@ import {
   type ProfileStamp,
   type ToolName
 } from "@chrome-relay/protocol";
+import { compareSemver } from "../release-notes.js";
 import { httpRequest } from "./http.js";
 import { resolveRoute } from "./route.js";
 
@@ -50,6 +51,8 @@ export interface CallOptions {
   /** --profile value: label or instanceId prefix. Routing also reads
    *  qualified ref prefixes out of `args` on its own. */
   profile?: string;
+  /** New semantics must fail before input when the extension is older. */
+  minimumExtensionVersion?: string;
 }
 
 // Program-level --profile fallback. Commands that take target flags thread
@@ -92,6 +95,34 @@ export async function callToolWithMeta(
   profile = profile ?? defaultProfileSource?.();
 
   const route = await resolveRoute(profile, args);
+  const newSemantics = (tool: string, input: Record<string, unknown>) =>
+    input.settle === true || (tool === "chrome_navigate" && input.waitUntil && input.waitUntil !== "none") ||
+    (tool === "chrome_screencast" && input.action === "start");
+  const requiresNewExtension = newSemantics(name, args) || (name === "chrome_batch" &&
+    Array.isArray(args.commands) && args.commands.some(command => newSemantics(command.name, command.args ?? {})));
+  const minimumVersion = options.minimumExtensionVersion ?? (requiresNewExtension ? "0.9.0" : undefined);
+  if (minimumVersion) {
+    let version = route.extensionVersion;
+    if (!version) {
+      // Only legacy routes need another probe; v2 routing already verifies
+      // the profile and carries its connected extension version.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 1000);
+      try {
+        const ping = await httpRequest(`${route.baseUrl}/ping`, { signal: controller.signal });
+        if (ping.ok) version = (await ping.json() as { extensionVersion?: string }).extensionVersion;
+      } catch { /* fail closed below when the version cannot be proved */ }
+      finally { clearTimeout(timer); }
+    }
+    if (!version || compareSemver(version, minimumVersion) < 0) {
+      throw new RelayError({
+        code: "unsupported_tool",
+        message: `This operation requires Chrome Relay extension ${minimumVersion}; connected version is ${version ?? "unknown"}. Update the extension in this browser/profile, then retry. The CLI update does not update Chrome extensions.`,
+        tool: name as ToolName, phase: "extension_compatibility",
+        details: { extensionVersion: version ?? null, requiredExtensionVersion: minimumVersion }, retryable: false
+      });
+    }
+  }
 
   const response = await httpRequest(`${route.baseUrl}/call`, {
     method: "POST",

@@ -145,7 +145,10 @@ blockquote p { margin: 0; }
   <main>
     <h1>Installation</h1>
     <p class="page-desc">Two pieces. The Chrome extension and the CLI. One command wires them together.</p>
-    <p>Chrome Relay is two artifacts that meet in the middle:</p>
+    <h2 id="09-release-status">0.9 release status<a class="anchor" href="#09-release-status" aria-hidden="true">#</a></h2>
+<p>The new browsing loop requires <strong>CLI/native host 0.9.0 and extension 0.9.0</strong>. The extension update is awaiting Chrome Web Store submission. Check <code>chrome-relay --version</code> and the <code>hostVersion</code> / <code>extensionVersion</code> from <code>chrome-relay profile list</code> before using it.</p>
+<p>If your extension is still 0.8.2, CLI 0.9 rejects readiness navigation, composite <code>--snapshot</code>, settle and new recording starts before acting. Use <code>navigate &lt;url&gt; --new --wait none</code>, wait for the specific element or text you need, then take a separate snapshot. <code>chrome-relay update</code> refreshes the CLI/native host; Chrome updates each extension separately.</p>
+<p>Chrome Relay is two artifacts that meet in the middle:</p>
 <ol>
 <li><strong>The extension</strong> runs inside Chrome, holds the CDP session, and executes browser actions.</li>
 <li><strong>The CLI</strong> is what your agent invokes. It ships with the native messaging host that the extension connects to.</li>

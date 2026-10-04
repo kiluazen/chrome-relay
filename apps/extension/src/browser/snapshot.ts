@@ -348,12 +348,13 @@ function assignRefs(
   nthCounter: Map<string, number>,
   refs: Record<string, SnapshotRefEntry>,
   prior: Map<number, string>,
-  refPrefix: string | null
+  refPrefix: string | null,
+  axOrdinals: Map<number, number>
 ): void {
   for (const n of nodes) {
     if ((n.refEligible || n.source === "sweep") && n.backendNodeId !== undefined) {
       const key = `${n.role}|${n.name ?? ""}`;
-      const nth = nthCounter.get(key) ?? 0;
+      const nth = axOrdinals.get(n.backendNodeId) ?? nthCounter.get(key) ?? 0;
       nthCounter.set(key, nth + 1);
       const entry: SnapshotRefEntry = {
         tabId,
@@ -374,7 +375,7 @@ function assignRefs(
       n.ref = wireRef;
       refs[wireRef] = entry;
     }
-    assignRefs(n.children, tabId, nthCounter, refs, prior, refPrefix);
+    assignRefs(n.children, tabId, nthCounter, refs, prior, refPrefix, axOrdinals);
   }
 }
 
@@ -447,6 +448,19 @@ export async function buildSnapshot(
     runSweep(tabId, scopeBackendId)
   ]);
 
+  // Healing searches the complete AX response, so preserve its ordinals
+  // before scope/depth/elision removes earlier role/name matches.
+  const axOrdinals = new Map<number, number>();
+  const counts = new Map<string, number>();
+  for (const raw of response.nodes ?? []) {
+    if (raw.ignored) continue;
+    const role = normalizeRole(raw.role?.value ?? "");
+    const name = typeof raw.name?.value === "string" ? raw.name.value.slice(0, 200) : "";
+    const key = `${role}|${name}`;
+    const nth = counts.get(key) ?? 0;
+    counts.set(key, nth + 1);
+    if (typeof raw.backendDOMNodeId === "number") axOrdinals.set(raw.backendDOMNodeId, nth);
+  }
   let tree = buildAxTree(response.nodes ?? [], opts.urls === true);
   if (scopeBackendId !== undefined) {
     const subtree = findScopeSubtree(tree, scopeBackendId);
@@ -466,7 +480,7 @@ export async function buildSnapshot(
   const refPrefix = await getWireRefPrefix();
   const refs: Record<string, SnapshotRefEntry> = {};
   const nthCounter = new Map<string, number>();
-  assignRefs(tree, tabId, nthCounter, refs, prior, refPrefix);
+  assignRefs(tree, tabId, nthCounter, refs, prior, refPrefix, axOrdinals);
 
   // Sweep extras — div-soup clickables the AX tree missed. Dedupe against
   // backendNodeIds that already got a ref above.
@@ -483,7 +497,7 @@ export async function buildSnapshot(
       refEligible: true
     });
   }
-  assignRefs(sweepNodes, tabId, nthCounter, refs, prior, refPrefix);
+  assignRefs(sweepNodes, tabId, nthCounter, refs, prior, refPrefix, axOrdinals);
   tree = tree.concat(sweepNodes);
 
   let title = "";

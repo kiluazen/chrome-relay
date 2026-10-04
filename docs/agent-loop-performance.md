@@ -7,7 +7,8 @@ What an agent actually waits on is the loop: open a page, read it, act, read the
 `apps/extension/scripts/agent-loop-bench.mjs` drives the production path (real CLI binary → real native host → extension → CDP) in isolated headless Chromium. It never touches your Chrome or desktop focus.
 
 ```sh
-pnpm build && (cd apps/extension && NODE_ENV=development npx wxt build)
+pnpm build:cli
+pnpm --filter chrome-relay-extension exec wxt build --mode development
 node apps/extension/scripts/agent-loop-bench.mjs --iterations 8 --real               # documented loop with explicit waits
 node apps/extension/scripts/agent-loop-bench.mjs --iterations 8 --real --no-wait-step # navigate → snapshot → click → snapshot
 node apps/extension/scripts/agent-loop-bench.mjs --iterations 8 --real --composite    # navigate --snapshot → click --snapshot
@@ -20,7 +21,7 @@ The extension must be a development build so its ID matches the native-host mani
 
 ## Results
 
-Medians, headless Chromium on the development Mac.
+Historical measurements recorded with the agent-loop PR, in headless Chromium on the development Mac. The 0.9.0 release checks now reject missing targets, loading snapshots and stale post-click URLs; the current validated measurements are in `release-0.9.0.md`. This table is not a fresh baseline comparison.
 
 | | Before (documented loop) | Default loop | `--snapshot` loop |
 |---|---:|---:|---:|
@@ -47,7 +48,7 @@ A tab created with a URL starts on `about:blank`, whose `readyState` is already 
 
 ### Waiting for the wrong event (speed)
 
-Agents waited for `load`, which waits for every image and tracker. GitHub never fires `load` in a background tab (it stayed `interactive` for 20 s). DOMContentLoaded is enough to read and act.
+Agents waited for `load`, which waits for every image and tracker. During those measurements, GitHub stayed `interactive` for 20 s in the background. DOMContentLoaded makes the new document available; a hydrated app can still need a wait for its required element or text.
 
 ### False `click_intercepted` below the fold (correctness)
 
@@ -80,7 +81,7 @@ For input actions the snapshot first waits for the page to react. The action arm
 
 The snapshot waits until no recent request is in flight and the DOM has been quiet for 150 ms, at least 300 ms after the action and at most 2 s. If the input starts a navigation, the readiness wait takes over. Polling runs from the service worker, since a background tab's own timers can be throttled. `snapshot --settle` uses the same wait standalone.
 
-Older extensions ignore the new fields: `navigate` returns immediately as before, and `--snapshot` still prints a snapshot, just without settle.
+CLI 0.9.0 checks the connected extension before readiness navigation, composite actions, settle and recording starts. With an extension older than 0.9.0, these commands fail with `unsupported_tool` before browser side effects. Update both components; `navigate --wait none` remains available with an explicit wait for the required page state.
 
 ## Known limits, not addressed
 

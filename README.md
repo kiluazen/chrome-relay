@@ -53,4 +53,4 @@ cd apps/extension && npx playwright test   # e2e against a real Chromium
 chrome-relay self-reload                   # reload the extension after a rebuild
 ```
 
-Load the unpacked extension from `apps/extension/build/chrome-mv3` for development. Store zips: `pnpm store:zip` → `apps/extension/build/`.
+Build the test/development extension with `pnpm --filter chrome-relay-extension exec wxt build --mode development` and load `apps/extension/build/chrome-mv3-dev`. The service-worker test hook is available only in this build. Store zips: `pnpm store:zip` → `apps/extension/build/`.

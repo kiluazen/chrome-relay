@@ -315,6 +315,7 @@
           <span>Prompt for your agent</span>
           <button class="copy-button" type="button" data-copy-target="agent-prompt">Copy</button>
         </div>
+<p style="margin:16px 0;padding:12px 16px;border:1px solid #d6d0c2;border-radius:8px;line-height:1.5">The 0.9 browser loop needs CLI and extension 0.9.0. The extension update is pending. <a href="/docs/installation/#09-release-status">Check your versions and use the compatible commands.</a></p>
 <pre id="agent-prompt">I just added the Chrome Relay extension (github.com/kiluazen/chrome-relay),
 an open-source, fully local tool that drives my real browser from the terminal.
 
@@ -325,6 +326,12 @@ Set it up and verify the complete connection for me:
   chrome-relay doctor
   chrome-relay profile list
   chrome-relay skills get core
+
+The new browsing loop needs CLI/native host and extension 0.9.0.
+Check hostVersion and extensionVersion in profile list. The extension update
+is awaiting Chrome Web Store submission. With an older extension, use
+navigate --wait none, then wait for the specific element/text before snapshotting.
+Keep every action in the background.
 
 The CLI must report 0.8.0 or newer. If it does not, find the stale binary on
 PATH and fix it before continuing. Then run chrome-relay tabs. If several

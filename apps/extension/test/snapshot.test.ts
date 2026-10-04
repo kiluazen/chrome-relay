@@ -288,3 +288,21 @@ describe("findBackendNodeByRoleName", () => {
     expect(await m.findBackendNodeByRoleName(42, "clickable", "Open card", 0)).toBeNull();
   });
 });
+
+
+describe("ref healing after snapshot filtering", () => {
+  it("keeps the full AX ordinal when earlier duplicate siblings are elided", async () => {
+    const buttons = Array.from({ length: 21 }, (_, i) => ({ nodeId: `b${i}`, ignored: false, role: { value: "button" }, name: { value: "Edit" }, backendDOMNodeId: 200 + i }));
+    const separator = { nodeId: "heading", ignored: false, role: { value: "heading" }, name: { value: "Last row" }, backendDOMNodeId: 300 };
+    const last = { nodeId: "last", ignored: false, role: { value: "button" }, name: { value: "Edit" }, backendDOMNodeId: 400 };
+    const nodes = [{ nodeId: "root", ignored: false, role: { value: "RootWebArea" }, backendDOMNodeId: 100, childIds: [...buttons.map(b => b.nodeId), "heading", "last"] }, ...buttons, separator, last];
+    scriptCdp(nodes);
+    const { buildSnapshot, findBackendNodeByRoleName } = await load();
+    const snap = await buildSnapshot(41, { interactiveOnly: true });
+    const entry = Object.values(snap.refs).find(r => r.backendNodeId === 400)!;
+    expect(snap.nodes.some(n => n.role === "elided")).toBe(true);
+    expect(entry.nth).toBe(21);
+    scriptCdp(nodes.map(n => ({ ...n, backendDOMNodeId: n.backendDOMNodeId + 1000 })));
+    expect(await findBackendNodeByRoleName(41, entry.role, entry.name, entry.nth ?? 0)).toBe(1400);
+  });
+});

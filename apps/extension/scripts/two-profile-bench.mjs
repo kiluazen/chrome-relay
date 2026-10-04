@@ -15,7 +15,7 @@
 //     a production host may live.
 //
 // Run: node apps/extension/scripts/two-profile-bench.mjs
-// Prereqs: pnpm build (extension build/chrome-mv3 + cli dist).
+// Prereqs: pnpm build:cli; pnpm --filter chrome-relay-extension exec wxt build --mode development.
 
 import { chromium } from "@playwright/test";
 import { execFile } from "node:child_process";
@@ -28,14 +28,14 @@ import { createHash } from "node:crypto";
 
 function extensionIdFromManifest(manifestPath) {
   const { key } = JSON.parse(readFileSync(manifestPath, "utf8"));
-  if (!key) throw new Error("extension build has no manifest key; build it in development mode (NODE_ENV=development npx wxt build)");
+  if (!key) throw new Error("extension build has no manifest key; build it in development mode (pnpm --filter chrome-relay-extension exec wxt build --mode development)");
   const hex = createHash("sha256").update(Buffer.from(key, "base64")).digest("hex").slice(0, 32);
   return [...hex].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join("");
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..", "..");
-const EXT_PATH = path.join(ROOT, "apps", "extension", "build", "chrome-mv3");
+const EXT_PATH = path.join(ROOT, "apps", "extension", "build", "chrome-mv3-dev");
 const HOST_JS = path.join(ROOT, "packages", "cli", "dist", "native-host.js");
 const CLI_JS = path.join(ROOT, "packages", "cli", "dist", "cli.js");
 const FIXTURE = path.join(ROOT, "apps", "extension", "test", "e2e", "fixtures", "upload.html");
@@ -59,7 +59,7 @@ function cli(args, { expectFail = false } = {}) {
     execFile(
       process.execPath,
       [CLI_JS, ...args],
-      { env: { ...process.env, CHROME_RELAY_HOME: HOME }, timeout: 30_000 },
+      { env: { ...process.env, CHROME_RELAY_HOME: HOME, CHROME_RELAY_NO_LEGACY_PORT: "1" }, timeout: 30_000 },
       (error, stdout, stderr) => {
         if (!expectFail && error) {
           check(`cli ${args.join(" ")}`, false, `unexpected failure: ${stderr || error.message}`);

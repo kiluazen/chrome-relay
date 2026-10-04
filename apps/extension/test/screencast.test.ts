@@ -78,3 +78,17 @@ describe("background recording lifecycle", () => {
     await expect(stopScreencast(42)).rejects.toMatchObject({ code: "target_not_found" });
   });
 });
+
+
+it.each([
+  ["png", [137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 2, 128, 0, 0, 1, 224]],
+  ["jpeg", [255, 216, 255, 224, 0, 4, 0, 0, 255, 194, 0, 8, 8, 1, 224, 2, 128, 0]]
+] as const)("unscaled %s frames read dimensions without decoding pixels", async (format, header) => {
+  const { startScreencast, stopScreencast } = await import("../src/browser/screencast");
+  const { send } = await import("../src/browser/cdp");
+  vi.mocked(send).mockResolvedValue({ data: btoa(String.fromCharCode(...header)) });
+  await startScreencast(42, { format });
+  const result = await stopScreencast(42);
+  expect(result.frames[0]).toMatchObject({ width: 640, height: 480 });
+  expect(createImageBitmap).not.toHaveBeenCalled();
+});

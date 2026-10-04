@@ -51,7 +51,7 @@ the targeted tab; nothing is logged or sent off-device.
 
 `tabs`
 
-Required to list open tabs, activate a selected tab, navigate a tab, close selected tabs, and return tab IDs to the user's local agent.
+Required to list open tabs, navigate background tabs, close selected tabs, and return tab IDs to the user's local agent. Chrome Relay does not activate tabs or focus windows.
 
 `tabGroups`
 
@@ -64,9 +64,9 @@ extension storage.
 
 `storage`
 
-Required to persist tab-group definitions (named windows the local agent
-targets via `--group <name>`) across service-worker restarts and to store
-the last few tool execution summaries shown in the popup. Storage stays in
+Required to persist named workspaces and tab-group definitions across
+service-worker restarts, the agent-cursor preference, and the last few
+tool execution summaries shown in the popup. Storage stays in
 Chrome's local extension storage; nothing is sent off-device.
 
 `host_permissions: <all_urls>`
@@ -90,7 +90,7 @@ Chrome Relay does not send browsing data to a Chrome Relay cloud service. Tool c
 
 Declare: no remote code.
 
-The published extension contains its JavaScript bundle and does not load scripts from remote URLs. Generic JavaScript evaluation is intentionally not part of the Chrome Web Store tool surface.
+The published extension contains its JavaScript bundle and does not load scripts from remote URLs. The local `js` command evaluates code supplied by the user's agent through CDP in the targeted page. The extension's own helpers are bundled with the package. Review this behavior against the current Store policy when submitting; do not claim that generic evaluation is absent.
 
 ## Reviewer Test Instructions
 
@@ -108,7 +108,7 @@ The published extension contains its JavaScript bundle and does not load scripts
    ```bash
    chrome-relay doctor
    chrome-relay tabs
-   chrome-relay read -i
+   chrome-relay snapshot -i
    ```
 
 5. The popup should show the most recent tool executions.

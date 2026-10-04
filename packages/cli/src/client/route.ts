@@ -43,6 +43,7 @@ export interface ResolvedRoute {
   /** Absent on the legacy fixed-port fallback (no v2 host discovered). */
   instanceId?: string;
   label?: string | null;
+  extensionVersion?: string;
 }
 
 function normalizeId(instanceId: string): string {
@@ -121,7 +122,7 @@ export async function discoverInstances(): Promise<DiscoveryResult> {
         ping.generationId === desc.generationId;
       if (ok) {
         result.verified.push({
-          descriptor: desc,
+          descriptor: { ...desc, extensionVersion: ping.extensionVersion ?? desc.extensionVersion },
           label: labelFor(desc.instanceId, labels),
           fileSchemeAccess: ping.fileSchemeAccess ?? null
         });
@@ -139,7 +140,7 @@ export async function discoverInstances(): Promise<DiscoveryResult> {
   return result;
 }
 
-function matchByProfileArg(verified: VerifiedInstance[], profileArg: string): VerifiedInstance[] {
+export function matchByProfileArg(verified: VerifiedInstance[], profileArg: string): VerifiedInstance[] {
   const byLabel = verified.filter((v) => v.label === profileArg);
   if (byLabel.length > 0) return byLabel;
   const needle = normalizeId(profileArg);
@@ -152,7 +153,8 @@ function toRoute(v: VerifiedInstance): ResolvedRoute {
     baseUrl: `http://127.0.0.1:${v.descriptor.port}`,
     token: v.descriptor.token,
     instanceId: v.descriptor.instanceId,
-    label: v.label
+    label: v.label,
+    extensionVersion: v.descriptor.extensionVersion
   };
 }
 
@@ -276,7 +278,20 @@ export async function resolveRoute(
 
   // Explicit --profile.
   if (profileArg !== undefined) {
-    const matches = matchByProfileArg(verified, profileArg);
+    // Exact labels take precedence across both pools, before prefix matches.
+    const allMatches = matchByProfileArg([...verified,
+      ...unresolved.map(u => ({ descriptor: u.descriptor, label: u.label, fileSchemeAccess: null }))], profileArg);
+    const selectedIds = new Set(allMatches.map(v => v.descriptor.instanceId));
+    const matches = verified.filter(v => selectedIds.has(v.descriptor.instanceId));
+    const unresolvedMatches = unresolved.filter(u => selectedIds.has(u.descriptor.instanceId));
+    if (matches.length + unresolvedMatches.length > 1) {
+      throw new RelayError({
+        code: "profile_ambiguous",
+        message: withMenu(`--profile ${profileArg} matches multiple connected profiles — narrow it`, matches,
+          unresolvedMatches),
+        phase: "resolve_profile", retryable: false
+      });
+    }
     if (matches.length === 0) {
       const needle = normalizeId(profileArg);
       const unresolvedHit = unresolved.some(
@@ -329,7 +344,29 @@ export async function resolveRoute(
   // counts toward ambiguity — a transient ping failure must never convert
   // an ambiguous command into a single-profile command.
   const total = verified.length + unresolved.length;
-  if (verified.length === 1 && unresolved.length === 0) return toRoute(verified[0]);
+  if (verified.length === 1 && unresolved.length === 0) {
+    // Pre-v2 profiles have no descriptor. The legacy listener must not make
+    // a mixed rollout look like a single-profile installation.
+    if (process.env.CHROME_RELAY_NO_LEGACY_PORT !== "1") {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), PING_TIMEOUT_MS);
+      try {
+        const response = await httpRequest(`http://127.0.0.1:${DEFAULT_HTTP_PORT}/ping`, { signal: controller.signal });
+        const legacy = response.ok ? await response.json() as PingResponse : null;
+        if (legacy?.ok && legacy.extensionVersion && !legacy.instanceId) {
+          throw new RelayError({
+            code: "profile_ambiguous",
+            message: withMenu("A legacy extension is also connected; update that extension or explicitly choose the registered profile", verified),
+            phase: "resolve_profile", details: { legacyExtensionVersion: legacy.extensionVersion, candidates: candidateList(verified) }, retryable: false
+          });
+        }
+      } catch (error) {
+        if (error instanceof RelayError) throw error;
+        // No legacy listener: ordinary single-profile route.
+      } finally { clearTimeout(timer); }
+    }
+    return toRoute(verified[0]);
+  }
   if (total > 1) {
     // The error IS the picker: one line per candidate with label, browser,
     // prefix, and the exact retry flag — the agent chooses and continues

@@ -145,7 +145,10 @@ blockquote p { margin: 0; }
   <main>
     <h1>Quickstart</h1>
     <p class="page-desc">The snapshot → ref → act loop, end to end, with real output.</p>
-    <p>Everything an agent does with Chrome Relay is one loop: look at the page, act on what you saw, look again. This page runs it once, for real.</p>
+    <h2 id="09-release-status">0.9 release status<a class="anchor" href="#09-release-status" aria-hidden="true">#</a></h2>
+<p>The new browsing loop requires <strong>CLI/native host 0.9.0 and extension 0.9.0</strong>. The extension update is awaiting Chrome Web Store submission. Check <code>chrome-relay --version</code> and the <code>hostVersion</code> / <code>extensionVersion</code> from <code>chrome-relay profile list</code> before using it.</p>
+<p>If your extension is still 0.8.2, CLI 0.9 rejects readiness navigation, composite <code>--snapshot</code>, settle and new recording starts before acting. Use <code>navigate &lt;url&gt; --new --wait none</code>, wait for the specific element or text you need, then take a separate snapshot. <code>chrome-relay update</code> refreshes the CLI/native host; Chrome updates each extension separately.</p>
+<p>Everything an agent does with Chrome Relay is one loop: look at the page, act on what you saw, look again. This page runs it once, for real.</p>
 <h2 id="open-a-page-in-the-background">Open a page in the background<a class="anchor" href="#open-a-page-in-the-background" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay navigate &quot;https://news.ycombinator.com&quot; --new
 </code></pre>

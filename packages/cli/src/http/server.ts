@@ -9,6 +9,8 @@ import {
   type LocalBridgeCallRequest,
   type PingResponse,
   type ProfileStamp,
+  type SnapshotData,
+  type SnapshotNode,
   type ToolName
 } from "@chrome-relay/protocol";
 import type { ExtensionBridge } from "../native/bridge.js";
@@ -41,6 +43,28 @@ function attachNotices(payload: Record<string, unknown>, notice: BridgeNotice | 
   if (!notice) return;
   payload.notice = notice.message;
   payload.notices = [notice];
+}
+
+// Batch responses wrap snapshots inside results[].data. Convert snapshots at
+// any envelope depth while preserving non-snapshot results and user strings.
+function legacySnapshotRefs(data: unknown): unknown {
+  if (Array.isArray(data)) return data.map(legacySnapshotRefs);
+  if (!data || typeof data !== "object") return data;
+  const value = data as Record<string, unknown>;
+  if (Array.isArray(value.nodes) && value.refs && typeof value.refs === "object") {
+    const snapshot = value as unknown as SnapshotData;
+    const strip = (ref: string) => ref.replace(/^[0-9a-f]{4}:(e[0-9]+)$/, "$1");
+    const bareNodes = (nodes: SnapshotNode[]): SnapshotNode[] => nodes.map(n => ({
+      ...n, ...(typeof n.ref === "string" ? { ref: strip(n.ref) } : {}),
+      ...(Array.isArray(n.children) ? { children: bareNodes(n.children) } : {})
+    }));
+    return { ...snapshot,
+      ...(typeof snapshot.prevText === "string" ? { prevText: snapshot.prevText.replace(/\[ref=[0-9a-f]{4}:(e[0-9]+)\]/g, "[ref=$1]") } : {}),
+      nodes: bareNodes(snapshot.nodes),
+      refs: Object.fromEntries(Object.entries(snapshot.refs).map(([ref, entry]) => [strip(ref), entry]))
+    };
+  }
+  return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, legacySnapshotRefs(nested)]));
 }
 
 export interface RelayHttpServerOptions {
@@ -131,10 +155,14 @@ export class RelayHttpServer {
 
       const profile = this.profileStamp();
       try {
-        const data = await this.bridge.callTool(
+        let data = await this.bridge.callTool(
           body.name as ToolName,
           (body.args ?? {}) as Record<string, unknown>
         );
+        // Fixed-port consumers include pre-v2 CLIs whose ref parser cannot
+        // read profile-qualified tokens. Routing through the authenticated
+        // registry keeps qualified refs; the legacy surface prints bare refs.
+        if (!this.token) data = legacySnapshotRefs(data);
         const notice = buildOutdatedNotice(this.bridge);
         const payload: Record<string, unknown> = { ok: true, data };
         if (profile) payload.profile = profile;

@@ -15,9 +15,11 @@ description: Use when an agent needs to operate the user's real Chrome session: 
 
 Drives the user's real Chrome through a Chrome extension + local native host. Prefer it when logged-in browser state (auth cookies, sessions, installed extensions) matters.
 
+The page can detect the cursor host element, although its shadow tree is closed.
+
 Keep all automation in the background. Target tabs with `--tab` or qualified refs; never activate a tab, raise a window, or use foreground input as a fallback. `--active` and `switch` are rejected. Run tests and benchmarks only in isolated headless Chromium. Recordings sample screenshots and may miss changes between samples.
 
-The user's real mouse never moves. Instead, each click, hover, fill and type draws the **agent cursor** in that tab: an arrow that glides to the target, pulses on click and wiggles while you're between commands. It shows the user what you're doing when they glance at the tab. It never delays an action, page scripts and snapshots can't see it, and `screenshot` hides it. `chrome-relay cursor off` turns it off. Older extensions draw no cursor (`cursor` fails `unsupported_tool`), return from `navigate` immediately, and run `--snapshot` without the settle wait.
+The user's real mouse never moves. Instead, each click, hover, fill and type draws the **agent cursor** in that tab: an arrow that glides to the target, pulses on click and wiggles while you're between commands. It shows the user what you're doing when they glance at the tab. It does not wait for its animation before acting; page scripts cannot access its isolated API, snapshots omit it, and `screenshot` hides it. `chrome-relay cursor off` turns it off. Older extensions draw no cursor. CLI 0.9.0 rejects readiness navigation, `--snapshot`, settle and new recording starts against them with `unsupported_tool` / `extension_compatibility` before acting. `navigate --wait none` retains legacy acknowledgment behavior; then wait explicitly for the required page state.
 
 ## Setup
 
@@ -30,11 +32,15 @@ The user's real mouse never moves. Instead, each click, hover, fill and type dra
    chrome-relay doctor
    ```
 
+The new `--snapshot` browsing loop, navigation readiness, background recordings and agent cursor require **CLI/native host 0.9.0 and extension 0.9.0**. Run `chrome-relay --version` and `chrome-relay profile list`; inspect `hostVersion` and `extensionVersion` for every profile you use. `chrome-relay update` updates the CLI/native host; Chrome updates each installed extension separately. Until both sides are 0.9.0, use separate actions, navigate with `--wait none`, and wait for the specific element/text you need before taking a snapshot.
+
 Use the latest CLI. Multi-browser/profile routing and uploads require >= 0.8.0; Dia detection and the agent-friendly profile picker require >= 0.8.1. If the printed version stays below 0.8 after installing, stop and resolve the stale binary on `PATH` before using 0.8 commands:
 ```sh
 chrome-relay --version
 which -a chrome-relay        # macOS/Linux; use `where chrome-relay` on Windows
 ```
+
+If `profile list` is empty but legacy `tabs` works, an old extension has not registered a profile. Update that extension and run `doctor`; an empty registry does not prove that no browser is connected.
 
 At the start of a session, run `chrome-relay profile list`. With one connected instance, normal commands need no profile flag. With several, this tells you exactly which browsers and profiles are reachable before you act.
 
@@ -52,7 +58,9 @@ chrome-relay snapshot --tab 1234 --diff       # print only what changed (~100 to
 
 `--snapshot` on `navigate`, `click`, `fill`, `type` and `keys` saves a turn: the action, then an interactive snapshot of the same tab. Input actions first wait for the page to finish reacting (requests done, DOM quiet, at most 2s) or for the navigation they started. `navigate` already returns once the page is usable (`--wait load|commit|none` to change that), and a plain `snapshot` waits for a pending navigation rather than reading a blank tab.
 
-Snapshot output is compact indented text, usually 1 to 15 KB for most pages. Read it directly, no jq needed:
+A navigation result with `ready: false` reached its timeout before the page was ready. Do not act on it yet: wait for the URL, element or text you need, then take a fresh snapshot. DOMContentLoaded does not mean every app has finished hydration.
+
+Snapshot output is indented text. Large pages can exceed 100 KB; use a scope, depth cap or a single-value `get` when you need less. Read it directly, no jq needed:
 
 ```
 - link "Hacker News" [ref=e4]
@@ -164,7 +172,7 @@ chrome-relay wait --text "Saved" --tab 1234     # or wait <selector> / --url
 chrome-relay snapshot --tab 1234 --diff         # only the changes, refs included
 ```
 
-Don't add `wait --load` after `navigate`: navigate already waited for the page. Avoid `--load load` on real sites, because some (GitHub) never fire `load` in a background tab. Wait for the element or text you need instead.
+With a successful readiness result, `navigate` has already waited for its selected document event. Check `ready` before acting. A `load` wait can be held by images or other resources; wait for the element or text you need instead.
 
 ## Top gotchas
 

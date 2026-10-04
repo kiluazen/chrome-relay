@@ -5,6 +5,13 @@ nav: Commands
 order: 20
 ---
 
+## 0.9 release status
+
+The new browsing loop requires **CLI/native host 0.9.0 and extension 0.9.0**. The extension update is awaiting Chrome Web Store submission. Check `chrome-relay --version` and the `hostVersion` / `extensionVersion` from `chrome-relay profile list` before using it.
+
+If your extension is still 0.8.2, CLI 0.9 rejects readiness navigation, composite `--snapshot`, settle and new recording starts before acting. Use `navigate <url> --new --wait none`, wait for the specific element or text you need, then take a separate snapshot. `chrome-relay update` refreshes the CLI/native host; Chrome updates each extension separately.
+
+
 Global targeting: `--profile <label|idprefix>` first selects a connected browser/profile. Within it, most commands accept `-t/--tab <id>`, `--workspace <name>`, or `--group <name>` (exactly one). With none, the active tab is used — except ref actions, whose qualified token carries both its profile and tab.
 
 ## Choose a browser/profile (CLI 0.8+)
@@ -37,7 +44,7 @@ chrome-relay navigate "https://chrome-relay.kushalsm.com" --new --snapshot  # op
 
 All navigation stays in the background. Legacy `--active` requests are rejected before navigation, including raw calls and batches.
 
-`navigate` returns once the new document is usable (DOMContentLoaded), so the next `snapshot` reads the page you asked for, not the new tab's blank placeholder. The result reports `ready`, `readyState` and `waitedMs`; a slow page returns `ready: false` instead of failing, and a network error page returns `loadFailed: true`. `--wait load` also waits for images and other subresources, `--wait commit` only for the first byte, `--wait none` returns as soon as Chrome accepts the navigation. `--timeout <ms>` bounds the wait (default 10 s).
+`navigate` returns once the new document is usable (DOMContentLoaded), so the next `snapshot` reads the page you asked for, not the new tab's blank placeholder. The result reports `ready`, `readyState` and `waitedMs`; a slow page returns `ready: false` instead of failing, and a network error page returns `loadFailed: true`. `--wait load` also waits for images and other subresources, `--wait commit` only for the first byte, `--wait none` returns as soon as Chrome accepts the navigation. `--timeout <ms>` bounds the wait (default 10 s). If `ready` is false or `loadFailed` is true, wait for the required page state and take a fresh snapshot before acting. DOMContentLoaded does not guarantee app hydration.
 
 ## Read the page
 
@@ -128,7 +135,7 @@ chrome-relay cursor off      # stop drawing it, for every tab of this profile
 chrome-relay cursor on
 ```
 
-Your real mouse never moves. Instead, each click, hover, fill and type draws an arrow in that tab: it glides to the target, pulses on click, wiggles while the agent is between commands, and fades after 15 s idle. It never delays an action (the input is sent right away and the arrow catches up). It runs in an isolated world inside a closed shadow root, so page scripts can't reach it, snapshots and hit tests ignore it, and after it first appears its movement causes no DOM mutations the page can observe. `screenshot` hides it; screencast recordings keep it.
+Your real mouse never moves. Instead, each click, hover, fill and type draws an arrow in that tab: it glides to the target, pulses on click, wiggles while the agent is between commands, and fades after 15 s idle. It does not wait for its animation before acting. It runs in an isolated world inside a closed shadow root, so page scripts cannot access its API or shadow tree, but can detect the host element. Snapshots and hit tests ignore it, and after it first appears its movement causes no DOM mutations the page can observe. `screenshot` hides it; screencast recordings keep it.
 
 ## Evaluate JavaScript
 

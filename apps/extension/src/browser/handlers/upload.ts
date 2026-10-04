@@ -361,9 +361,9 @@ async function uploadChoose(parsed: ChromeUploadArgs): Promise<unknown> {
         ? { ref: parsed.clickRef }
         : {
             selector: parsed.clickSelector,
-            ...(parsed.tabId !== undefined ? { tabId: parsed.tabId } : {}),
-            ...(parsed.workspaceName ? { workspaceName: parsed.workspaceName } : {}),
-            ...(parsed.groupName ? { groupName: parsed.groupName } : {})
+            // Interception and input must use the same resolved tab even
+            // if the user changes the active tab while we are arming it.
+            tabId
           };
     await clickHandler(clickArgs);
 
@@ -382,11 +382,13 @@ async function uploadChoose(parsed: ChromeUploadArgs): Promise<unknown> {
     const node = await describeBackendNode(tabId, chooser.backendNodeId);
     return { tabId, mode: chooser.mode ?? "selectSingle", ...(await setFilesOnNode(tabId, node, parsed.files)) };
   } finally {
-    armedTabs.delete(tabId);
     try {
       await send(tabId, "Page.setInterceptFileChooserDialog", { enabled: false });
     } catch {
       /* tab gone or debugger detached — nothing left to disarm */
+    } finally {
+      // A second chooser may only arm after the first has finished disarming.
+      armedTabs.delete(tabId);
     }
   }
 }
