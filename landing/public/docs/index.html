@@ -4,9 +4,9 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Chrome Relay docs | Chrome Relay</title>
-<meta name="description" content="Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms. Nothing leaves the machine." />
+<meta name="description" content="Your agent drives the Chrome you're signed into. It reads pages, clicks buttons, and fills forms. Nothing leaves the machine." />
 <meta property="og:title" content="Chrome Relay docs | Chrome Relay" />
-<meta property="og:description" content="Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms. Nothing leaves the machine." />
+<meta property="og:description" content="Your agent drives the Chrome you're signed into. It reads pages, clicks buttons, and fills forms. Nothing leaves the machine." />
 <meta property="og:type" content="article" />
 <meta property="og:url" content="https://chrome-relay.kushalsm.com/docs/" />
 <meta property="og:image" content="https://chrome-relay.kushalsm.com/ext-index.png" />
@@ -14,7 +14,7 @@
 <link rel="canonical" href="https://chrome-relay.kushalsm.com/docs/" />
 <link rel="alternate" type="text/markdown" href="https://chrome-relay.kushalsm.com/docs/index.md" title="Markdown version" />
 <link rel="icon" type="image/png" href="/icon-128.png" />
-<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Chrome Relay docs","description":"Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms. Nothing leaves the machine.","url":"https://chrome-relay.kushalsm.com/docs/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TechArticle","headline":"Chrome Relay docs","description":"Your agent drives the Chrome you're signed into. It reads pages, clicks buttons, and fills forms. Nothing leaves the machine.","url":"https://chrome-relay.kushalsm.com/docs/","isPartOf":{"@type":"WebSite","name":"Chrome Relay","url":"https://chrome-relay.kushalsm.com"},"author":{"@type":"Person","name":"Kushal SM","url":"https://kushalsm.com"}}</script>
 <style>
 :root {
   color-scheme: light;
@@ -144,26 +144,31 @@ blockquote p { margin: 0; }
   <aside class="sidebar" aria-label="Docs"><div class="group">Start</div><a href="/docs/" class="active">Overview</a><a href="/docs/installation/">Installation</a><a href="/docs/quickstart/">Quickstart</a><div class="group">Concepts</div><a href="/docs/why-your-real-chrome/">Why your real Chrome</a><a href="/docs/architecture/">Architecture</a><a href="/docs/snapshots/">Snapshots</a><a href="/docs/refs/">Refs</a><a href="/docs/clicking/">Clicking</a><div class="group">Reference</div><a href="/docs/commands/">Commands</a><a href="/docs/observability/">Observability</a><a href="/docs/workspaces/">Workspaces</a><a href="/docs/errors/">Errors</a><a href="/docs/skill/">Agent skill</a><div class="group">Evaluate</div><a href="/docs/vs-agent-browser/">vs agent-browser</a><a href="/docs/vs-claude-codex/">vs Claude / Codex</a><a href="/docs/why-open-tools/">The replaceable part</a></aside>
   <main>
     <h1>Chrome Relay docs</h1>
-    <p class="page-desc">Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms. Nothing leaves the machine.</p>
-    <p>Chrome Relay lets a terminal agent — Claude Code, Codex, anything that runs shell commands — operate your real Chrome. Not a headless automation browser with an empty profile: the actual browser you&#39;re signed into, with your cookies, SSO sessions, extensions, and localhost tabs. It works on background tabs without stealing focus, so you keep browsing while the agent works.</p>
+    <p class="page-desc">Your agent drives the Chrome you're signed into. It reads pages, clicks buttons, and fills forms. Nothing leaves the machine.</p>
+    <p>Chrome Relay lets a terminal agent operate your real Chrome.</p>
+<p>Claude Code, Codex, anything that runs shell commands.</p>
+<p>Not a headless automation browser with an empty profile. The actual browser you&#39;re signed into, with your cookies, SSO sessions, extensions, and localhost tabs.</p>
+<p>It works on background tabs without stealing focus, so you keep browsing while the agent works.</p>
+<p>Version 0.8 reaches multiple browser profiles and multiple supported browsers from the same CLI. With several connected, Chrome Relay makes the agent choose; it never silently guesses which browser to control.</p>
 <pre><code class="language-sh">chrome-relay tabs                             # find or open a tab
 chrome-relay navigate &quot;https://kushalsm.com&quot; --new   # opens in the background
 chrome-relay snapshot --tab 1234 -i           # see the page: actionable elements get @refs
-chrome-relay click @e12                       # act on a ref — no selectors, no --tab
+chrome-relay click @e12                       # act on a ref, no selectors, no --tab
 chrome-relay fill @e14 &quot;hello&quot;
 chrome-relay snapshot --tab 1234 -i           # look again after the page changes
 </code></pre>
 <p>That&#39;s the whole loop. A snapshot of the Hacker News front page is ~14 KB of plain text. A click round-trip is ~150 ms.</p>
 <h2 id="what-it-is-in-one-diagram">What it is, in one diagram<a class="anchor" href="#what-it-is-in-one-diagram" aria-hidden="true">#</a></h2>
 <pre><code>your agent (terminal)
-  → chrome-relay CLI
-  → localhost HTTP (127.0.0.1:12122)
-  → native messaging host
-  → Chrome extension (service worker)
-  → CDP (chrome.debugger)
-  → your real tabs
+  -&gt; chrome-relay CLI
+  -&gt; instance registry (choose exactly one browser/profile)
+  -&gt; that profile&#39;s localhost host on an authenticated ephemeral port
+  -&gt; that profile&#39;s Chrome Relay extension
+  -&gt; CDP (chrome.debugger)
+  -&gt; your real tabs
 </code></pre>
-<p>Everything is local. There is no cloud relay, no account, no telemetry. The extension talks to one whitelisted local process through Chrome&#39;s own native-messaging permission system — the same Chrome you&#39;d have to trust anyway.</p>
+<p>Everything is local. There is no cloud relay, no account, no telemetry.</p>
+<p>The extension talks to one whitelisted local process through Chrome&#39;s own native-messaging permission system. The same Chrome you&#39;d have to trust anyway.</p>
 <h2 id="where-to-go">Where to go<a class="anchor" href="#where-to-go" aria-hidden="true">#</a></h2>
 <table>
 <thead>
@@ -205,6 +210,10 @@ chrome-relay snapshot --tab 1234 -i           # look again after the page change
 <td><a href="/docs/skill/">The agent skill</a></td>
 </tr>
 <tr>
+<td>Use several browsers or profiles</td>
+<td><a href="/docs/installation/#multiple-browsers-and-profiles">Installation: browsers and profiles</a></td>
+</tr>
+<tr>
 <td>Compare with agent-browser</td>
 <td><a href="/docs/vs-agent-browser/">vs agent-browser</a></td>
 </tr>
@@ -213,11 +222,11 @@ chrome-relay snapshot --tab 1234 -i           # look again after the page change
 <ul>
 <li><strong>CLI, not MCP.</strong> Tool schemas cost thousands of context tokens on every agent turn; a CLI costs nothing until invoked, and every agent already knows how to run shell commands.</li>
 <li><strong>Verbs, not magic.</strong> There&#39;s no &quot;smart click&quot; with hidden fallbacks. Each addressing mode (<code>@ref</code>, CSS selector, coordinates) is explicit, and each failure is a structured error code the agent can branch on.</li>
-<li><strong>Strict by default.</strong> No silent partial success. If a click would land on an overlay instead of the target, you get <code>click_intercepted</code> naming the overlay — not a success report and a broken page.</li>
+<li><strong>Strict by default.</strong> No silent partial success. If a click would land on an overlay instead of the target, you get <code>click_intercepted</code> naming the overlay. Not a success report and a broken page.</li>
 <li><strong>Output is the product.</strong> Agents pay for every byte on stdout. The snapshot format exists to be small.</li>
 </ul>
 
-    <div class="pager"><a class="next" href="/docs/installation/"><span class="dir">Next →</span><span class="t">Installation</span></a></div>
+    <div class="pager"><a class="next" href="/docs/installation/"><span class="dir">Next</span><span class="t">Installation</span></a></div>
   </main>
 </div>
 <footer class="footer">

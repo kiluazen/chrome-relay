@@ -1,4 +1,4 @@
-// wait / get / batch / skills — loop-ergonomics commands (adoption-spec
+// wait / get / batch / skills: loop-ergonomics commands (adoption-spec
 // Changes 3, 5, 6, 7).
 
 import { readFileSync } from "node:fs";
@@ -11,7 +11,7 @@ import {
 import { callTool } from "../client/call.js";
 import { tabOpt, type CommandContext } from "./shared.js";
 
-// Core agent guide — inlined at build time from the canonical skill
+// Core agent guide: inlined at build time from the canonical skill
 // (skills/chrome-relay/SKILL.md) via tsup's `define`, so the playbook the
 // binary prints is always version-matched to the binary itself. The
 // readFileSync fallback covers src-mode runs (vitest, ts-node) where the
@@ -25,7 +25,7 @@ function coreSkillText(): string {
       .replace(/<!--[\s\S]*?-->\n*/, "")
       .trim();
   } catch {
-    return "core skill unavailable in this build — see https://chrome-relay.kushalsm.com/skill.md";
+    return "core skill unavailable in this build. See https://chrome-relay.kushalsm.com/skill.md";
   }
 }
 
@@ -95,7 +95,7 @@ need a follow-up probe.
   // ---------- get (Change 6) ----------
   const get = program
     .command("get")
-    .description("One value, plain to stdout — no full snapshot.")
+    .description("One value, plain to stdout. No full snapshot.")
     .addHelpText(
       "after",
       `
@@ -168,7 +168,7 @@ Examples:
 
 One HTTP POST, one native-messaging message, sequential execution in the
 extension. Tool names are the wire names (chrome_navigate, chrome_snapshot,
-chrome_click_element, ... — see \`chrome-relay call --help\`). Amortizes CLI
+chrome_click_element, ...; see \`chrome-relay call --help\`). Amortizes CLI
 startup across N actions. Nested batches are rejected.
 `
     )
@@ -220,7 +220,7 @@ startup across N actions. Nested batches are rejected.
   // ---------- skills (Change 7) ----------
   const skills = program
     .command("skills [verb] [name]")
-    .description("Agent playbooks shipped inside the CLI — always version-matched to the binary.")
+    .description("Agent playbooks shipped inside the CLI. Always version-matched to the binary.")
     .addHelpText(
       "after",
       `
@@ -229,13 +229,13 @@ Examples:
   chrome-relay skills            # list available skills
   chrome-relay skills get core   # print the core usage guide
 
-The same guide is hosted at https://chrome-relay.kushalsm.com/skill.md —
-the binary copy is authoritative for the version you have installed.
+The same guide is hosted at https://chrome-relay.kushalsm.com/skill.md.
+The binary copy is authoritative for the version you have installed.
 `
     );
   skills.action(async (verb: string | undefined, name: string | undefined) => {
     if (!verb || verb === "list") {
-      process.stdout.write("core — the Chrome Relay agent playbook (snapshot/@ref loop, text-tool table, gotchas)\n");
+      process.stdout.write("core: the Chrome Relay agent playbook (snapshot/@ref loop, text-tool table, gotchas)\n");
       return;
     }
     if (verb === "get" && (name === "core" || name === undefined)) {

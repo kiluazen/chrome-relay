@@ -534,20 +534,21 @@
                   <code class="prompt-preview">I just added the Chrome Relay extension…</code>
                   <button class="copy-button" type="button" data-copy-target="agent-prompt">Copy</button>
                 </div>
-<pre id="agent-prompt" hidden>I just added the Chrome Relay extension to Chrome. It's an open-source tool
-(github.com/kiluazen/chrome-relay) that lets you drive my real Chrome from the
-terminal: read pages, click buttons, fill forms.
+<pre id="agent-prompt" hidden>I just added the Chrome Relay extension (github.com/kiluazen/chrome-relay),
+an open-source, fully local tool that drives my real browser from the terminal.
 
-It's safe and fully local. The extension only talks to a native host on this
-machine (localhost). Nothing is sent to any server, and the source is public.
+Set it up and verify the complete connection for me:
+  npm i -g chrome-relay@latest
+  chrome-relay install
+  chrome-relay --version
+  chrome-relay doctor
+  chrome-relay profile list
+  chrome-relay skills get core
 
-Set it up for me:
-  npm i -g chrome-relay
-  chrome-relay install      # registers the local bridge
-  chrome-relay doctor       # verify the connection
-  npx skills add kiluazen/kstack@chrome-relay   # learn the commands
-
-Then run chrome-relay tabs and show me my open tabs.</pre>
+The CLI must report 0.8.0 or newer. If it does not, find the stale binary on
+PATH and fix it before continuing. Then run chrome-relay tabs. If several
+profiles are connected, use the exact --profile choices from the error and
+show me the tabs in each one.</pre>
               </div>
             </li>
           </ol>

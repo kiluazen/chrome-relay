@@ -146,4 +146,11 @@ describe("RefMap", () => {
     await m.invalidateTabRefs(1);
     expect(m.refMapSize()).toBe(0);
   });
+
+  it("drops a pending persistence write if the browser context is already gone", async () => {
+    const m = await load();
+    m.allocateRef(entry(10, 100));
+    delete (globalThis as any).chrome;
+    await new Promise((r) => setTimeout(r, 80));
+  });
 });

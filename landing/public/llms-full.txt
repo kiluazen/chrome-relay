@@ -1,4 +1,4 @@
-# Chrome Relay — full documentation
+# Chrome Relay full documentation
 # https://chrome-relay.kushalsm.com
 
 
@@ -7,16 +7,24 @@
 
 # Chrome Relay docs
 
-> Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms. Nothing leaves the machine.
+> Your agent drives the Chrome you're signed into. It reads pages, clicks buttons, and fills forms. Nothing leaves the machine.
 
 
-Chrome Relay lets a terminal agent — Claude Code, Codex, anything that runs shell commands — operate your real Chrome. Not a headless automation browser with an empty profile: the actual browser you're signed into, with your cookies, SSO sessions, extensions, and localhost tabs. It works on background tabs without stealing focus, so you keep browsing while the agent works.
+Chrome Relay lets a terminal agent operate your real Chrome.
+
+Claude Code, Codex, anything that runs shell commands.
+
+Not a headless automation browser with an empty profile. The actual browser you're signed into, with your cookies, SSO sessions, extensions, and localhost tabs.
+
+It works on background tabs without stealing focus, so you keep browsing while the agent works.
+
+Version 0.8 reaches multiple browser profiles and multiple supported browsers from the same CLI. With several connected, Chrome Relay makes the agent choose; it never silently guesses which browser to control.
 
 ```sh
 chrome-relay tabs                             # find or open a tab
 chrome-relay navigate "https://kushalsm.com" --new   # opens in the background
 chrome-relay snapshot --tab 1234 -i           # see the page: actionable elements get @refs
-chrome-relay click @e12                       # act on a ref — no selectors, no --tab
+chrome-relay click @e12                       # act on a ref, no selectors, no --tab
 chrome-relay fill @e14 "hello"
 chrome-relay snapshot --tab 1234 -i           # look again after the page changes
 ```
@@ -27,15 +35,17 @@ That's the whole loop. A snapshot of the Hacker News front page is ~14 KB of pla
 
 ```
 your agent (terminal)
-  → chrome-relay CLI
-  → localhost HTTP (127.0.0.1:12122)
-  → native messaging host
-  → Chrome extension (service worker)
-  → CDP (chrome.debugger)
-  → your real tabs
+  -> chrome-relay CLI
+  -> instance registry (choose exactly one browser/profile)
+  -> that profile's localhost host on an authenticated ephemeral port
+  -> that profile's Chrome Relay extension
+  -> CDP (chrome.debugger)
+  -> your real tabs
 ```
 
-Everything is local. There is no cloud relay, no account, no telemetry. The extension talks to one whitelisted local process through Chrome's own native-messaging permission system — the same Chrome you'd have to trust anyway.
+Everything is local. There is no cloud relay, no account, no telemetry.
+
+The extension talks to one whitelisted local process through Chrome's own native-messaging permission system. The same Chrome you'd have to trust anyway.
 
 ## Where to go
 
@@ -49,13 +59,14 @@ Everything is local. There is no cloud relay, no account, no telemetry. The exte
 | Click things reliably | [Refs](/docs/refs/) · [Clicking strategies](/docs/clicking/) |
 | Look up a command | [Command reference](/docs/commands/) |
 | Teach your agent | [The agent skill](/docs/skill/) |
+| Use several browsers or profiles | [Installation: browsers and profiles](/docs/installation/#multiple-browsers-and-profiles) |
 | Compare with agent-browser | [vs agent-browser](/docs/vs-agent-browser/) |
 
 ## Design positions, briefly
 
 - **CLI, not MCP.** Tool schemas cost thousands of context tokens on every agent turn; a CLI costs nothing until invoked, and every agent already knows how to run shell commands.
 - **Verbs, not magic.** There's no "smart click" with hidden fallbacks. Each addressing mode (`@ref`, CSS selector, coordinates) is explicit, and each failure is a structured error code the agent can branch on.
-- **Strict by default.** No silent partial success. If a click would land on an overlay instead of the target, you get `click_intercepted` naming the overlay — not a success report and a broken page.
+- **Strict by default.** No silent partial success. If a click would land on an overlay instead of the target, you get `click_intercepted` naming the overlay. Not a success report and a broken page.
 - **Output is the product.** Agents pay for every byte on stdout. The snapshot format exists to be small.
 
 
@@ -63,43 +74,59 @@ Everything is local. There is no cloud relay, no account, no telemetry. The exte
 
 # Installation
 
-> Two pieces — the Chrome extension and the CLI. One command wires them together.
+> Two pieces. The Chrome extension and the CLI. One command wires them together.
 
 
 Chrome Relay is two artifacts that meet in the middle:
 
-1. **The extension** — runs inside Chrome, holds the CDP session, executes every browser action.
-2. **The CLI** — what your agent invokes. Ships with the native messaging host that the extension connects to.
+1. **The extension** runs inside Chrome, holds the CDP session, and executes browser actions.
+2. **The CLI** is what your agent invokes. It ships with the native messaging host that the extension connects to.
 
 ## 1. Install the extension
 
-From the [Chrome Web Store](https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb). Works in Chrome and Chromium forks — Edge, Brave, Arc, Vivaldi, Opera.
+From the [Chrome Web Store](https://chromewebstore.google.com/detail/chrome-relay/cpdiapbifblhlcpnmlmfpgfjlacebokb). Install it once in every browser profile you want your agent to reach.
+
+The primary supported browsers are:
+
+- **Google Chrome**, including several Chrome profiles at the same time.
+- **Dia**.
+- **Brave**.
+
+The installer also writes native-host manifests for detected Chrome Canary, Chromium, Edge, Vivaldi, Arc, and Opera installations. Those are compatibility targets; manifest detection does not by itself mean they have received the same end-to-end testing as Chrome, Dia, and Brave.
 
 Permissions it asks for, and why:
 
 | Permission | Used for |
 |---|---|
-| `nativeMessaging` | connecting to the local CLI host — the only channel out of the extension, and it goes to your own machine |
+| `nativeMessaging` | connecting to the local CLI host. This is the only channel out of the extension, and it goes to your own machine |
 | `debugger` | CDP: trusted clicks, snapshots, screenshots, network/console capture |
 | `tabs`, `tabGroups` | listing and targeting tabs, workspaces |
 | `storage` | ref-map persistence across extension service-worker restarts |
 
 ## 2. Install the CLI
 
+Needs [Node.js](https://nodejs.org) 18 or newer — the CLI ships as an npm package and works on macOS, Windows, and Linux.
+
 ```sh
 pnpm add -g chrome-relay     # or npm i -g chrome-relay
 chrome-relay install
 ```
 
-`install` detects every Chromium-family browser on the machine and registers the native messaging host for each (macOS, Linux, and Windows — on Windows it also writes the HKCU registry entries Chrome reads).
+`install` detects every Chromium-family browser on the machine and registers the native messaging host for each. On Windows it also writes the HKCU registry entries Chrome reads, and drops a `run-host.cmd` wrapper under `%USERPROFILE%\.chrome-relay`.
+
+**Windows note:** if `chrome-relay` isn't recognized right after the global install, restart your terminal so `PATH` picks up the npm global bin (`%APPDATA%\npm`), then re-run `chrome-relay install`.
 
 ## 3. Verify
 
 ```sh
 chrome-relay doctor
+chrome-relay --version
+chrome-relay profile list
 ```
 
-Doctor checks the whole chain: wrapper script present, native host starts, extension connects, local bridge reachable. Then:
+Doctor checks the whole chain: wrapper script, per-browser manifests, connected extension instances, local hosts, versions, and upload file access. Multi-browser/profile routing requires CLI and extension 0.8.0 or newer. If `chrome-relay --version` stays below 0.8 after installing the latest package, find the stale executable first (`which -a chrome-relay` on macOS/Linux; `where chrome-relay` on Windows).
+
+`profile list` is the authoritative answer to “which running browsers and profiles can my agent reach right now?” Then:
 
 ```sh
 chrome-relay tabs
@@ -107,23 +134,46 @@ chrome-relay tabs
 
 If you get your window and tab list as JSON, you're done.
 
-## 4. Teach your agent (optional but recommended)
+## Multiple browsers and profiles
+
+One CLI serves every supported browser/profile where the extension is installed. Each extension instance has a stable generated ID; Chrome does not expose profile names, so you can attach your own labels:
 
 ```sh
-npx skills add kiluazen/kstack@chrome-relay
+chrome-relay profile list
+chrome-relay profile label work                       # one instance connected
+chrome-relay --profile 3f2a profile label personal    # several: select by ID prefix
+chrome-relay --profile work tabs
 ```
 
-This installs the [agent skill](/docs/skill/) — the playbook that tells Claude Code / Codex how to use the commands well (the snapshot→ref loop, which text tool to pick for which editor, the fallback ladder). Also available raw at [/skill.md](/skill.md).
+With one connected instance, every command routes there and no flag is needed. With several, an unscoped command returns `profile_ambiguous` as a picker containing each label, browser, ID prefix, and exact `--profile` retry. Chrome Relay never guesses. Snapshot refs are profile-qualified (`@3f2a:e12`), so actions on a ref route themselves after the first snapshot.
+
+## 4. Teach your agent (optional but recommended)
+
+If the CLI is installed, print the version-matched playbook:
+
+```sh
+chrome-relay skills get core
+```
+
+For agents with a skills directory:
+
+```sh
+npx -y skills add kiluazen/kstack@chrome-relay
+```
+
+The `-y` auto-confirms npx's "install the `skills` package?" prompt, so a headless agent doesn't hang on a TTY question. This installs the [agent skill](/docs/skill/). It teaches the snapshot/ref loop, which text tool to pick for which editor, the fallback ladder, and the failure modes. Also available raw at [/skill.md](/skill.md).
 
 ## Troubleshooting
 
-| Symptom | Cause → fix |
+| Symptom | Fix |
 |---|---|
-| `extension_not_connected` | Extension not installed, or installed after `chrome-relay install` ran → re-run `chrome-relay install`, then restart Chrome |
-| `doctor` says no wrapper | CLI installed but `install` never ran → `chrome-relay install` |
-| Worked yesterday, dead today | Chrome updated and restarted the native host → usually self-heals on first command; otherwise toggle the extension off/on |
-| Commands hang ~15 s then time out | Another process is holding port 12122 → kill it or reboot the bridge by restarting Chrome |
-| `unsupported_tool` on `snapshot` | Extension is older than the CLI → update the extension (Web Store updates roll out on Chrome's schedule; `chrome://extensions` → Update forces it) |
+| `extension_not_connected` | Install the extension, re-run `chrome-relay install`, then restart Chrome |
+| `doctor` says no wrapper | Run `chrome-relay install` |
+| Worked yesterday, dead today | Chrome may have restarted the native host. Retry once, then toggle the extension off/on |
+| `profile_ambiguous` | Pick one of the exact `--profile` choices in the error and rerun the command |
+| Browser missing from `profile list` | Install the extension in that exact browser/profile, then rerun `chrome-relay install` |
+| `profile` is an unknown command | Your PATH is resolving a pre-0.8 CLI; locate and remove the stale executable |
+| `unsupported_tool` on `snapshot` | Extension is older than the CLI. Update the extension from `chrome://extensions` |
 
 ## Updating
 
@@ -132,7 +182,7 @@ chrome-relay update          # updates the CLI and prints what changed, as JSON
 chrome-relay release-notes --since 0.5.22   # just read the changelog
 ```
 
-The changelog is agent-readable on purpose — your agent can check what changed before relying on a new flag.
+The changelog is agent-readable on purpose. Your agent can check what changed before relying on a new flag.
 
 
 ---
@@ -301,14 +351,17 @@ The two-line summary we'd want an agent to remember:
 ```
 agent (any shell)
   → chrome-relay CLI            parses args, renders output
-  → HTTP, 127.0.0.1:12122       localhost-only bridge (Fastify)
-  → native messaging host       long-lived Node process, spawned by Chrome
-  → extension service worker    tool handlers, ref map, buffers
+  → instance registry           discovers and verifies connected profiles
+  → localhost HTTP              authenticated ephemeral port for one profile
+  → native messaging host       one process spawned by that extension instance
+  → extension service worker    that browser/profile's tools, refs, buffers
   → chrome.debugger (CDP)       trusted input, snapshots, capture
   → your tabs
 ```
 
 Every hop is local. The wire format is one JSON envelope per call: `{ name, args }` in, `{ ok, data } | { ok: false, errorDetails }` out.
+
+Each browser profile running the extension spawns its own native host. The host registers an authenticated ephemeral localhost port under `~/.chrome-relay/instances/`; every CLI call verifies those descriptors, resolves exactly one profile, and sends the command there. With one connected profile this is invisible. With several, `--profile <label|idprefix>` chooses one and profile-qualified refs such as `@3f2a:e12` route themselves. Port `12122` exists only as a legacy compatibility path for pre-0.8 installations.
 
 ## Why not `--remote-debugging-port`?
 
@@ -325,9 +378,9 @@ The cost is more moving parts (install registers the host; the extension must be
 
 | Piece | Owns |
 |---|---|
-| **CLI** (`chrome-relay`, npm) | argument parsing, output rendering (snapshot text, JSON), exit codes. Stateless — every invocation is one HTTP call. |
+| **CLI** (`chrome-relay`, npm) | argument parsing, profile discovery/routing, output rendering (snapshot text, JSON), exit codes. Stateless — every invocation resolves one host and makes one HTTP call. |
 | **Protocol** (bundled into the CLI) | tool names, argument schemas, error codes, the snapshot renderer. One source of truth both ends import. |
-| **Native host** | spawned by Chrome on the extension's `connectNative()`; runs the localhost HTTP server; relays frames. No logic. |
+| **Native host** | spawned once per extension instance on `connectNative()`; registers its authenticated localhost endpoint and relays frames. |
 | **Extension** | everything that touches the browser: the [ref map](/docs/refs/), the [snapshot builder](/docs/snapshots/), per-tab console/network ring buffers, CDP sessions, trusted input dispatch. |
 
 ## Security model
@@ -607,7 +660,19 @@ There's intentionally no `click-text` verb — it would be a smart wrapper hidin
 > Every command, its flags, and an example. `--help` on any command is always authoritative.
 
 
-Global targeting: most commands accept `-t/--tab <id>`, `--workspace <name>`, or `--group <name>` (exactly one). With none, the active tab is used — except ref actions, which target the ref's own tab.
+Global targeting: `--profile <label|idprefix>` first selects a connected browser/profile. Within it, most commands accept `-t/--tab <id>`, `--workspace <name>`, or `--group <name>` (exactly one). With none, the active tab is used — except ref actions, whose qualified token carries both its profile and tab.
+
+## Choose a browser/profile (CLI 0.8+)
+
+```sh
+chrome-relay profile list
+chrome-relay profile label work                       # one connected instance
+chrome-relay --profile 3f2a profile label personal    # several: choose by ID prefix
+chrome-relay --profile work tabs
+chrome-relay profile unlabel personal
+```
+
+One connected instance routes implicitly. With several, an unscoped command fails `profile_ambiguous` and prints exact `--profile` choices; it never guesses. A qualified ref such as `@3f2a:e12` routes itself.
 
 ## See the browser
 
@@ -735,6 +800,16 @@ chrome-relay network har --tab 42 -o session.har
 ```
 
 Per-tab ring buffers, last 200 entries each. Details: [Observability](/docs/observability/).
+
+## Upload (CLI and extension 0.8+)
+
+```sh
+chrome-relay upload set --selector 'input[type=file]' --tab 42 ./cv.pdf
+chrome-relay upload choose --click-ref @3f2a:e4 ./cv.pdf
+chrome-relay upload drop --selector '.dropzone' --tab 42 ./avatar.png
+```
+
+`set` targets a file input directly, including hidden inputs. `choose` intercepts the browser picker before clicking, so no OS dialog appears. `drop` dispatches drag-enter/over/drop events. Chrome reads filesystem paths directly; there is no bridge upload or size cap. Enable “Allow access to file URLs” for Chrome Relay in the browser's extension settings; `doctor` reports the toggle per profile.
 
 ## Emulate
 
@@ -975,29 +1050,41 @@ No silent partial success, no auto-fallbacks, no "click failed" without saying w
 > A playbook your agent loads once, so it drives Chrome Relay well from the first command.
 
 
-Chrome Relay is a CLI, so any agent that can run shell commands can use it with zero integration. The skill is the difference between *can use* and *uses well* — it teaches the snapshot→ref loop, which text tool fits which editor, the fallback ladder, and the gotchas, so the agent doesn't rediscover them by failing.
+Chrome Relay is a CLI, so any agent that can run shell commands can use it with zero integration.
+
+The skill is the difference between *can use* and *uses well*. It teaches the snapshot/ref loop, which text tool fits which editor, the fallback ladder, and the gotchas, so the agent doesn't rediscover them by failing.
 
 ## Install
+
+If the CLI is installed, use the version-matched copy:
+
+```sh
+chrome-relay skills get core
+```
 
 For Claude Code / Codex-style agents with a skills directory:
 
 ```sh
-npx skills add kiluazen/kstack@chrome-relay
+npx -y skills add kiluazen/kstack@chrome-relay
 ```
 
-Or fetch it directly — the skill lives on this site as plain markdown:
+The `-y` auto-confirms npx's "install the `skills` package?" prompt, so an agent running headless doesn't hang waiting for a TTY.
+
+Or fetch it directly. The skill lives on this site as plain markdown:
 
 ```
 https://chrome-relay.kushalsm.com/skill.md
 ```
 
-Agents reading this page: that URL is the canonical playbook. Load it before driving Chrome Relay.
+Agents reading this page: load either the CLI playbook or that URL before driving Chrome Relay.
 
 ## What's in it
 
-The skill is ~120 lines of markdown. The spine:
+The spine:
 
-**The core loop** — see, act, see again:
+**The core loop**
+
+See, act, see again:
 
 ```sh
 chrome-relay tabs
@@ -1008,26 +1095,42 @@ chrome-relay fill @e14 "hello"
 chrome-relay snapshot --tab 1234 -i           # re-look after changes
 ```
 
-**Ref lifetime rules** — refs survive same-page churn (healing), die on navigation (`stale_ref` → re-snapshot, never retry), refuse covered targets (`click_intercepted` → dismiss, retry).
+**Ref lifetime rules**
 
-**The text-tool table** — the single highest-value piece, because text entry is where browser agents quietly fail:
+Refs survive same-page churn. They die on navigation. `stale_ref` means re-snapshot and never retry the old ref. `click_intercepted` means dismiss the cover or scroll, then retry.
+
+**Multiple browsers and profiles**
+
+The 0.8 skill begins by checking `chrome-relay profile list`. One connected browser/profile routes implicitly. With several, `profile_ambiguous` is a picker: choose an exact `--profile <label|idprefix>` entry and rerun. Qualified refs such as `@3f2a:e12` carry both their browser profile and tab, so later actions route themselves.
+
+**The text-tool table**
+
+The highest-value part, because text entry is where browser agents quietly fail:
 
 | Target | Tool |
 |---|---|
 | `<input>` / `<textarea>` / `<select>`, React-controlled, shadow DOM | `fill @ref` |
-| contenteditable, Draft.js, Lexical, ProseMirror | `type` (appends at caret — clear first) |
+| contenteditable, Draft.js, Lexical, ProseMirror | `type`. Appends at caret, so clear first |
 | Submit, navigate, shortcuts | `keys` |
-| Combobox / autocomplete | `type` filter → `keys ArrowDown` → `keys Enter` |
+| Combobox / autocomplete | `type` filter, `keys ArrowDown`, `keys Enter` |
 
-**Operational guardrails** — don't echo secrets into shell strings; screenshot before irreversible actions; a failing click is information (plant a capture-phase listener, act, read the console) — not a stop signal.
+**Operational guardrails**
+
+Don't echo secrets into shell strings. Screenshot before irreversible actions. A failing click is information, not a stop signal. Plant a capture-phase listener, act, then read the console.
 
 ## Why a skill and not an MCP server
 
-MCP tool schemas are injected into the agent's context on every turn — for browser-tool servers that's measured in thousands of tokens per turn before any work happens. A CLI costs zero until invoked, and the skill is loaded once. Same capability, none of the standing tax. This is a deliberate position, not a missing feature.
+MCP tool schemas are injected into the agent's context on every turn. For browser-tool servers, that can mean thousands of tokens before any work happens.
+
+A CLI costs zero until invoked, and the skill is loaded once.
+
+Same capability, none of the standing tax. This is a deliberate position, not a missing feature.
 
 ## Keeping it current
 
-`chrome-relay <command> --help` is always authoritative — the skill says so itself, and agents should trust the binary over any doc, including this one. The skill's canonical source is versioned in [kstack](https://github.com/kiluazen/kstack/tree/main/skills/chrome-relay); this site's copy tracks it.
+`chrome-relay <command> --help` is always authoritative. The skill says so itself, and agents should trust the binary over any doc, including this one.
+
+The skill's canonical source is versioned in [kstack](https://github.com/kiluazen/kstack/tree/main/skills/chrome-relay). This site's copy tracks it.
 
 
 ---

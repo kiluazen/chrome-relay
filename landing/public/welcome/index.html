@@ -3,124 +3,346 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chrome Relay added — one step left</title>
+    <title>Chrome Relay installed</title>
     <meta name="robots" content="noindex" />
     <link rel="icon" href="/icon-128.png" type="image/png" />
     <style>
       :root {
+        color-scheme: light;
         --paper: #f7f3e8;
         --ink: #181818;
         --muted: #58544c;
         --line: #d6d0c2;
+        --panel: #fffdf6;
         --green: #1f7a4d;
         --green-soft: #e6f2eb;
+        --shadow: 0 22px 70px rgba(16, 24, 32, 0.18);
       }
+
       * { box-sizing: border-box; }
+
+      html { background: var(--paper); }
+
       body {
         margin: 0;
-        min-height: 100vh;
+        min-height: 100svh;
         display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 32px;
-        background: var(--paper);
+        flex-direction: column;
+        overflow-x: hidden;
+        background: transparent;
         color: var(--ink);
         font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.55;
       }
-      .card { width: min(640px, 100%); }
-      .badge {
+
+      .bg-art {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background-image: url('/bg.jpg');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        opacity: 0.18;
+        filter: saturate(0.25) contrast(0.4) brightness(1.7);
+      }
+
+      a { color: inherit; }
+
+      .nav, .footer {
+        width: min(1240px, calc(100% - 56px));
+        margin: 0 auto;
+      }
+
+      .nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 24px 0;
+      }
+
+      .brand {
         display: inline-flex;
         align-items: center;
-        gap: 7px;
-        font-size: 12px;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--green);
-        background: var(--green-soft);
+        gap: 10px;
+        text-decoration: none;
+        font-weight: 750;
+      }
+
+      .brand img { width: 36px; height: 36px; border-radius: 8px; }
+
+      .nav-links {
+        display: flex;
+        gap: 18px;
+        font-size: 14.5px;
+      }
+
+      .nav-links a {
+        color: var(--muted);
+        font-weight: 550;
+        text-decoration: none;
+      }
+
+      .nav-links a:hover { color: var(--ink); }
+
+      .welcome {
+        width: min(720px, calc(100% - 56px));
+        margin: auto;
+        padding: clamp(48px, 8vh, 96px) 0;
+      }
+
+      .celebration {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: grid;
+        place-items: center;
+        pointer-events: none;
+        animation: celebration-exit 1900ms ease-out both;
+      }
+
+      .celebration-mark {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        place-items: center;
+        width: 92px;
+        height: 92px;
         border: 1px solid var(--line);
-        border-radius: 999px;
-        padding: 5px 11px;
+        border-radius: 50%;
+        background: var(--green-soft);
+        color: var(--green);
+        font-size: 46px;
+        font-weight: 750;
+        box-shadow: 0 0 0 14px rgba(230, 242, 235, 0.62), var(--shadow);
+        animation: success-pop 1500ms cubic-bezier(.2,.8,.2,1) both;
       }
+
+      .confetti {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 1px;
+        height: 1px;
+      }
+
+      .confetti i {
+        position: absolute;
+        width: 7px;
+        height: 18px;
+        border-radius: 2px;
+        background: var(--color, var(--green));
+        transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-36px) scale(.35);
+        animation: confetti-burst 1350ms cubic-bezier(.16,.8,.25,1) var(--delay, 0ms) both;
+      }
+
+      .confetti i:nth-child(3n) { width: 9px; height: 9px; border-radius: 50%; }
+      .confetti i:nth-child(4n) { width: 5px; height: 15px; }
+
+      @keyframes success-pop {
+        0% { opacity: 0; transform: scale(.48) rotate(-10deg); }
+        18% { opacity: 1; transform: scale(1.1) rotate(2deg); }
+        30%, 68% { opacity: 1; transform: scale(1) rotate(0); }
+        100% { opacity: 0; transform: scale(.82); }
+      }
+
+      @keyframes confetti-burst {
+        0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-36px) scale(.35); }
+        14% { opacity: 1; }
+        72% { opacity: 1; }
+        100% { opacity: 0; transform: translate(-50%, -50%) rotate(calc(var(--angle) + 150deg)) translateY(calc(var(--distance) * -1)) scale(1); }
+      }
+
+      @keyframes celebration-exit {
+        0%, 78% { visibility: visible; }
+        100% { visibility: hidden; }
+      }
+
       h1 {
-        margin: 18px 0 6px;
-        font-size: clamp(26px, 5vw, 34px);
-        font-weight: 650;
-        letter-spacing: -0.02em;
+        margin: 0;
+        font-size: clamp(42px, 7vw, 72px);
+        font-weight: 760;
+        letter-spacing: -0.045em;
+        line-height: 1;
+        white-space: nowrap;
       }
-      .sub { margin: 0 0 22px; color: var(--muted); font-size: 16px; max-width: 52ch; }
+
+      .sub {
+        max-width: 56ch;
+        margin: 15px 0 26px;
+        color: #38352f;
+        font-size: clamp(17px, 2vw, 20px);
+      }
+
       .prompt-card {
+        overflow: hidden;
         border: 1px solid var(--line);
         border-radius: 10px;
-        background: #181818;
-        padding: 12px 16px 16px;
+        background: var(--ink);
+        box-shadow: var(--shadow);
       }
+
       .prompt-head {
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        margin-bottom: 8px;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 11px 12px 0 16px;
       }
+
       .prompt-head span {
+        color: rgba(255, 253, 246, 0.48);
         font-size: 11px;
         font-weight: 700;
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: rgba(255, 253, 246, 0.45);
       }
+
       .copy-button {
         padding: 5px 12px;
         border: 1px solid rgba(255, 253, 246, 0.18);
         border-radius: 6px;
         background: transparent;
-        color: #f7f3e8;
+        color: var(--panel);
         cursor: pointer;
         font: inherit;
         font-size: 12px;
         font-weight: 700;
       }
+
       .copy-button:hover { background: rgba(255, 253, 246, 0.1); }
+      .copy-button:focus-visible, a:focus-visible { outline: 3px solid rgba(31, 122, 77, 0.35); outline-offset: 3px; }
+
       pre {
         margin: 0;
+        padding: 9px 16px 18px;
+        overflow-x: auto;
         white-space: pre-wrap;
         word-break: break-word;
+        color: #e2ddd0;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 13px;
-        line-height: 1.6;
-        color: #e2ddd0;
+        line-height: 1.62;
       }
-      .foot { margin-top: 18px; font-size: 14px; color: var(--muted); }
-      .foot a { color: var(--green); text-decoration: none; font-weight: 600; }
-      .foot a:hover { text-decoration: underline; }
+
+      .footer-wrap { margin-top: auto; border-top: 1px solid var(--line); }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 28px 0 40px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .footer-links { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 16px; }
+      .footer a { text-decoration: none; }
+      .footer a:hover { color: var(--ink); }
+
+      @media (max-width: 900px) {
+        .nav, .footer { width: min(1120px, calc(100% - 40px)); }
+        .welcome { width: min(720px, calc(100% - 40px)); }
+      }
+
+      @media (max-width: 640px) {
+        .nav, .footer { width: min(1120px, calc(100% - 28px)); }
+        .welcome { width: min(720px, calc(100% - 28px)); padding: 54px 0 66px; }
+        .nav { padding: 18px 0 10px; }
+        .brand img { width: 30px; height: 30px; }
+        .brand { font-size: 18px; }
+        .nav-links { gap: 14px; font-size: 14px; }
+        h1 { font-size: clamp(22px, 7.4vw, 39px); }
+        .prompt-card { border-radius: 8px; }
+        pre { font-size: 12px; }
+        .footer { padding: 22px 0 28px; }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .celebration { display: none; }
+      }
     </style>
   </head>
   <body>
-    <main class="card">
-      <span class="badge">Extension added</span>
-      <h1>One step left.</h1>
-      <p class="sub">Paste this into Claude Code or Codex. Your agent installs the bridge, verifies it, and shows you it works.</p>
+    <div class="bg-art"></div>
+    <div class="celebration" aria-hidden="true">
+      <div class="celebration-mark">✓</div>
+      <div class="confetti">
+        <i style="--angle:0deg;--distance:176px;--delay:0ms;--color:#1f7a4d"></i>
+        <i style="--angle:15deg;--distance:142px;--delay:70ms;--color:#ba7136"></i>
+        <i style="--angle:30deg;--distance:188px;--delay:25ms;--color:#d8a63d"></i>
+        <i style="--angle:45deg;--distance:154px;--delay:95ms;--color:#1f7a4d"></i>
+        <i style="--angle:60deg;--distance:181px;--delay:40ms;--color:#ba7136"></i>
+        <i style="--angle:75deg;--distance:148px;--delay:115ms;--color:#d8a63d"></i>
+        <i style="--angle:90deg;--distance:190px;--delay:10ms;--color:#1f7a4d"></i>
+        <i style="--angle:105deg;--distance:158px;--delay:80ms;--color:#ba7136"></i>
+        <i style="--angle:120deg;--distance:179px;--delay:45ms;--color:#d8a63d"></i>
+        <i style="--angle:135deg;--distance:145px;--delay:105ms;--color:#1f7a4d"></i>
+        <i style="--angle:150deg;--distance:186px;--delay:20ms;--color:#ba7136"></i>
+        <i style="--angle:165deg;--distance:151px;--delay:90ms;--color:#d8a63d"></i>
+        <i style="--angle:180deg;--distance:176px;--delay:0ms;--color:#1f7a4d"></i>
+        <i style="--angle:195deg;--distance:142px;--delay:70ms;--color:#ba7136"></i>
+        <i style="--angle:210deg;--distance:188px;--delay:25ms;--color:#d8a63d"></i>
+        <i style="--angle:225deg;--distance:154px;--delay:95ms;--color:#1f7a4d"></i>
+        <i style="--angle:240deg;--distance:181px;--delay:40ms;--color:#ba7136"></i>
+        <i style="--angle:255deg;--distance:148px;--delay:115ms;--color:#d8a63d"></i>
+        <i style="--angle:270deg;--distance:190px;--delay:10ms;--color:#1f7a4d"></i>
+        <i style="--angle:285deg;--distance:158px;--delay:80ms;--color:#ba7136"></i>
+        <i style="--angle:300deg;--distance:179px;--delay:45ms;--color:#d8a63d"></i>
+        <i style="--angle:315deg;--distance:145px;--delay:105ms;--color:#1f7a4d"></i>
+        <i style="--angle:330deg;--distance:186px;--delay:20ms;--color:#ba7136"></i>
+        <i style="--angle:345deg;--distance:151px;--delay:90ms;--color:#d8a63d"></i>
+      </div>
+    </div>
+    <nav class="nav" aria-label="Primary">
+      <a class="brand" href="/">
+        <img src="/icon-128.png" alt="" />
+        <span>Chrome Relay</span>
+      </a>
+      <div class="nav-links">
+        <a href="/docs/">Docs</a>
+        <a href="https://github.com/kiluazen/chrome-relay">GitHub</a>
+      </div>
+    </nav>
+
+    <main class="welcome">
+      <h1>Chrome Relay is installed</h1>
+      <p class="sub">One last step, paste this into your agent</p>
       <div class="prompt-card">
         <div class="prompt-head">
-          <span>prompt</span>
+          <span>Prompt for your agent</span>
           <button class="copy-button" type="button" data-copy-target="agent-prompt">Copy</button>
         </div>
-<pre id="agent-prompt">I just added the Chrome Relay extension to Chrome. It's an open-source tool
-(github.com/kiluazen/chrome-relay) that lets you drive my real Chrome from the
-terminal: read pages, click buttons, fill forms.
+<pre id="agent-prompt">I just added the Chrome Relay extension (github.com/kiluazen/chrome-relay),
+an open-source, fully local tool that drives my real browser from the terminal.
 
-It's safe and fully local. The extension only talks to a native host on this
-machine (localhost). Nothing is sent to any server, and the source is public.
+Set it up and verify the complete connection for me:
+  npm i -g chrome-relay@latest
+  chrome-relay install
+  chrome-relay --version
+  chrome-relay doctor
+  chrome-relay profile list
+  chrome-relay skills get core
 
-Set it up for me:
-  npm i -g chrome-relay
-  chrome-relay install      # registers the local bridge
-  chrome-relay doctor       # verify the connection
-  npx skills add kiluazen/kstack@chrome-relay   # learn the commands
-
-Then run chrome-relay tabs and show me my open tabs.</pre>
+The CLI must report 0.8.0 or newer. If it does not, find the stale binary on
+PATH and fix it before continuing. Then run chrome-relay tabs. If several
+profiles are connected, use the exact --profile choices from the error and
+show me the tabs in each one.</pre>
       </div>
-      <p class="foot">Stuck? <a href="/docs/installation/">Read the install docs</a>.</p>
     </main>
+
+    <div class="footer-wrap">
+      <footer class="footer">
+        <a href="https://kushalsm.com">kushalsm.com</a>
+        <div class="footer-links">
+          <a href="/privacy/">Privacy</a>
+          <a href="/support/">Support</a>
+        </div>
+      </footer>
+    </div>
+
     <script>
       document.querySelectorAll("[data-copy-target]").forEach((button) => {
         button.addEventListener("click", async () => {

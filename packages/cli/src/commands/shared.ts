@@ -20,33 +20,43 @@ import { callTool } from "../client/call.js";
 // Shared context passed to every command-group registration function.
 // Each per-domain module imports CommandContext and registers its
 // subcommands against ctx.program using the helpers.
+export interface TargetOpts {
+  tab?: number;
+  workspace?: string;
+  group?: string;
+  profile?: string;
+}
+
 export interface CommandContext {
   program: Command;
-  baseArgs: (opts: { tab?: number; workspace?: string; group?: string }) => Record<string, unknown>;
+  baseArgs: (opts: TargetOpts) => Record<string, unknown>;
   run: typeof runToolImpl;
-  withBase: (opts: { tab?: number; workspace?: string; group?: string }, extras?: Record<string, unknown>) => Record<string, unknown>;
+  withBase: (opts: TargetOpts, extras?: Record<string, unknown>) => Record<string, unknown>;
 }
 
 // Helper that collapses the `const args = {}; Object.assign(args,
 // baseArgs(opts)); args.foo = bar; await run(...)` pattern into one
 // expression. Used by every per-domain registration module.
 export function makeWithBase(
-  baseArgs: (opts: { tab?: number; workspace?: string; group?: string }) => Record<string, unknown>
+  baseArgs: (opts: TargetOpts) => Record<string, unknown>
 ) {
   return function withBase(
-    opts: { tab?: number; workspace?: string; group?: string },
+    opts: TargetOpts,
     extras?: Record<string, unknown>
   ): Record<string, unknown> {
     return { ...baseArgs(opts), ...(extras ?? {}) };
   };
 }
 
-// Attach --tab / --workspace / --group to a subcommand.
+// Attach --tab / --workspace / --group / --profile to a subcommand.
+// --profile is a PARENT scope: it composes with the other three (they pick
+// a tab inside one profile's Chrome), so it joins no conflict set.
 export function tabOpt(cmd: Command): Command {
   return cmd
     .option("-t, --tab <id>",      "target tab ID", (v) => Number(v))
     .option("--workspace <name>",  "target the active tab in a named workspace window (see `chrome-relay workspace`)")
-    .option("--group <name>",      "target the active tab in a named tab-group (see `chrome-relay group`)");
+    .option("--group <name>",      "target the active tab in a named tab-group (see `chrome-relay group`)")
+    .option("--profile <name>",    "target a connected Chrome profile by label or instanceId prefix (see `chrome-relay profile`)");
 }
 
 // Build a base args object from common options. Every subcommand that
@@ -63,8 +73,8 @@ export function tabOpt(cmd: Command): Command {
 //   3. --tab is mutually exclusive with --workspace/--group on the same
 //      scope (a specific tab can't also "be in" a named workspace).
 export function makeBaseArgs(program: Command) {
-  return function baseArgs(opts: { tab?: number; workspace?: string; group?: string }): Record<string, unknown> {
-    const parentOpts = program.opts() as { workspace?: string; group?: string };
+  return function baseArgs(opts: TargetOpts): Record<string, unknown> {
+    const parentOpts = program.opts() as { workspace?: string; group?: string; profile?: string };
 
     rejectIntraScopeConflict("subcommand", {
       tab: opts.tab, workspace: opts.workspace, group: opts.group
@@ -83,6 +93,9 @@ export function makeBaseArgs(program: Command) {
       const prior = parentOpts.workspace ? `workspace=${parentOpts.workspace}` : `group=${parentOpts.group}`;
       emitTargetOverride("tab", prior, String(opts.tab));
     }
+    if (opts.profile && parentOpts.profile && opts.profile !== parentOpts.profile) {
+      emitTargetOverride("profile", parentOpts.profile, opts.profile);
+    }
 
     const args: Record<string, unknown> = {};
     if (opts.tab !== undefined) args.tabId = opts.tab;
@@ -90,6 +103,12 @@ export function makeBaseArgs(program: Command) {
     const effectiveGroup     = opts.group     ?? parentOpts.group;
     if (opts.tab === undefined && effectiveWorkspace) args.workspaceName = effectiveWorkspace;
     if (opts.tab === undefined && effectiveGroup)     args.groupName     = effectiveGroup;
+    // --profile is a PARENT scope, orthogonal to the three above. It rides
+    // as the CLI-internal `__profile` hint: callTool strips it and routes
+    // by it — it never reaches the wire (an extension IS a profile; it has
+    // no concept of others).
+    const effectiveProfile = opts.profile ?? parentOpts.profile;
+    if (effectiveProfile) args.__profile = effectiveProfile;
     return args;
   };
 }
@@ -121,6 +140,13 @@ function emitTargetOverride(kind: string, from: string, to: string): void {
 // agents can parse `{relayError: {...}}` mechanically without a separate flag.
 async function runToolImpl(name: string, args: Record<string, unknown>): Promise<void> {
   try {
+    // Peel the CLI-internal routing hint off before validation and wire.
+    let profile: string | undefined;
+    if (typeof args.__profile === "string") {
+      profile = args.__profile;
+      args = { ...args };
+      delete args.__profile;
+    }
     // Validate locally so bad input fails fast with the same structured
     // RelayError the extension would produce — but transmit the RAW args.
     // Parsers run at BOTH ends on the same raw shape; some (chrome_wait)
@@ -129,7 +155,7 @@ async function runToolImpl(name: string, args: Record<string, unknown>): Promise
     // `wait .sel` validated fine here, then died extension-side with
     // "got 0 conditions" because the wire carried {condition} not {selector}.
     if (isToolName(name)) parseToolArgs(name, args);
-    const result = await callTool(name, args);
+    const result = await callTool(name, args, { profile });
     if (typeof result === "string") {
       process.stdout.write(result + "\n");
     } else {

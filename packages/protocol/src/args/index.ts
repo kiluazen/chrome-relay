@@ -13,6 +13,7 @@
 //                 switch_tab, close_tabs, ax, click_ax, screenshot,
 //                 get_windows_and_tabs, self_reload
 //   multi.ts      chrome_viewport, console, workspace, group, screencast
+//   upload.ts     chrome_upload
 //
 // Parsers reject "present but wrong type" with code:invalid_arguments. A
 // field that's truly omitted (undefined or null) is OK; the handler uses
@@ -25,6 +26,7 @@ export * from "./network";
 export * from "./simple";
 export * from "./multi";
 export * from "./loop";
+export * from "./upload";
 
 import type { ToolName } from "../index";
 import {
@@ -77,6 +79,10 @@ import {
   type ChromeGetArgs
 } from "./loop";
 import {
+  parseChromeUploadArgs,
+  type ChromeUploadArgs
+} from "./upload";
+import {
   parseChromeViewportArgs,
   parseChromeConsoleArgs,
   parseChromeWorkspaceArgs,
@@ -115,6 +121,7 @@ export interface ToolArgMap {
   chrome_wait: ChromeWaitArgs;
   chrome_batch: ChromeBatchArgs;
   chrome_get: ChromeGetArgs;
+  chrome_upload: ChromeUploadArgs;
 }
 
 export type ParsedToolArguments<T extends ToolName = ToolName> = ToolArgMap[T];
@@ -146,6 +153,7 @@ export function parseToolArgs<T extends ToolName>(name: T, input: unknown): Tool
     case "chrome_wait": return parseChromeWaitArgs(input) as ToolArgMap[T];
     case "chrome_batch": return parseChromeBatchArgs(input) as ToolArgMap[T];
     case "chrome_get": return parseChromeGetArgs(input) as ToolArgMap[T];
+    case "chrome_upload": return parseChromeUploadArgs(input) as ToolArgMap[T];
   }
   const exhaustive: never = name;
   return exhaustive;

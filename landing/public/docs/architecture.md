@@ -6,14 +6,17 @@
 ```
 agent (any shell)
   → chrome-relay CLI            parses args, renders output
-  → HTTP, 127.0.0.1:12122       localhost-only bridge (Fastify)
-  → native messaging host       long-lived Node process, spawned by Chrome
-  → extension service worker    tool handlers, ref map, buffers
+  → instance registry           discovers and verifies connected profiles
+  → localhost HTTP              authenticated ephemeral port for one profile
+  → native messaging host       one process spawned by that extension instance
+  → extension service worker    that browser/profile's tools, refs, buffers
   → chrome.debugger (CDP)       trusted input, snapshots, capture
   → your tabs
 ```
 
 Every hop is local. The wire format is one JSON envelope per call: `{ name, args }` in, `{ ok, data } | { ok: false, errorDetails }` out.
+
+Each browser profile running the extension spawns its own native host. The host registers an authenticated ephemeral localhost port under `~/.chrome-relay/instances/`; every CLI call verifies those descriptors, resolves exactly one profile, and sends the command there. With one connected profile this is invisible. With several, `--profile <label|idprefix>` chooses one and profile-qualified refs such as `@3f2a:e12` route themselves. Port `12122` exists only as a legacy compatibility path for pre-0.8 installations.
 
 ## Why not `--remote-debugging-port`?
 
@@ -30,9 +33,9 @@ The cost is more moving parts (install registers the host; the extension must be
 
 | Piece | Owns |
 |---|---|
-| **CLI** (`chrome-relay`, npm) | argument parsing, output rendering (snapshot text, JSON), exit codes. Stateless — every invocation is one HTTP call. |
+| **CLI** (`chrome-relay`, npm) | argument parsing, profile discovery/routing, output rendering (snapshot text, JSON), exit codes. Stateless — every invocation resolves one host and makes one HTTP call. |
 | **Protocol** (bundled into the CLI) | tool names, argument schemas, error codes, the snapshot renderer. One source of truth both ends import. |
-| **Native host** | spawned by Chrome on the extension's `connectNative()`; runs the localhost HTTP server; relays frames. No logic. |
+| **Native host** | spawned once per extension instance on `connectNative()`; registers its authenticated localhost endpoint and relays frames. |
 | **Extension** | everything that touches the browser: the [ref map](/docs/refs/), the [snapshot builder](/docs/snapshots/), per-tab console/network ring buffers, CDP sessions, trusted input dispatch. |
 
 ## Security model

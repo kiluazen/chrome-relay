@@ -79,18 +79,77 @@ export interface SnapshotData {
 // ---------------------------------------------------------------------------
 // @ref token grammar. The @ prefix is mandatory in CLI positionals so a ref
 // can never be confused with a CSS type selector (`e3` is a valid one).
+//
+// v2 (multi-profile): refs are PROFILE-QUALIFIED in the printable token —
+// `@3f2a:e12` — because every profile mints its own e-counter from e1, so
+// cross-profile collisions are the normal case, not an edge case. The prefix
+// is the first 4 hex chars of the minting extension's instanceId; the CLI
+// routes on it BEFORE contacting any extension. Refs are qualified ALWAYS,
+// even with one profile connected: a token whose format depends on how many
+// profiles happen to be running would be hidden state. Bare `@e12` stays
+// accepted and follows the same routing rule as any unscoped command.
 
-const REF_TOKEN = /^@(e\d+)$/;
+const REF_TOKEN = /^@((?:[0-9a-f]{4,32}:)?e\d+)$/;
+const REF_ID = /^(?:([0-9a-f]{4,32}):)?(e\d+)$/;
 
-/** "@e3" → "e3"; anything else → null. */
+/** "@e3" → "e3"; "@3f2a:e3" → "3f2a:e3"; anything else → null.
+ *  Returns the full (possibly qualified) ref id — the wire form. */
 export function parseRefToken(input: string): string | null {
   const m = REF_TOKEN.exec(input.trim());
   return m ? m[1] : null;
 }
 
-/** "e3" → "@e3" (display form). */
+/** "e3" | "3f2a:e3" → "@e3" | "@3f2a:e3" (display form). */
 export function formatRefToken(ref: string): string {
   return `@${ref}`;
+}
+
+/** Split a wire ref id into its instance prefix (null when bare) and local
+ *  id. "3f2a:e12" → {prefix:"3f2a", id:"e12"}; "e12" → {prefix:null, id:"e12"};
+ *  anything else → null. */
+export function splitRefId(ref: string): { prefix: string | null; id: string } | null {
+  const m = REF_ID.exec(ref.trim());
+  return m ? { prefix: m[1] ?? null, id: m[2] } : null;
+}
+
+/** "e12" + "3f2a" → "3f2a:e12" (wire form). */
+export function qualifyRefId(id: string, prefix: string): string {
+  return `${prefix}:${id}`;
+}
+
+/** Derive the 4-hex-char ref/routing prefix from a UUID instanceId.
+ *  Shared by the extension (mint) and the CLI (routing/display) so the two
+ *  can never disagree on the derivation. */
+export function instancePrefix(instanceId: string): string {
+  return instanceId.replace(/-/g, "").toLowerCase().slice(0, 4);
+}
+
+/** Keys whose string values are ref ids on the wire. Only these are scanned
+ *  for routing prefixes — scanning every string would false-positive on user
+ *  data (a fill value that happens to look like "abcd:e5"). */
+const REF_BEARING_KEYS = new Set(["ref", "clickRef"]);
+
+/** Recursively collect the distinct instance prefixes carried by qualified
+ *  refs in a tool-args object (recursion covers nested chrome_batch calls).
+ *  Only values under ref-bearing keys are considered. The CLI routes on
+ *  these before any extension is contacted; two different prefixes in one
+ *  call is a target_conflict. */
+export function collectRefPrefixes(args: unknown, out = new Set<string>()): Set<string> {
+  if (Array.isArray(args)) {
+    for (const v of args) collectRefPrefixes(v, out);
+    return out;
+  }
+  if (args && typeof args === "object") {
+    for (const [key, v] of Object.entries(args)) {
+      if (REF_BEARING_KEYS.has(key) && typeof v === "string") {
+        const split = REF_ID.exec(v.trim());
+        if (split?.[1]) out.add(split[1]);
+      } else if (v && typeof v === "object") {
+        collectRefPrefixes(v, out);
+      }
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

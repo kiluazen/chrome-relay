@@ -17,6 +17,10 @@ function mockBridgeResponse(body: unknown, ok = true, status = 200) {
 }
 
 beforeEach(() => {
+  // Hermetic routing: an empty registry home means resolveRoute always takes
+  // the legacy fixed-port fallback, so these argv→body tests never depend on
+  // (or touch) the developer machine's real ~/.chrome-relay.
+  process.env.CHROME_RELAY_HOME = "/nonexistent/chrome-relay-test-home";
   fetchSpy = vi.fn();
   vi.stubGlobal("fetch", fetchSpy);
   // Default: every call returns ok with empty data so commands don't blow up.
@@ -31,6 +35,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete process.env.CHROME_RELAY_HOME;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });

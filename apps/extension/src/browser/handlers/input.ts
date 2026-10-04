@@ -30,6 +30,28 @@ import { resolveTarget, requireTabId, type ToolHandler } from "./target";
 // `pointerdown` instead of `mousedown` — without it the page receives
 // trusted mouse events but its pointer-event listeners never fire, so
 // dropdowns / menu triggers stay closed. Failure mode is silent.
+// Consequence reporting: did this click start a navigation? If yes, every
+// ref in the tab just died (refs.ts invalidates on the loading event), and
+// the agent should know NOW — in the click's own response — instead of one
+// wasted stale_ref call later. Check immediately, then once more after
+// 120ms (JS click handlers often navigate a tick later). Best effort.
+async function detectNavigation(tabId: number, urlBefore: string | undefined): Promise<boolean> {
+  const check = async (): Promise<boolean> => {
+    try {
+      const t = await chrome.tabs.get(tabId);
+      return t.status === "loading" || (urlBefore !== undefined && t.url !== urlBefore);
+    } catch {
+      return false;
+    }
+  };
+  if (await check()) return true;
+  await new Promise((r) => setTimeout(r, 120));
+  return check();
+}
+
+const NAVIGATED_NOTE =
+  "click triggered a navigation — this tab's refs are now stale; re-run snapshot before the next ref action";
+
 async function dispatchClick(tabId: number, x: number, y: number): Promise<void> {
   await send(tabId, "Input.dispatchMouseEvent", {
     type: "mouseMoved",
@@ -64,14 +86,17 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
       // Ref mode — the ref's tab IS the target; resolveTarget (active-tab
       // default) is deliberately not consulted.
       const r = await resolveRefCenter(TOOL_NAMES.CLICK, parsed.ref, parsed);
+      const urlBefore = (await chrome.tabs.get(r.tabId).catch(() => undefined))?.url;
       await dispatchClick(r.tabId, r.x, r.y);
+      const navigated = await detectNavigation(r.tabId, urlBefore);
       return {
         clicked: true,
         x: r.x,
         y: r.y,
         ref: parsed.ref,
         tabId: r.tabId,
-        ...(r.healed ? { healed: true } : {})
+        ...(r.healed ? { healed: true } : {}),
+        ...(navigated ? { navigated: true, note: NAVIGATED_NOTE } : {})
       };
     }
 
@@ -92,12 +117,15 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
       }
     }
 
+    const urlBefore = tab.url;
     await dispatchClick(tabId, x, y);
+    const navigated = await detectNavigation(tabId, urlBefore);
 
     return {
       clicked: true,
       x, y,
-      ...(parsed.kind === "selector" ? { selector: parsed.selector } : {})
+      ...(parsed.kind === "selector" ? { selector: parsed.selector } : {}),
+      ...(navigated ? { navigated: true, note: NAVIGATED_NOTE } : {})
     };
   },
 

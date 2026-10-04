@@ -20,10 +20,11 @@ import type {
   SnapshotNode,
   SnapshotRefEntry
 } from "@chrome-relay/protocol";
-import { RelayError, renderSnapshot, TOOL_NAMES } from "@chrome-relay/protocol";
+import { RelayError, renderSnapshot, qualifyRefId, TOOL_NAMES } from "@chrome-relay/protocol";
 import { evalInTab, send } from "./cdp";
 import { markCursorInteractive, unmarkCursorInteractive } from "./page-actions";
 import { assignRef as registerRef, beginTabSnapshot } from "./refs";
+import { getWireRefPrefix } from "./identity";
 
 // Interactive AX roles — always ref-bearing, even unnamed. Same 17-role set
 // the old chrome_ax used.
@@ -45,6 +46,16 @@ const DROP_ROLES = new Set<string>(["InlineTextBox", "LineBreak", "ScrollBar"]);
 
 // Cap on cursor-interactive sweep extras per snapshot.
 const SWEEP_MAX = 100;
+
+// Pattern elision (Shortcut's formula-aliasing idea, applied to trees):
+// virtualized tables emit hundreds of consecutive siblings with identical
+// SHAPE (same role, same attrs, same child structure — different text).
+// Keep the first ELIDE_KEEP, replace the rest with one loud marker line.
+// Thresholds are generous on purpose: never elide runs ≤ ELIDE_RUN_MIN, so
+// ordinary lists (HN's ~30 alternating story rows don't even form a run)
+// stay complete. Opt out entirely with --no-elide.
+const ELIDE_RUN_MIN = 20;
+const ELIDE_KEEP = 10;
 
 // ---------------------------------------------------------------------------
 // Raw CDP shapes (only the bits we read)
@@ -263,6 +274,45 @@ function truncateDepth(nodes: BuildNode[], depth: number): BuildNode[] {
   return nodes.map((n) => ({ ...n, children: truncateDepth(n.children, depth - 1) }));
 }
 
+// Shape signature: identical role + named-ness + attr keys + child roles.
+// Text content deliberately excluded — that's what VARIES across rows.
+function shapeSig(n: BuildNode): string {
+  return [
+    n.role,
+    n.name ? "named" : "anon",
+    Object.keys(n.attrs ?? {}).sort().join("+"),
+    n.children.map((c) => c.role).join(",")
+  ].join("|");
+}
+
+function elideRepeats(nodes: BuildNode[]): BuildNode[] {
+  const out: BuildNode[] = [];
+  let i = 0;
+  while (i < nodes.length) {
+    const sig = shapeSig(nodes[i]);
+    let j = i + 1;
+    while (j < nodes.length && shapeSig(nodes[j]) === sig) j++;
+    const runLen = j - i;
+    if (runLen > ELIDE_RUN_MIN) {
+      for (let k = i; k < i + ELIDE_KEEP; k++) {
+        out.push({ ...nodes[k], children: elideRepeats(nodes[k].children) });
+      }
+      out.push({
+        role: "elided",
+        name: `${runLen - ELIDE_KEEP} more ${nodes[i].role} siblings with the same shape — scope with -s <css>, or pass --no-elide for all`,
+        children: [],
+        refEligible: false
+      });
+    } else {
+      for (let k = i; k < j; k++) {
+        out.push({ ...nodes[k], children: elideRepeats(nodes[k].children) });
+      }
+    }
+    i = j;
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Ref assignment + wire conversion
 
@@ -271,7 +321,8 @@ function assignRefs(
   tabId: number,
   nthCounter: Map<string, number>,
   refs: Record<string, SnapshotRefEntry>,
-  prior: Map<number, string>
+  prior: Map<number, string>,
+  refPrefix: string | null
 ): void {
   for (const n of nodes) {
     if ((n.refEligible || n.source === "sweep") && n.backendNodeId !== undefined) {
@@ -285,11 +336,19 @@ function assignRefs(
         name: n.name ?? "",
         ...(nth > 0 ? { nth } : {})
       };
+      // Internal RefMap keys stay bare (`eN`); the WIRE form is profile-
+      // qualified (`3f2a:e12`) so the printed token routes across profiles.
+      // Qualification always happens, even single-profile — a token whose
+      // format depends on connected-profile count would be hidden state.
+      // ONE exception, and it's about the HOST not the profile count:
+      // refPrefix is null when the connected host predates v2 (its CLI
+      // can't parse qualified tokens) — see identity.getWireRefPrefix.
       const ref = registerRef(entry, prior);
-      n.ref = ref;
-      refs[ref] = entry;
+      const wireRef = refPrefix === null ? ref : qualifyRefId(ref, refPrefix);
+      n.ref = wireRef;
+      refs[wireRef] = entry;
     }
-    assignRefs(n.children, tabId, nthCounter, refs, prior);
+    assignRefs(n.children, tabId, nthCounter, refs, prior, refPrefix);
   }
 }
 
@@ -327,7 +386,7 @@ if (typeof chrome !== "undefined" && chrome.tabs?.onRemoved) {
 
 export async function buildSnapshot(
   tabId: number,
-  opts: Pick<ChromeSnapshotArgs, "interactiveOnly" | "depth" | "scope" | "urls" | "diff">
+  opts: Pick<ChromeSnapshotArgs, "interactiveOnly" | "depth" | "scope" | "urls" | "diff" | "elide">
 ): Promise<SnapshotData> {
   await send(tabId, "Accessibility.enable", {});
   const response = await send<{ nodes: RawAXNode[] }>(tabId, "Accessibility.getFullAXTree", { depth: -1 });
@@ -366,14 +425,18 @@ export async function buildSnapshot(
 
   if (opts.interactiveOnly) tree = pruneToRefBearing(tree);
   if (opts.depth !== undefined) tree = truncateDepth(tree, opts.depth);
+  // Elide BEFORE ref assignment — elided rows never consume refs, so the
+  // ref map matches what's printed. The marker line is loud, not silent.
+  if (opts.elide !== false) tree = elideRepeats(tree);
 
   // Refs: stable across re-snapshots. Elements that survived keep their
   // @eN (reused via the prior map); new elements get fresh global ids;
   // vanished elements' refs die because they're never re-registered.
   const prior = await beginTabSnapshot(tabId);
+  const refPrefix = await getWireRefPrefix();
   const refs: Record<string, SnapshotRefEntry> = {};
   const nthCounter = new Map<string, number>();
-  assignRefs(tree, tabId, nthCounter, refs, prior);
+  assignRefs(tree, tabId, nthCounter, refs, prior, refPrefix);
 
   // Sweep extras — div-soup clickables the AX tree missed. Dedupe against
   // backendNodeIds that already got a ref above.
@@ -390,7 +453,7 @@ export async function buildSnapshot(
       refEligible: true
     });
   }
-  assignRefs(sweepNodes, tabId, nthCounter, refs, prior);
+  assignRefs(sweepNodes, tabId, nthCounter, refs, prior, refPrefix);
   tree = tree.concat(sweepNodes);
 
   let title = "";

@@ -15,7 +15,8 @@
 //   2. Entries hydrated from chrome.storage.session (MV3 SW restarts) go
 //      through the same verification — hydration restores ids, not trust.
 
-import type { SnapshotRefEntry } from "@chrome-relay/protocol";
+import { RelayError, splitRefId, type SnapshotRefEntry } from "@chrome-relay/protocol";
+import { getRefPrefix } from "./identity";
 
 const STORAGE_KEY = "chrome_relay_ref_map_v1";
 // Hard cap on total entries — a runaway multi-tab session can't grow the
@@ -60,6 +61,11 @@ function schedulePersist(): void {
   persistTimer = setTimeout(() => {
     persistTimer = null;
     const payload: PersistedRefMap = { counter, entries: [...entries.entries()] };
+    // The MV3 service worker can be torn down between scheduling and this
+    // callback. Tests exercise the same lifetime boundary by removing the
+    // mocked global. Persistence is best-effort, so missing storage must not
+    // become an uncaught timer exception after the browser context is gone.
+    if (typeof chrome === "undefined" || !chrome.storage?.session) return;
     void chrome.storage.session.set({ [STORAGE_KEY]: payload }).catch(() => {
       /* best effort — in-memory map stays authoritative */
     });
@@ -127,18 +133,44 @@ export function allocateRef(entry: SnapshotRefEntry): string {
   return ref;
 }
 
+/** Normalize an incoming (possibly profile-qualified) ref id to the bare
+ *  internal map key. The map stays keyed by bare `eN` — qualification is a
+ *  wire-boundary concern.
+ *
+ *  A FOREIGN prefix (another profile's) is a hard target_conflict, not a
+ *  stale ref: the CLI routes on the prefix, so a foreign ref landing here
+ *  means the caller explicitly overrode routing (e.g. --profile A with
+ *  @B:eN). "Re-run snapshot" would be the wrong advice — the ref exists,
+ *  just not in this profile. */
+async function normalizeRefId(ref: string): Promise<string> {
+  const split = splitRefId(ref);
+  if (!split || !split.prefix) return split?.id ?? ref;
+  const own = await getRefPrefix();
+  if (split.prefix !== own) {
+    throw new RelayError({
+      code: "target_conflict",
+      message: `ref @${ref} was minted by another profile (this one is ${own}…). Route the call to the profile that produced the snapshot.`,
+      phase: "resolve_ref",
+      details: { ref, refPrefix: split.prefix, ownPrefix: own },
+      retryable: false
+    });
+  }
+  return split.id;
+}
+
 export async function getRefEntry(ref: string): Promise<SnapshotRefEntry | undefined> {
   await ensureHydrated();
-  return entries.get(ref);
+  return entries.get(await normalizeRefId(ref));
 }
 
 /** Write a fresh backendNodeId back after a successful role/name/nth heal —
  *  our addition over agent-browser (their resolver re-finds every time). */
 export async function healRefEntry(ref: string, backendNodeId: number): Promise<void> {
   await ensureHydrated();
-  const entry = entries.get(ref);
+  const key = await normalizeRefId(ref);
+  const entry = entries.get(key);
   if (entry) {
-    entries.set(ref, { ...entry, backendNodeId });
+    entries.set(key, { ...entry, backendNodeId });
     schedulePersist();
   }
 }

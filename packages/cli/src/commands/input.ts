@@ -1,8 +1,8 @@
-// click / fill / keys / type / js / hover — trusted-input + JS-eval commands.
+// click / fill / keys / type / js / hover: trusted-input + JS-eval commands.
 //
 // Element-addressed commands accept @eN refs from `chrome-relay snapshot`
 // in the same positional as the CSS selector (adoption-spec Change 2). The
-// @ prefix keeps parsing unambiguous — a bare `e3` is a valid CSS type
+// @ prefix keeps parsing unambiguous. A bare `e3` is a valid CSS type
 // selector. A ref carries its own tab: no --tab needed, and a contradicting
 // one is target_conflict.
 
@@ -33,7 +33,7 @@ Examples:
   chrome-relay click 'button[aria-label="Save"]'
   chrome-relay click --tab 123 --x 1327 --y 771
 
-Prefer @refs from \`chrome-relay snapshot\` — they carry their own tab and
+Prefer @refs from \`chrome-relay snapshot\`. They carry their own tab and
 survive DOM churn (backendNodeId + role/name heal). CSS selectors for
 elements you know statically. Coordinates for canvas/SVG chart internals
 where no DOM handle exists. See docs/clicking-strategies.md.
@@ -42,7 +42,7 @@ where no DOM handle exists. See docs/clicking-strategies.md.
   ).action(async (target: string | undefined, opts) => {
     const extras: Record<string, unknown> = {};
     if (target) Object.assign(extras, addressArg(target));
-    // Forward partial input — protocol parser rejects x-without-y so the
+    // Forward partial input. Protocol parser rejects x-without-y so the
     // agent sees the typo instead of a silent fallback to selector mode.
     if (typeof opts.x === "number") extras.x = opts.x;
     if (typeof opts.y === "number") extras.y = opts.y;
@@ -101,10 +101,10 @@ Examples:
   chrome-relay type "appended into already-focused element"
 
 When to pick which:
-  fill   — plain <input>, <textarea>, <select>, React-controlled inputs (atomic write).
-  type   — contenteditable, Draft.js, Lexical, ProseMirror (trusted text commit).
-  keys   — Enter, Tab, Esc, arrows, modifier chords (single key press).
-  js     — anything else.
+  fill: plain <input>, <textarea>, <select>, React-controlled inputs (atomic write).
+  type: contenteditable, Draft.js, Lexical, ProseMirror (trusted text commit).
+  keys: Enter, Tab, Esc, arrows, modifier chords (single key press).
+  js: anything else.
 `
       )
   ).action(async (text: string, opts) => {
@@ -161,7 +161,7 @@ tooltip appearance, etc.) that a bare click would skip past too quickly.
   ).action(async (target: string | undefined, opts) => {
     const extras: Record<string, unknown> = {};
     if (target) Object.assign(extras, addressArg(target));
-    // Forward whatever was passed — even partial (x without y). The
+    // Forward whatever was passed, even partial input (x without y). The
     // protocol parser rejects with invalid_arguments so the agent sees
     // the typo instead of silently falling back to selector mode.
     if (typeof opts.x === "number") extras.x = opts.x;

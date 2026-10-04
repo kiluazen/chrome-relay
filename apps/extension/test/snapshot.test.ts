@@ -189,6 +189,59 @@ describe("buildSnapshot", () => {
     expect(sweepEntries.map((e) => e.backendNodeId)).toEqual([300]);
   });
 
+  it("elides long runs of identical-shape siblings: keep 10 + loud marker, refs only for kept", async () => {
+    // 25 named listitems with identical shape (same role, named, no attrs,
+    // no children) under the root — a virtualized-table stand-in.
+    const rows: Raw[] = Array.from({ length: 25 }, (_, k) => ({
+      nodeId: `r${k}`,
+      ignored: false,
+      role: { value: "listitem" },
+      name: { value: `Row ${k}` },
+      backendDOMNodeId: 1000 + k,
+      childIds: []
+    }));
+    const fixture: Raw[] = [
+      { nodeId: "1", ignored: false, role: { value: "RootWebArea" }, backendDOMNodeId: 100,
+        childIds: rows.map((r) => r.nodeId as string) },
+      ...rows
+    ];
+    scriptCdp(fixture);
+    const m = await load();
+    const data = await m.buildSnapshot(42, {});
+
+    const items = data.nodes.filter((n) => n.role === "listitem");
+    const markers = data.nodes.filter((n) => n.role === "elided");
+    expect(items.length).toBe(10);
+    expect(markers.length).toBe(1);
+    expect(markers[0].name).toContain("15 more listitem siblings");
+    expect(markers[0].ref).toBeUndefined(); // marker is not actionable
+    // refs only allocated for printed rows
+    expect(Object.values(data.refs).filter((e) => e.role === "listitem").length).toBe(10);
+  });
+
+  it("elide: false prints everything; runs of 20 or fewer never elide", async () => {
+    const mk = (n: number): Raw[] => {
+      const rows: Raw[] = Array.from({ length: n }, (_, k) => ({
+        nodeId: `r${k}`, ignored: false, role: { value: "listitem" },
+        name: { value: `Row ${k}` }, backendDOMNodeId: 2000 + k, childIds: []
+      }));
+      return [
+        { nodeId: "1", ignored: false, role: { value: "RootWebArea" }, backendDOMNodeId: 100,
+          childIds: rows.map((r) => r.nodeId as string) },
+        ...rows
+      ];
+    };
+    scriptCdp(mk(25));
+    let m = await load();
+    let data = await m.buildSnapshot(42, { elide: false });
+    expect(data.nodes.filter((n) => n.role === "listitem").length).toBe(25);
+
+    scriptCdp(mk(20));
+    data = await m.buildSnapshot(42, {});
+    expect(data.nodes.filter((n) => n.role === "listitem").length).toBe(20);
+    expect(data.nodes.filter((n) => n.role === "elided").length).toBe(0);
+  });
+
   it("depth truncates the tree", async () => {
     scriptCdp(FIXTURE);
     const m = await load();

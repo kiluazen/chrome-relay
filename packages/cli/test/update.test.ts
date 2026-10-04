@@ -167,6 +167,57 @@ describe("chrome-relay update — structured metadata", () => {
     expect(warnings.some((w) => w.code === "release_notes_parse_failed")).toBe(true);
   });
 
+  it("win32: resolves via `where`, skips the extensionless shim, re-execs the quoted .CMD", async () => {
+    const realPlatform = process.platform;
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+    try {
+      const ok = () => ({ status: 0, stdout: Buffer.from("") });
+      spawnHandlers.npm  = ok;
+      spawnHandlers.pnpm = ok;
+      spawnHandlers.bun  = ok;
+      // `where` (not `which`) is the Windows lookup, and it prints several
+      // matches: the extensionless npm shim first, then the .CMD. We must
+      // pick the .CMD — the extensionless one isn't directly spawnable.
+      let whichCalledWith = "";
+      spawnHandlers.where = (args) => {
+        whichCalledWith = args[0];
+        return {
+          status: 0,
+          stdout: Buffer.from("C:\\Users\\me\\AppData\\Roaming\\npm\\chrome-relay\r\nC:\\Users\\me\\AppData\\Roaming\\npm\\chrome-relay.CMD\r\n")
+        };
+      };
+      // spawnCli quotes the bin path before handing it to the shell.
+      spawnHandlers['"C:\\Users\\me\\AppData\\Roaming\\npm\\chrome-relay.CMD"'] = (args) => {
+        if (args[0] === "--version") return { status: 0, stdout: Buffer.from("99.99.99") };
+        if (args[0] === "release-notes") {
+          return {
+            status: 0,
+            stdout: Buffer.from(JSON.stringify({
+              currentVersion: "99.99.99",
+              since: "0.0.0",
+              changes: [{ version: "99.99.99", bullets: ["windows path"] }]
+            }))
+          };
+        }
+        return { status: 0, stdout: Buffer.from("") };
+      };
+      // The extensionless shim must NOT be the bin we spawn.
+      spawnHandlers["C:\\Users\\me\\AppData\\Roaming\\npm\\chrome-relay"] = () => {
+        throw new Error("should not spawn the extensionless shim on win32");
+      };
+
+      await runArgs("update");
+      const out = lastJsonOnStdout();
+      expect(whichCalledWith).toBe("chrome-relay");
+      expect((out.binary as Record<string, unknown>).reexeced).toBe(true);
+      expect((out.binary as Record<string, unknown>).path).toBe("C:\\Users\\me\\AppData\\Roaming\\npm\\chrome-relay.CMD");
+      expect(out.updatedTo).toBe("99.99.99");
+      expect((out.releaseNotes as Record<string, unknown>).source).toBe("updated_binary");
+    } finally {
+      Object.defineProperty(process, "platform", { value: realPlatform, configurable: true });
+    }
+  });
+
   it("install succeeded, new binary returns valid release notes", async () => {
     const ok = () => ({ status: 0, stdout: Buffer.from("") });
     spawnHandlers.npm   = ok;

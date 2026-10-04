@@ -1,10 +1,10 @@
 # Chrome Relay
 
-> Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms, fully local. CLI → localhost HTTP → native messaging host → Chrome extension → CDP. No cloud relay, no account, no telemetry.
+> Your agent drives the Chrome you're signed into. Reads pages, clicks buttons, fills forms, fully local. CLI to localhost HTTP to native messaging host to Chrome extension to CDP. No cloud relay, no account, no telemetry.
 
 ## Docs
-- [Chrome Relay docs](https://chrome-relay.kushalsm.com/docs/index.md): Your agent drives the Chrome you're signed into — reads pages, clicks buttons, fills forms. Nothing leaves the machine.
-- [Installation](https://chrome-relay.kushalsm.com/docs/installation.md): Two pieces — the Chrome extension and the CLI. One command wires them together.
+- [Chrome Relay docs](https://chrome-relay.kushalsm.com/docs/index.md): Your agent drives the Chrome you're signed into. It reads pages, clicks buttons, and fills forms. Nothing leaves the machine.
+- [Installation](https://chrome-relay.kushalsm.com/docs/installation.md): Two pieces. The Chrome extension and the CLI. One command wires them together.
 - [Quickstart](https://chrome-relay.kushalsm.com/docs/quickstart.md): The snapshot → ref → act loop, end to end, with real output.
 - [Why your real Chrome](https://chrome-relay.kushalsm.com/docs/why-your-real-chrome.md): Automation browsers give your agent a browser. Chrome Relay gives it yours — and that difference is the whole product.
 - [Architecture](https://chrome-relay.kushalsm.com/docs/architecture.md): Five hops, each with one job. Why the extension route is the only safe way into a running Chrome.

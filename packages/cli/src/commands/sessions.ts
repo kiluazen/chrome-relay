@@ -1,4 +1,4 @@
-// viewport / console / network / workspace / group / self-reload — session-
+// viewport / console / network / workspace / group / self-reload: session-
 // and capture-buffer commands that share filter/limit options.
 
 import type { Command } from "commander";
@@ -17,22 +17,24 @@ function netFilterOpts(cmd: Command) {
     .option("--filter <substr>", "url substring filter")
     .option("--status <bucket>", "ok | redirect | client_error | server_error | failed")
     .option("--method <verb>",   "exact method, e.g. POST")
-    .option("--limit <n>",       "cap response length", (v) => Number(v));
+    .option("--limit <n>",       "cap response length", (v) => Number(v))
+    .option("--raw-headers",     "include sensitive header values (cookies, auth, tokens). REDACTED by default so output is safe to paste");
 }
 
-function netFilterArgs(opts: { filter?: string; status?: string; method?: string; limit?: number }) {
+function netFilterArgs(opts: { filter?: string; status?: string; method?: string; limit?: number; rawHeaders?: boolean }) {
   const a: Record<string, unknown> = {};
   if (opts.filter) a.filter = opts.filter;
   if (opts.status) a.status = opts.status;
   if (opts.method) a.method = opts.method;
   if (typeof opts.limit === "number") a.limit = opts.limit;
+  if (opts.rawHeaders) a.rawHeaders = true;
   return a;
 }
 
 export function registerSessions(ctx: CommandContext): void {
   const { program, withBase, run } = ctx;
 
-  // ---------- viewport (§2.2 — device-metrics emulation) ----------
+  // ---------- viewport (§2.2: device-metrics emulation) ----------
   const viewport = program
     .command("viewport")
     .description("Emulate device viewport, DPR, mobile flag, touch, and user agent.")
@@ -155,7 +157,7 @@ Notes:
       await run("chrome_workspace", { action: "close", name });
     });
 
-  // ---------- group (tab-GROUPS — Chrome's colored folder of tabs) ----------
+  // ---------- group (tab-GROUPS: Chrome's colored folder of tabs) ----------
   const group = program
     .command("group")
     .description("Manage Chrome tab-groups (the colored, collapsible folders inside one window).")
@@ -230,7 +232,7 @@ Notes:
       await run("chrome_group", { action: "remove", tabIds: String(opts.tabs) });
     });
 
-  // ---------- network (§2.7a — HTTP capture + HAR export) ----------
+  // ---------- network (§2.7a: HTTP capture + HAR export) ----------
   // Filter / status / method / limit are lifted to the parent so they work
   // with `chrome-relay network --filter X` AND `network read --filter X`.
   const network = tabOpt(netFilterOpts(
@@ -259,8 +261,8 @@ Privacy:
   share with the agent invoking chrome-relay.
 
 Notes:
-  Bodies are NOT eagerly buffered — Chrome GCs response bodies ~30s after
-  the request finishes. Use \`--body <id>\` or \`har --with-bodies\` promptly.
+  Bodies are NOT eagerly buffered. Chrome GCs response bodies ~30s after
+  the request finishes. Use \`network body <requestId>\` or \`network har --with-bodies\` promptly.
   WebSocket frames and SSE streams are out of scope.
 `
     )
@@ -279,7 +281,7 @@ Notes:
       .command("body <requestId>")
       .description("Fetch the response body for one request (lazy; may fail if GC'd).")
       .option("--head <bytes>", "truncate to first N bytes", (v) => Number(v))
-      .option("--full",         "return the full body — default truncates to 8 KB")
+      .option("--full",         "return the full body. Default truncates to 8 KB")
   ).action(async (requestId: string, opts) => {
     const extras: Record<string, unknown> = { action: "body", requestId };
     if (opts.full) extras.full = true;
@@ -291,7 +293,7 @@ Notes:
     network
       .command("har")
       .description("Emit HAR-compatible JSON for the captured entries.")
-      .option("--with-bodies", "fetch response bodies before emitting; strict by default — fails if any body cannot be fetched")
+      .option("--with-bodies", "fetch response bodies before emitting; strict by default, fails if any body cannot be fetched")
       .option("--best-effort-bodies", "with --with-bodies: keep the HAR even when some bodies are missing/errored (legacy behavior); per-entry _chrome_relay.bodyState/bodyError records what failed")
   )).action(async (opts) => {
     const extras: Record<string, unknown> = { ...netFilterArgs(opts), action: "har" };
@@ -314,7 +316,7 @@ Notes:
     await run("chrome_network", withBase(opts, { action: "clear" }));
   });
 
-  // ---------- console (§2.7c — page console + exception capture) ----------
+  // ---------- console (§2.7c: page console + exception capture) ----------
   tabOpt(
     program
       .command("console")

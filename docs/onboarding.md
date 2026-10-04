@@ -33,21 +33,21 @@ Open the popup and confirm:
 - the store extension ID is `cpdiapbifblhlcpnmlmfpgfjlacebokb`
 - local unpacked extension IDs can vary; the installer also allows the current dev IDs used by this workspace
 - the native host is connected
-- the bridge port is `12122`
+- `node packages/cli/dist/cli.js profile list` shows the browser/profile instance on its authenticated ephemeral port
 
 ### 4. Use the CLI
 
 ```bash
 node packages/cli/dist/cli.js tabs
-node packages/cli/dist/cli.js read -i
+node packages/cli/dist/cli.js snapshot -i
 ```
 
-## Later
+## User-facing packaging
 
-The intended user-facing packaging is:
+The shipped surfaces are:
 
 - Chrome Web Store extension named **Chrome Relay**
-- `npx skills add kiluazen/kstack@chrome-relay` agent-skill install surface
+- `npx -y skills add kiluazen/kstack@chrome-relay` agent-skill install surface
 - a `chrome-relay` skill that explains the CLI setup for agents
 
 The current codebase keeps those surfaces separate:

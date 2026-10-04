@@ -25,14 +25,33 @@ export class ExtensionBridge {
   private readonly pending = new Map<string, PendingRequest>();
   private readonly readyWaiters = new Set<() => void>();
   private ready = false;
-  // Extension version captured from `bridge.ready`. Read by the HTTP server
-  // to compute the cli-outdated notice on each tool call.
+  // Extension version + id captured from `bridge.ready`. Version feeds the
+  // cli-outdated notice; the id tells doctor WHICH extension owns the bridge
+  // (store vs unpacked dev — they race for the port when both are loaded).
   private extensionVersion: string | undefined;
+  private extensionId: string | undefined;
+  // v2 identity from `bridge.ready`: the minted per-profile instanceId
+  // (keys the instance descriptor) and the file-URL-access toggle state
+  // (surfaced on /ping for doctor). Absent from pre-v2 extensions.
+  private instanceId: string | undefined;
+  private fileSchemeAccess: boolean | undefined;
 
   constructor(private readonly send: (message: BridgeMessage) => void) {}
 
   getExtensionVersion(): string | undefined {
     return this.extensionVersion;
+  }
+
+  getExtensionId(): string | undefined {
+    return this.extensionId;
+  }
+
+  getInstanceId(): string | undefined {
+    return this.instanceId;
+  }
+
+  getFileSchemeAccess(): boolean | undefined {
+    return this.fileSchemeAccess;
   }
 
   handleMessage(message: BridgeMessage): void {
@@ -60,6 +79,9 @@ export class ExtensionBridge {
   private handleReady(message: BridgeReadyMessage): void {
     this.ready = true;
     this.extensionVersion = message.payload?.version;
+    this.extensionId = message.payload?.extensionId;
+    this.instanceId = message.payload?.instanceId;
+    this.fileSchemeAccess = message.payload?.fileSchemeAccess;
     for (const notify of this.readyWaiters) {
       notify();
     }

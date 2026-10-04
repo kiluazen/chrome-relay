@@ -37,6 +37,7 @@ describe("TOOL_NAMES", () => {
       "SNAPSHOT",
       "SWITCH_TAB",
       "TYPE",
+      "UPLOAD",
       "VIEWPORT",
       "WAIT",
       "WORKSPACE"

@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- One page, all three upload mechanisms:
+     - #direct / #multi: visible file inputs (upload set)
+     - #pick button clicking a hidden #hidden-input (upload choose)
+     - #zone: a drop zone reading DataTransfer.files (upload drop) -->
+<html>
+  <body>
+    <input id="direct" type="file" accept=".txt" />
+    <input id="multi" type="file" multiple />
+    <input id="hidden-input" type="file" style="display: none" />
+    <button id="pick" type="button">Upload a file</button>
+    <div id="zone" style="width: 240px; height: 120px; border: 2px dashed #888">drop here</div>
+
+    <script>
+      document.getElementById("pick").addEventListener("click", () => {
+        document.getElementById("hidden-input").click();
+      });
+
+      const dropped = [];
+      let sawDragOver = false;
+      const zone = document.getElementById("zone");
+      zone.addEventListener("dragover", (e) => {
+        sawDragOver = true;
+        e.preventDefault();
+      });
+      zone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        for (const f of e.dataTransfer.files) dropped.push({ name: f.name, size: f.size });
+      });
+
+      const names = (input) => Array.from(input.files ?? []).map((f) => ({ name: f.name, size: f.size }));
+      window.__diag = () => ({
+        direct: names(document.getElementById("direct")),
+        multi: names(document.getElementById("multi")),
+        hidden: names(document.getElementById("hidden-input")),
+        dropped,
+        sawDragOver
+      });
+    </script>
+  </body>
+</html>

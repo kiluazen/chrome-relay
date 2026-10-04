@@ -145,18 +145,24 @@ blockquote p { margin: 0; }
   <main>
     <h1>The agent skill</h1>
     <p class="page-desc">A playbook your agent loads once, so it drives Chrome Relay well from the first command.</p>
-    <p>Chrome Relay is a CLI, so any agent that can run shell commands can use it with zero integration. The skill is the difference between <em>can use</em> and <em>uses well</em> — it teaches the snapshot→ref loop, which text tool fits which editor, the fallback ladder, and the gotchas, so the agent doesn&#39;t rediscover them by failing.</p>
+    <p>Chrome Relay is a CLI, so any agent that can run shell commands can use it with zero integration.</p>
+<p>The skill is the difference between <em>can use</em> and <em>uses well</em>. It teaches the snapshot/ref loop, which text tool fits which editor, the fallback ladder, and the gotchas, so the agent doesn&#39;t rediscover them by failing.</p>
 <h2 id="install">Install<a class="anchor" href="#install" aria-hidden="true">#</a></h2>
-<p>For Claude Code / Codex-style agents with a skills directory:</p>
-<pre><code class="language-sh">npx skills add kiluazen/kstack@chrome-relay
+<p>If the CLI is installed, use the version-matched copy:</p>
+<pre><code class="language-sh">chrome-relay skills get core
 </code></pre>
-<p>Or fetch it directly — the skill lives on this site as plain markdown:</p>
+<p>For Claude Code / Codex-style agents with a skills directory:</p>
+<pre><code class="language-sh">npx -y skills add kiluazen/kstack@chrome-relay
+</code></pre>
+<p>The <code>-y</code> auto-confirms npx&#39;s &quot;install the <code>skills</code> package?&quot; prompt, so an agent running headless doesn&#39;t hang waiting for a TTY.</p>
+<p>Or fetch it directly. The skill lives on this site as plain markdown:</p>
 <pre><code>https://chrome-relay.kushalsm.com/skill.md
 </code></pre>
-<p>Agents reading this page: that URL is the canonical playbook. Load it before driving Chrome Relay.</p>
+<p>Agents reading this page: load either the CLI playbook or that URL before driving Chrome Relay.</p>
 <h2 id="whats-in-it">What&#39;s in it<a class="anchor" href="#whats-in-it" aria-hidden="true">#</a></h2>
-<p>The skill is ~120 lines of markdown. The spine:</p>
-<p><strong>The core loop</strong> — see, act, see again:</p>
+<p>The spine:</p>
+<p><strong>The core loop</strong></p>
+<p>See, act, see again:</p>
 <pre><code class="language-sh">chrome-relay tabs
 chrome-relay navigate &quot;https://kushalsm.com&quot; --new   # background tab
 chrome-relay snapshot --tab 1234 -i           # actionable elements get @refs
@@ -164,8 +170,12 @@ chrome-relay click @e12                       # refs need no --tab
 chrome-relay fill @e14 &quot;hello&quot;
 chrome-relay snapshot --tab 1234 -i           # re-look after changes
 </code></pre>
-<p><strong>Ref lifetime rules</strong> — refs survive same-page churn (healing), die on navigation (<code>stale_ref</code> → re-snapshot, never retry), refuse covered targets (<code>click_intercepted</code> → dismiss, retry).</p>
-<p><strong>The text-tool table</strong> — the single highest-value piece, because text entry is where browser agents quietly fail:</p>
+<p><strong>Ref lifetime rules</strong></p>
+<p>Refs survive same-page churn. They die on navigation. <code>stale_ref</code> means re-snapshot and never retry the old ref. <code>click_intercepted</code> means dismiss the cover or scroll, then retry.</p>
+<p><strong>Multiple browsers and profiles</strong></p>
+<p>The 0.8 skill begins by checking <code>chrome-relay profile list</code>. One connected browser/profile routes implicitly. With several, <code>profile_ambiguous</code> is a picker: choose an exact <code>--profile &lt;label|idprefix&gt;</code> entry and rerun. Qualified refs such as <code>@3f2a:e12</code> carry both their browser profile and tab, so later actions route themselves.</p>
+<p><strong>The text-tool table</strong></p>
+<p>The highest-value part, because text entry is where browser agents quietly fail:</p>
 <table>
 <thead>
 <tr>
@@ -179,7 +189,7 @@ chrome-relay snapshot --tab 1234 -i           # re-look after changes
 </tr>
 <tr>
 <td>contenteditable, Draft.js, Lexical, ProseMirror</td>
-<td><code>type</code> (appends at caret — clear first)</td>
+<td><code>type</code>. Appends at caret, so clear first</td>
 </tr>
 <tr>
 <td>Submit, navigate, shortcuts</td>
@@ -187,16 +197,20 @@ chrome-relay snapshot --tab 1234 -i           # re-look after changes
 </tr>
 <tr>
 <td>Combobox / autocomplete</td>
-<td><code>type</code> filter → <code>keys ArrowDown</code> → <code>keys Enter</code></td>
+<td><code>type</code> filter, <code>keys ArrowDown</code>, <code>keys Enter</code></td>
 </tr>
 </tbody></table>
-<p><strong>Operational guardrails</strong> — don&#39;t echo secrets into shell strings; screenshot before irreversible actions; a failing click is information (plant a capture-phase listener, act, read the console) — not a stop signal.</p>
+<p><strong>Operational guardrails</strong></p>
+<p>Don&#39;t echo secrets into shell strings. Screenshot before irreversible actions. A failing click is information, not a stop signal. Plant a capture-phase listener, act, then read the console.</p>
 <h2 id="why-a-skill-and-not-an-mcp-server">Why a skill and not an MCP server<a class="anchor" href="#why-a-skill-and-not-an-mcp-server" aria-hidden="true">#</a></h2>
-<p>MCP tool schemas are injected into the agent&#39;s context on every turn — for browser-tool servers that&#39;s measured in thousands of tokens per turn before any work happens. A CLI costs zero until invoked, and the skill is loaded once. Same capability, none of the standing tax. This is a deliberate position, not a missing feature.</p>
+<p>MCP tool schemas are injected into the agent&#39;s context on every turn. For browser-tool servers, that can mean thousands of tokens before any work happens.</p>
+<p>A CLI costs zero until invoked, and the skill is loaded once.</p>
+<p>Same capability, none of the standing tax. This is a deliberate position, not a missing feature.</p>
 <h2 id="keeping-it-current">Keeping it current<a class="anchor" href="#keeping-it-current" aria-hidden="true">#</a></h2>
-<p><code>chrome-relay &lt;command&gt; --help</code> is always authoritative — the skill says so itself, and agents should trust the binary over any doc, including this one. The skill&#39;s canonical source is versioned in <a href="https://github.com/kiluazen/kstack/tree/main/skills/chrome-relay">kstack</a>; this site&#39;s copy tracks it.</p>
+<p><code>chrome-relay &lt;command&gt; --help</code> is always authoritative. The skill says so itself, and agents should trust the binary over any doc, including this one.</p>
+<p>The skill&#39;s canonical source is versioned in <a href="https://github.com/kiluazen/kstack/tree/main/skills/chrome-relay">kstack</a>. This site&#39;s copy tracks it.</p>
 
-    <div class="pager"><a class="prev" href="/docs/errors/"><span class="dir">← Previous</span><span class="t">Errors</span></a><a class="next" href="/docs/vs-agent-browser/"><span class="dir">Next →</span><span class="t">vs agent-browser</span></a></div>
+    <div class="pager"><a class="prev" href="/docs/errors/"><span class="dir">Previous</span><span class="t">Errors</span></a><a class="next" href="/docs/vs-agent-browser/"><span class="dir">Next</span><span class="t">vs agent-browser</span></a></div>
   </main>
 </div>
 <footer class="footer">
