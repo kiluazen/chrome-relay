@@ -56,7 +56,9 @@ import {
   parseChromeClickAxArgs,
   parseChromeScreenshotArgs,
   parseChromeSnapshotArgs,
+  parseChromeCursorArgs,
   type ChromeSnapshotArgs,
+  type ChromeCursorArgs,
   type NoArgs,
   type ChromeReadPageArgs,
   type ChromeClickArgs,
@@ -122,6 +124,7 @@ export interface ToolArgMap {
   chrome_batch: ChromeBatchArgs;
   chrome_get: ChromeGetArgs;
   chrome_upload: ChromeUploadArgs;
+  chrome_cursor: ChromeCursorArgs;
 }
 
 export type ParsedToolArguments<T extends ToolName = ToolName> = ToolArgMap[T];
@@ -154,6 +157,7 @@ export function parseToolArgs<T extends ToolName>(name: T, input: unknown): Tool
     case "chrome_batch": return parseChromeBatchArgs(input) as ToolArgMap[T];
     case "chrome_get": return parseChromeGetArgs(input) as ToolArgMap[T];
     case "chrome_upload": return parseChromeUploadArgs(input) as ToolArgMap[T];
+    case "chrome_cursor": return parseChromeCursorArgs(input) as ToolArgMap[T];
   }
   const exhaustive: never = name;
   return exhaustive;

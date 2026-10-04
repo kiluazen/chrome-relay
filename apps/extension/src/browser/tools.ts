@@ -8,6 +8,7 @@
 
 import {
   parseChromeBatchArgs,
+  parseChromeCursorArgs,
   RelayError,
   toBridgeError,
   TOOL_NAMES,
@@ -21,6 +22,7 @@ import { captureHandlers } from "./handlers/capture";
 import { sessionsHandlers } from "./handlers/sessions";
 import { waitHandlers } from "./handlers/wait";
 import { uploadHandlers } from "./handlers/upload";
+import { isCursorEnabled, setCursorEnabled } from "./cursor";
 
 const handlers: Partial<Record<ToolName, ToolHandler>> = {
   ...(navigationHandlers as Partial<Record<ToolName, ToolHandler>>),
@@ -63,4 +65,11 @@ handlers[TOOL_NAMES.BATCH] = async (args) => {
     }
   }
   return { results, completed: results.length, total: parsed.commands.length };
+};
+
+// chrome_cursor — read or set whether the agent cursor is drawn (cursor.ts).
+handlers[TOOL_NAMES.CURSOR] = async (args) => {
+  const { enabled } = parseChromeCursorArgs(args);
+  if (enabled !== undefined) await setCursorEnabled(enabled);
+  return { enabled: await isCursorEnabled() };
 };

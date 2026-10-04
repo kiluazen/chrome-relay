@@ -26,6 +26,7 @@ import { locateForClick, locateForScreenshot } from "../page-actions";
 import { buildSnapshot } from "../snapshot";
 import { isDocumentLoading, waitForDocument } from "../readiness";
 import { waitForSettle } from "../settle";
+import { hideCursorDuring, moveCursor } from "../cursor";
 import { startScreencast, stopScreencast } from "../screencast";
 import { resolveTarget, requireTabId, invalidArg, type ToolHandler } from "./target";
 
@@ -118,7 +119,8 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
       clipMeta = { source: "selector", selector: parsed.selector, padding };
     }
 
-    const result = await send<{ data: string }>(tabId, "Page.captureScreenshot", params);
+    // The agent asked for the page, not our arrow drawn on it.
+    const result = await hideCursorDuring(tabId, () => send<{ data: string }>(tabId, "Page.captureScreenshot", params));
 
     let outData = result.data;
     let downscaled: { from: { width: number; height: number }; to: { width: number; height: number } } | null = null;
@@ -270,6 +272,7 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
     const parsed = parseChromeHoverArgs(args);
     if (parsed.kind === "ref") {
       const r = await resolveRefCenter(TOOL_NAMES.HOVER, parsed.ref, parsed);
+      await moveCursor(r.tabId, r.x, r.y, "hover");
       await send(r.tabId, "Input.dispatchMouseEvent", {
         type: "mouseMoved",
         x: r.x,
@@ -297,6 +300,7 @@ export const captureHandlers: Partial<Record<string, ToolHandler>> = {
         mapPageError(e, TOOL_NAMES.HOVER, "locate_element");
       }
     }
+    await moveCursor(tabId, x, y, "hover");
     await send(tabId, "Input.dispatchMouseEvent", {
       type: "mouseMoved",
       x, y,

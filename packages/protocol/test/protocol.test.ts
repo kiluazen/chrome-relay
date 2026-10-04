@@ -21,6 +21,7 @@ describe("TOOL_NAMES", () => {
       "CLICK_AX",
       "CLOSE_TABS",
       "CONSOLE",
+      "CURSOR",
       "EVALUATE",
       "FILL",
       "GET",
