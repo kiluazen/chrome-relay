@@ -85,7 +85,10 @@ export const TOOL_NAMES = {
   // the click-strategy taxonomy: each mechanism has its own failure mode,
   // the agent picks, no auto-fallback. All strategies take file PATHS;
   // Chrome reads the files itself, nothing crosses the bridge.
-  UPLOAD: "chrome_upload"
+  UPLOAD: "chrome_upload",
+  // Agent cursor — the arrow drawn in the page where the agent points,
+  // clicks and types. Read or set whether it is shown (default on).
+  CURSOR: "chrome_cursor"
 } as const;
 
 export type ToolName = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES];

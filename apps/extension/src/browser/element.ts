@@ -240,9 +240,9 @@ export async function resolveRefObjectId(
   tool: ToolName,
   ref: string,
   target: TargetArgs
-): Promise<{ tabId: number; objectId: string; healed: boolean }> {
+): Promise<{ tabId: number; objectId: string; healed: boolean; x: number; y: number }> {
   const resolved = await resolveRefCenter(tool, ref, target, { hitTest: false }); // verify+heal, no pointer check
-  return { tabId: resolved.tabId, objectId: resolved.objectId, healed: resolved.healed };
+  return { tabId: resolved.tabId, objectId: resolved.objectId, healed: resolved.healed, x: resolved.x, y: resolved.y };
 }
 
 // ---------------------------------------------------------------------------

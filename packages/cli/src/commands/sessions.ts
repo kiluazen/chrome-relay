@@ -105,6 +105,35 @@ Notes:
       await run("chrome_self_reload", {});
     });
 
+  // ---------- cursor (the agent arrow drawn in the page) ----------
+  program
+    .command("cursor [state]")
+    .description("Show or set the agent cursor: the arrow drawn in the tab where the agent clicks, hovers and types. on | off")
+    .addHelpText(
+      "after",
+      `
+
+Examples:
+  chrome-relay cursor        # { "enabled": true }
+  chrome-relay cursor off    # stop drawing it (applies to every tab of this profile)
+  chrome-relay cursor on
+
+The arrow is decoration: input still goes through CDP, your real mouse never
+moves, and actions never wait for the animation. It glides to each target,
+pulses on click, wiggles while the agent is between commands, and fades
+after 15s idle. Page scripts can't see or reach it, snapshots ignore it, and
+\`screenshot\` hides it; screencast recordings keep it.
+`
+    )
+    .action(async (state?: string) => {
+      if (state !== undefined && state !== "on" && state !== "off") {
+        process.stderr.write(`cursor takes on | off (got "${state}").\n`);
+        process.exit(1);
+        return;
+      }
+      await run("chrome_cursor", state === undefined ? {} : { enabled: state === "on" });
+    });
+
   // ---------- workspace (named Chrome WINDOWS for parallel agent work) ----------
   // Pre-0.4.0 this was called `group`. Renamed because "group" collides with
   // Chrome's own tab-group UI primitive, which is now exposed separately

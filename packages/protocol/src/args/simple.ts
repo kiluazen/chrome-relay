@@ -412,3 +412,15 @@ export function parseChromeScreenshotArgs(input: unknown): ChromeScreenshotArgs 
   const me   = optPositiveNumber(obj, "maxEdge", TOOL_NAMES.SCREENSHOT); if (me !== undefined) out.maxEdge = me;
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// chrome_cursor — the in-page agent cursor. No `enabled` = read the setting.
+
+export interface ChromeCursorArgs {
+  enabled?: boolean;
+}
+export function parseChromeCursorArgs(input: unknown): ChromeCursorArgs {
+  const obj = asObject(input ?? {}, TOOL_NAMES.CURSOR);
+  const enabled = optBool(obj, "enabled", TOOL_NAMES.CURSOR);
+  return enabled === undefined ? {} : { enabled };
+}

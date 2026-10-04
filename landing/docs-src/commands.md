@@ -120,6 +120,16 @@ chrome-relay click-ax --node 4837 --tab 42       # deprecated — raw backendNod
 
 `click --no-wait` still dispatches trusted input and checks for immediate navigation, but skips the default 120 ms grace period for delayed navigation. Use it when the next step explicitly verifies the result, for example `wait --text "Saved" --tab 42` or `snapshot --tab 42 --diff`. Its response includes `navigationCheck: "immediate"`; the absence of `navigated` does not rule out later navigation. In a batch, set `waitForNavigation: false` on the click's wire args and follow with the appropriate wait. Older extensions ignore this field and retain their usual delay.
 
+## Agent cursor
+
+```sh
+chrome-relay cursor          # { "enabled": true }
+chrome-relay cursor off      # stop drawing it, for every tab of this profile
+chrome-relay cursor on
+```
+
+Your real mouse never moves. Instead, each click, hover, fill and type draws an arrow in that tab: it glides to the target, pulses on click, wiggles while the agent is between commands, and fades after 15 s idle. It never delays an action (the input is sent right away and the arrow catches up). It runs in an isolated world inside a closed shadow root, so page scripts can't reach it, snapshots and hit tests ignore it, and after it first appears its movement causes no DOM mutations the page can observe. `screenshot` hides it; screencast recordings keep it.
+
 ## Evaluate JavaScript
 
 ```sh

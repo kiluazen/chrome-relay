@@ -305,6 +305,15 @@ describe("CLI argument parsing", () => {
       expect(exitSpy).toHaveBeenCalledWith(1);
     });
 
+    it("cursor reads, and on/off sets, the agent cursor", async () => {
+      await runArgs("cursor");
+      expect(lastBody()).toEqual({ name: "chrome_cursor", args: {} });
+      await runArgs("cursor", "off");
+      expect(lastBody()).toEqual({ name: "chrome_cursor", args: { enabled: false } });
+      await runArgs("cursor", "on");
+      expect(lastBody()).toEqual({ name: "chrome_cursor", args: { enabled: true } });
+    });
+
     it("snapshot --settle sends settle:true", async () => {
       await runArgs("snapshot", "--tab", "1", "--settle");
       expect(lastBody().args).toMatchObject({ tabId: 1, settle: true });

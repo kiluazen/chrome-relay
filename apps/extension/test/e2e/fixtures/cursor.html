@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+<head><title>Cursor fixture</title>
+<style>body { margin: 0; background: #fff; } #go { position: absolute; left: 300px; top: 200px; width: 160px; height: 60px; background: #fff; border: 0; }</style>
+</head>
+<body>
+  <button id="go" onclick="window.__clicks++">Go</button>
+  <script>
+    window.__clicks = 0;
+    window.__mutations = 0;
+    new MutationObserver((r) => { window.__mutations += r.length; })
+      .observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+  </script>
+</body>
+</html>

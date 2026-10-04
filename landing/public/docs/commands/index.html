@@ -270,6 +270,12 @@ chrome-relay click-ax --node 4837 --tab 42       # deprecated — raw backendNod
 </code></pre>
 <p><code>--snapshot</code> on <code>navigate</code>, <code>click</code>, <code>fill</code>, <code>type</code> and <code>keys</code> prints the action&#39;s result, then an interactive snapshot of the tab it acted on: one command instead of two. For input actions it first waits for the page to stop reacting (no recent request in flight and the DOM quiet briefly, at most 2 s), or for the navigation the input started. The observer runs in an isolated world, so page scripts cannot see it.</p>
 <p><code>click --no-wait</code> still dispatches trusted input and checks for immediate navigation, but skips the default 120 ms grace period for delayed navigation. Use it when the next step explicitly verifies the result, for example <code>wait --text &quot;Saved&quot; --tab 42</code> or <code>snapshot --tab 42 --diff</code>. Its response includes <code>navigationCheck: &quot;immediate&quot;</code>; the absence of <code>navigated</code> does not rule out later navigation. In a batch, set <code>waitForNavigation: false</code> on the click&#39;s wire args and follow with the appropriate wait. Older extensions ignore this field and retain their usual delay.</p>
+<h2 id="agent-cursor">Agent cursor<a class="anchor" href="#agent-cursor" aria-hidden="true">#</a></h2>
+<pre><code class="language-sh">chrome-relay cursor          # { &quot;enabled&quot;: true }
+chrome-relay cursor off      # stop drawing it, for every tab of this profile
+chrome-relay cursor on
+</code></pre>
+<p>Your real mouse never moves. Instead, each click, hover, fill and type draws an arrow in that tab: it glides to the target, pulses on click, wiggles while the agent is between commands, and fades after 15 s idle. It never delays an action (the input is sent right away and the arrow catches up). It runs in an isolated world inside a closed shadow root, so page scripts can&#39;t reach it, snapshots and hit tests ignore it, and after it first appears its movement causes no DOM mutations the page can observe. <code>screenshot</code> hides it; screencast recordings keep it.</p>
 <h2 id="evaluate-javascript">Evaluate JavaScript<a class="anchor" href="#evaluate-javascript" aria-hidden="true">#</a></h2>
 <pre><code class="language-sh">chrome-relay js --tab 42 &quot;return document.title&quot;
 chrome-relay js --tab 42 &quot;const r = await fetch(&#39;/api/me&#39;); return await r.json()&quot;

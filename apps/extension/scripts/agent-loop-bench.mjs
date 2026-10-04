@@ -308,6 +308,8 @@ async function main() {
   // Let the SW settle (first connect, storage hydration) before timing.
   await waitFor(async () => (await cli(["tabs"])).ok, "first successful call");
   const base = await serveFixtures();
+  // --cursor off: A/B the agent cursor's cost on the same build.
+  if (opt("--cursor", "") === "off") await mustCli(["cursor", "off"]);
 
   // Overhead probes.
   for (let i = 0; i < 15; i++) {
