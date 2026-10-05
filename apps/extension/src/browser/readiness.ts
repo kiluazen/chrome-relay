@@ -11,6 +11,7 @@
 // document has reached the requested state.
 
 import { evalExpression } from "./cdp";
+import { sleepOrSignal } from "./tab-signal";
 
 export type ReadyState = "commit" | "domcontentloaded" | "load";
 
@@ -23,8 +24,9 @@ export interface ReadyResult {
   errorPage?: boolean;
 }
 
-const POLL_MS = 25;
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// Upper bound between probes; a navigation signal (tab update, Page event)
+// wakes the probe sooner — see tab-signal.ts for why timers alone are slow.
+const POLL_MS = 100;
 
 function reached(target: ReadyState, readyState: string, tabStatus: string | undefined): boolean {
   if (target === "commit") return true;
@@ -72,7 +74,7 @@ export async function waitForDocument(tabId: number, target: ReadyState, timeout
       }
     }
     if (Date.now() >= deadline) break;
-    await sleep(POLL_MS);
+    await sleepOrSignal(tabId, Math.min(POLL_MS, Math.max(0, deadline - Date.now())));
   }
   const tab = await chrome.tabs.get(tabId).catch(() => undefined);
   return {

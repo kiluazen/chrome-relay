@@ -73,6 +73,23 @@ export function __resetOncePerProcessFlagsForTests(): void {
   profilePrinted = false;
 }
 
+// What still works against an older extension, so the compatibility error
+// says how to keep going instead of only how to upgrade. The first command
+// of the core loop (`navigate`) hits this gate, so the hint matters.
+function fallbackFor(tool: string, input: Record<string, unknown>): string | undefined {
+  if (input.settle === true) {
+    return tool === "chrome_snapshot"
+      ? "drop --settle, and wait for the element or text you expect first."
+      : "drop --snapshot, then run `snapshot -i` after the action.";
+  }
+  if (tool === "chrome_navigate") {
+    return "rerun with --wait none (returns at once), then `wait --text`/`wait <selector>` for what you need before snapshotting.";
+  }
+  if (tool === "chrome_screencast") return "use `screenshot` for stills.";
+  if (tool === "chrome_batch") return "remove waitUntil/settle from the batched commands.";
+  return undefined;
+}
+
 // Internal: returns both the tool data and any notices. Callers that want
 // to forward the notice into their own JSON output (e.g. agent-facing
 // commands) use this directly. The default `callTool` peels off `data` and
@@ -97,7 +114,7 @@ export async function callToolWithMeta(
   const route = await resolveRoute(profile, args);
   const newSemantics = (tool: string, input: Record<string, unknown>) =>
     input.settle === true || (tool === "chrome_navigate" && input.waitUntil && input.waitUntil !== "none") ||
-    (tool === "chrome_screencast" && input.action === "start");
+    (tool === "chrome_screencast" && input.action === "start") || tool === "chrome_cursor";
   const requiresNewExtension = newSemantics(name, args) || (name === "chrome_batch" &&
     Array.isArray(args.commands) && args.commands.some(command => newSemantics(command.name, command.args ?? {})));
   const minimumVersion = options.minimumExtensionVersion ?? (requiresNewExtension ? "0.9.0" : undefined);
@@ -117,9 +134,18 @@ export async function callToolWithMeta(
     if (!version || compareSemver(version, minimumVersion) < 0) {
       throw new RelayError({
         code: "unsupported_tool",
-        message: `This operation requires Chrome Relay extension ${minimumVersion}; connected version is ${version ?? "unknown"}. Update the extension in this browser/profile, then retry. The CLI update does not update Chrome extensions.`,
+        message:
+          `This operation requires Chrome Relay extension ${minimumVersion}; connected version is ${version ?? "unknown"}. ` +
+          `The CLI update does not update Chrome extensions: Chrome pulls the Web Store update on its own within a few hours ` +
+          `(to get it now: chrome://extensions → Developer mode → Update, or restart the browser).` +
+          (fallbackFor(name, args) ? ` Until then: ${fallbackFor(name, args)}` : ""),
         tool: name as ToolName, phase: "extension_compatibility",
-        details: { extensionVersion: version ?? null, requiredExtensionVersion: minimumVersion }, retryable: false
+        details: {
+          extensionVersion: version ?? null,
+          requiredExtensionVersion: minimumVersion,
+          ...(fallbackFor(name, args) ? { fallback: fallbackFor(name, args) } : {})
+        },
+        retryable: false
       });
     }
   }

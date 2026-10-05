@@ -21,9 +21,11 @@ let stderrSpy: ReturnType<typeof vi.spyOn>;
 // so we can simulate npm install + which + version + release-notes calls
 // independently.
 let spawnHandlers: Record<string, (args: string[]) => { status: number; stdout?: Buffer; stderr?: Buffer }>;
+let spawnCalls: Array<{ cmd: string; args: string[]; env?: Record<string, string | undefined> }> = [];
 
 vi.mock("node:child_process", () => ({
-  spawnSync: (cmd: string, args: string[]) => {
+  spawnSync: (cmd: string, args: string[], opts?: { env?: Record<string, string | undefined> }) => {
+    spawnCalls.push({ cmd, args, env: opts?.env });
     const handler = spawnHandlers[cmd];
     if (!handler) return { status: 0, stdout: Buffer.from(""), stderr: Buffer.from("") };
     return handler(args);
@@ -32,6 +34,7 @@ vi.mock("node:child_process", () => ({
 
 beforeEach(() => {
   spawnHandlers = {};
+  spawnCalls = [];
   fetchSpy = vi.fn();
   vi.stubGlobal("fetch", fetchSpy);
   exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
@@ -76,6 +79,23 @@ function lastJsonOnStdout(): Record<string, unknown> {
 }
 
 describe("chrome-relay update — structured metadata", () => {
+  it("pnpm without PNPM_HOME (agent shells): derives it from the install path", async () => {
+    const argv1 = process.argv[1];
+    const home = process.env.PNPM_HOME;
+    delete process.env.PNPM_HOME;
+    process.argv[1] = "/Users/x/Library/pnpm/global/5/.pnpm/chrome-relay@0.9.0/node_modules/chrome-relay/dist/cli.js";
+    try {
+      spawnHandlers.pnpm = () => ({ status: 1 });
+      await runArgs("update");
+      const install = spawnCalls.find((c) => c.cmd === "pnpm");
+      expect(install?.args).toEqual(["add", "-g", "chrome-relay@latest"]);
+      expect(install?.env?.PNPM_HOME).toBe("/Users/x/Library/pnpm");
+    } finally {
+      process.argv[1] = argv1;
+      if (home !== undefined) process.env.PNPM_HOME = home;
+    }
+  });
+
   it("--dry-run: install.attempted=false, release-notes from current_process", async () => {
     await runArgs("update", "--dry-run");
     const out = lastJsonOnStdout();

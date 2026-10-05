@@ -92,3 +92,21 @@ it.each([
   expect(result.frames[0]).toMatchObject({ width: 640, height: 480 });
   expect(createImageBitmap).not.toHaveBeenCalled();
 });
+
+it("--max-width renders the frame small in Chrome (clip.scale) instead of rescaling in the worker", async () => {
+  const { startScreencast, stopScreencast } = await import("../src/browser/screencast");
+  const { send } = await import("../src/browser/cdp");
+  // A 1000x625 JPEG header: what Chrome returns for clip.scale at 2x DPR.
+  const header = [255, 216, 255, 224, 0, 4, 0, 0, 255, 192, 0, 8, 8, 2, 113, 3, 232, 0];
+  vi.mocked(send).mockImplementation(async (_tabId: number, method: string) => {
+    if (method === "Page.getLayoutMetrics") return { cssVisualViewport: { clientWidth: 1280, clientHeight: 800, pageX: 0, pageY: 40 } };
+    if (method === "Runtime.evaluate") return { result: { value: 2 } };
+    return { data: btoa(String.fromCharCode(...header)) };
+  });
+  await startScreencast(42, { maxWidth: 1000 });
+  const result = await stopScreencast(42);
+  const capture = vi.mocked(send).mock.calls.find((c) => c[1] === "Page.captureScreenshot");
+  expect(capture?.[2]).toMatchObject({ clip: { x: 0, y: 40, width: 1280, height: 800, scale: 1000 / 2560 } });
+  expect(result.frames[0]).toMatchObject({ width: 1000, height: 625 });
+  expect(createImageBitmap).not.toHaveBeenCalled();
+});

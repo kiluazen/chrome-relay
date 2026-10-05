@@ -56,8 +56,49 @@ function encodedSize(bytes: Uint8Array, format: "jpeg" | "png"): { width: number
   }
 }
 
+// Device pixel ratio per recording tab (read once per recording).
+const pixelRatios = new Map<number, number>();
+
+// --max-width/--max-height: have Chrome render the frame at the target size
+// (clip.scale) instead of capturing at device resolution and rescaling in
+// the service worker. On a 2x display the rescale path decoded, redrew and
+// re-encoded every ~2,500px frame and recorded at ~4fps instead of ~10fps;
+// rendering small is also faster for Chrome itself. Output pixels =
+// clip size x scale x devicePixelRatio. Returns undefined when no scaling
+// is needed or the result doesn't fit, so the caller falls back.
+async function captureScaled(tabId: number, opts: StartOptions, format: "jpeg" | "png"): Promise<ScreencastFrame | undefined> {
+  const metrics = await send<{ cssVisualViewport: { clientWidth: number; clientHeight: number; pageX: number; pageY: number } }>(
+    tabId,
+    "Page.getLayoutMetrics"
+  );
+  const vv = metrics.cssVisualViewport;
+  let ratio = pixelRatios.get(tabId);
+  if (ratio === undefined) {
+    const r = await send<{ result: { value?: number } }>(tabId, "Runtime.evaluate", { expression: "devicePixelRatio", returnByValue: true });
+    ratio = typeof r.result?.value === "number" && r.result.value > 0 ? r.result.value : 1;
+    pixelRatios.set(tabId, ratio);
+  }
+  const fullW = vv.clientWidth * ratio, fullH = vv.clientHeight * ratio;
+  const scale = Math.min(1, (opts.maxWidth ?? fullW) / fullW, (opts.maxHeight ?? fullH) / fullH);
+  if (!(scale < 1)) return undefined;
+  const { data } = await send<{ data: string }>(tabId, "Page.captureScreenshot", {
+    format,
+    ...(format === "jpeg" ? { quality: opts.quality ?? 80 } : {}),
+    clip: { x: vv.pageX, y: vv.pageY, width: vv.clientWidth, height: vv.clientHeight, scale },
+    captureBeyondViewport: false
+  });
+  const size = encodedSize(Uint8Array.from(atob(data.slice(0, 4096)), (c) => c.charCodeAt(0)), format) ??
+    { width: Math.round(fullW * scale), height: Math.round(fullH * scale) };
+  if ((opts.maxWidth && size.width > opts.maxWidth + 1) || (opts.maxHeight && size.height > opts.maxHeight + 1)) return undefined;
+  return { data, timestamp: Date.now() / 1000, ...size };
+}
+
 async function captureFrame(tabId: number, opts: StartOptions): Promise<ScreencastFrame> {
   const format = opts.format ?? "jpeg";
+  if (opts.maxWidth || opts.maxHeight) {
+    const scaled = await captureScaled(tabId, opts, format).catch(() => undefined);
+    if (scaled) return scaled;
+  }
   const { data } = await send<{ data: string }>(tabId, "Page.captureScreenshot", {
     format,
     ...(format === "jpeg" ? { quality: opts.quality ?? 80 } : {}),
@@ -147,6 +188,7 @@ export async function stopScreencast(tabId: number): Promise<{
   if (session.timer) clearTimeout(session.timer);
   await session.pending?.catch(() => {});
   sessions.delete(tabId);
+  pixelRatios.delete(tabId);
   return {
     frameCount: session.frames.length, durationMs: Date.now() - session.startedAt,
     frames: session.frames, mode: "sampled",
