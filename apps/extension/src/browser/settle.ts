@@ -18,6 +18,7 @@
 // be throttled, ours are not.
 
 import { send } from "./cdp";
+import { sleepOrSignal } from "./tab-signal";
 import { networkCaptureTabs } from "./network-state";
 
 // Network capture the agent turned on must survive our Network.disable.
@@ -34,7 +35,6 @@ const STALE_REQUEST_MS = 1_000;
 const ARM_TTL_MS = 10_000;
 const WORLD = "chrome-relay-settle";
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export interface SettleResult {
   settled: boolean;
@@ -166,7 +166,7 @@ export async function waitForSettle(tabId: number, maxMs: number): Promise<Settl
       else if (now - quietSince >= QUIET_MS && now - tracker.armedAt >= MIN_SINCE_ACTION_MS) {
         return { settled: true, waitedMs: now - started };
       }
-      await sleep(POLL_MS);
+      await sleepOrSignal(tabId, POLL_MS);
     }
     return { settled: false, waitedMs: Date.now() - started };
   } finally {

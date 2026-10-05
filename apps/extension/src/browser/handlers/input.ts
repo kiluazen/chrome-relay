@@ -19,6 +19,7 @@ import {
 import { evalExpression, evalInTab, send } from "../cdp";
 import { resolveRefCenter, resolveRefObjectId, mapPageError } from "../element";
 import { pressKey } from "../keyboard";
+import { sleepOrSignal } from "../tab-signal";
 import { armSettle } from "../settle";
 import { moveCursor, pulseCursor } from "../cursor";
 import { fillElement, focusSelector, locateForClick } from "../page-actions";
@@ -50,8 +51,16 @@ async function detectNavigation(tabId: number, urlBefore: string | undefined, wa
   };
   if (await check()) return true;
   if (!waitForNavigation) return false;
-  await new Promise((r) => setTimeout(r, 120));
-  return check();
+  // Re-check on every tab signal (a navigation starting fires
+  // tabs.onUpdated and Page events) and return as soon as one is seen;
+  // otherwise hold the full grace period — an unrelated signal (a network
+  // response) must not cut it short.
+  const until = Date.now() + 120;
+  while (Date.now() < until) {
+    await sleepOrSignal(tabId, until - Date.now());
+    if (await check()) return true;
+  }
+  return false;
 }
 
 const NAVIGATED_NOTE =
