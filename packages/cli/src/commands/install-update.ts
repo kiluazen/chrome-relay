@@ -118,7 +118,16 @@ export function registerInstallUpdate(program: Command): void {
           command: `${cmd[0]} ${cmd[1].join(" ")}`
         };
         process.stderr.write(`[chrome-relay] updating from ${fromVersion} via ${pm}...\n`);
-        const install = spawnSync(cmd[0], cmd[1], { stdio: "inherit" });
+        // pnpm refuses global installs without PNPM_HOME, which interactive
+        // shells set and agent shells usually don't — so `update` failed for
+        // every pnpm user exactly when an agent ran it. The running binary
+        // lives under <PNPM_HOME>/global/<n>/.pnpm/...; derive it from that.
+        const env = { ...process.env };
+        if (pm === "pnpm" && !env.PNPM_HOME) {
+          const home = /^(.*?)[\\/]global[\\/]\d+[\\/]\.pnpm[\\/]/.exec(argv0)?.[1];
+          if (home) env.PNPM_HOME = home;
+        }
+        const install = spawnSync(cmd[0], cmd[1], { stdio: "inherit", env });
         out.install.status = install.status;
         if (install.status !== 0) {
           process.stderr.write(`[chrome-relay] install failed (${pm} exited ${install.status}). Try manually: ${cmd[0]} ${cmd[1].join(" ")}\n`);

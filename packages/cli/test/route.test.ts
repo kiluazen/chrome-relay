@@ -478,11 +478,22 @@ describe("release compatibility", () => {
       ["chrome_navigate", { url: "https://example.com", waitUntil: "domcontentloaded" }],
       ["chrome_click_element", { selector: "#go", settle: true }],
       ["chrome_screencast", { action: "start", tabId: 41 }],
-      ["chrome_batch", { commands: [{ name: "chrome_navigate", args: { url: "https://example.com", waitUntil: "load" } }] }]
+      ["chrome_batch", { commands: [{ name: "chrome_navigate", args: { url: "https://example.com", waitUntil: "load" } }] }],
+      ["chrome_cursor", {}]
     ] as const) {
       await expect(callToolWithMeta(name, args)).rejects.toMatchObject({ code: "unsupported_tool", phase: "extension_compatibility" });
     }
     expect(bridges[0].callTool).not.toHaveBeenCalled();
+  });
+
+  it("the compatibility error says how to keep going until the extension updates", async () => {
+    await bootHost(ID_A, { extensionVersion: "0.8.2" });
+    await expect(callToolWithMeta("chrome_navigate", { url: "https://example.com", waitUntil: "domcontentloaded" }))
+      .rejects.toMatchObject({ message: expect.stringContaining("--wait none"), details: { fallback: expect.stringContaining("--wait none") } });
+    await expect(callToolWithMeta("chrome_click_element", { selector: "#go", settle: true }))
+      .rejects.toMatchObject({ message: expect.stringContaining("drop --snapshot") });
+    await expect(callToolWithMeta("chrome_cursor", {}))
+      .rejects.toMatchObject({ message: expect.stringContaining("chrome://extensions") });
   });
 
   it("allows legacy navigation without readiness and new semantics after extension update", async () => {
