@@ -101,6 +101,7 @@ Snapshot output is indented text. Large pages can exceed 100 KB; use a scope, de
 | `workspace` / `group` | Manage named windows / tab-groups so multiple agents can drive separate windows. |
 | `switch <tabId>` / `close <tabIds...>` | Switch is rejected; use `--tab` to target a tab. Close removes tabs. |
 | `cursor [on\|off]` | Show or set the agent cursor (on by default). |
+| `status` / `release [--tab <id>]` | Tabs you hold a debugger session on (idle timers, held input, when the user last used each) / let go of every tab or one. Extension 0.10.0+. |
 | `self-reload` | Restart the extension's service worker after a rebuild |
 | `release-notes --since <ver>` / `update` | Queryable changelog; agent-readable JSON. |
 | `call <tool> [json]` | Raw pass-through for any internal tool. |
@@ -174,6 +175,10 @@ chrome-relay snapshot --tab 1234 --diff         # only the changes, refs include
 
 With a successful readiness result, `navigate` has already waited for its selected document event. Check `ready` before acting. A `load` wait can be held by images or other resources; wait for the element or text you need instead.
 
+## Sharing the browser (extension 0.10.0+)
+
+The user is using this Chrome too. Tabs you touch are given back after 30s without a command; the next command takes them again, so nothing to manage mid-task. While the user types, clicks or scrolls in a tab, your input to that tab waits for them to pause; after 8s it fails with retryable `user_active`. Then retry shortly, or do the work in your own tab (`navigate --new`, which lands in the "Agent" tab group). Run `chrome-relay release` when your job is done.
+
 ## Top gotchas
 
 0. **`snapshot -i` is for ACTING, not fact extraction.** It prints ref-bearing elements only. Non-interactive values (dashboard metrics, paragraph text, chart labels) drop out. Measured live: a Cloudflare Pages metrics page lost all its numbers under `-i`. To READ facts, use full `snapshot`, `get text <target>`, or a `js` projection.
@@ -204,5 +209,5 @@ Failure modes: [references/troubleshooting.md](references/troubleshooting.md)
 
 ## Guardrails
 
-- Errors are structured: branch on `relayError.code` (`stale_ref`, `click_intercepted`, `element_not_found`, `target_conflict`, `profile_ambiguous`, `timeout`), not on message text.
+- Errors are structured: branch on `relayError.code` (`stale_ref`, `click_intercepted`, `element_not_found`, `target_conflict`, `profile_ambiguous`, `user_active`, `timeout`), not on message text.
 - If a flag is unclear, `chrome-relay <command> --help` is authoritative. These docs lag.

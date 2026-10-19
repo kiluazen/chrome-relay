@@ -1,6 +1,7 @@
 import { startNativeBridge } from "../src/bridge/native-host";
 import { runTool } from "../src/browser/tools";
 import { setHostProtocolVersion } from "../src/browser/identity";
+import { _setIdleDetachMsForTests } from "../src/browser/cdp";
 
 const WELCOME_URL = "https://chrome-relay.kushalsm.com/welcome/";
 
@@ -25,7 +26,8 @@ export default defineBackground(() => {
   if (import.meta.env.MODE === "development") {
     (globalThis as { __chromeRelay?: unknown }).__chromeRelay = {
       runTool,
-      simulateHello: (protocolVersion: number) => setHostProtocolVersion(protocolVersion)
+      simulateHello: (protocolVersion: number) => setHostProtocolVersion(protocolVersion),
+      setIdleDetachMs: _setIdleDetachMsForTests
     };
   }
 });

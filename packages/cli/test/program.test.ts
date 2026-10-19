@@ -10,7 +10,7 @@ vi.mock("../src/client/http.js", () => ({
 // Argv tests isolate routing; version-skew is exercised against real HTTP
 // hosts in route.test.ts.
 vi.mock("../src/client/route.js", () => ({
-  resolveRoute: vi.fn(async () => ({ baseUrl: "http://127.0.0.1:12122", extensionVersion: "0.9.0" }))
+  resolveRoute: vi.fn(async () => ({ baseUrl: "http://127.0.0.1:12122", extensionVersion: "0.10.0" }))
 }));
 
 type FetchSpy = ReturnType<typeof vi.fn>;
@@ -309,6 +309,18 @@ describe("CLI argument parsing", () => {
       await runArgs("click", "@e3", "--snapshot");
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+
+    it("release lets go of every tab by default, or one with --tab", async () => {
+      await runArgs("release");
+      expect(lastBody()).toEqual({ name: "chrome_release", args: { all: true } });
+      await runArgs("release", "--tab", "7");
+      expect(lastBody()).toEqual({ name: "chrome_release", args: { tabId: 7 } });
+    });
+
+    it("status reads what the agent holds", async () => {
+      await runArgs("status");
+      expect(lastBody()).toEqual({ name: "chrome_status", args: {} });
     });
 
     it("cursor reads, and on/off sets, the agent cursor", async () => {

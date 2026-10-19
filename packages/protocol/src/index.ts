@@ -88,7 +88,14 @@ export const TOOL_NAMES = {
   UPLOAD: "chrome_upload",
   // Agent cursor — the arrow drawn in the page where the agent points,
   // clicks and types. Read or set whether it is shown (default on).
-  CURSOR: "chrome_cursor"
+  CURSOR: "chrome_cursor",
+  // Let go of tabs: release held input, undo the visibility/focus overrides
+  // and detach the debugger from one tab (target fields) or every tab
+  // (all: true). The person's emergency exit; also the polite end of a run.
+  RELEASE: "chrome_release",
+  // Which tabs the agent holds a debugger session on, their state, pins,
+  // idle timers, any input still held, and recent use by the person.
+  STATUS: "chrome_status"
 } as const;
 
 export type ToolName = (typeof TOOL_NAMES)[keyof typeof TOOL_NAMES];
@@ -191,6 +198,9 @@ export type BridgeErrorCode =
   | "unauthorized"
   // The target tab navigated or closed while an operation was armed.
   | "target_closed"
+  // The person is typing, clicking or scrolling in the target tab; agent
+  // input waited for them to pause and they didn't. Retry, or use another tab.
+  | "user_active"
   | "internal_error";
 
 export interface BridgeError {

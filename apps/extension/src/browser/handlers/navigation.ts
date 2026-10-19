@@ -14,6 +14,7 @@ import {
 import { ensureAttached, send } from "../cdp";
 import { waitForDocument } from "../readiness";
 import { addToTabGroup, resolveTabGroupTarget } from "../tab-groups";
+import { groupAgentTab } from "../agent-tabs";
 import { resolveWorkspaceTarget } from "../workspaces";
 import { resolveTarget, requireTabId, type ToolHandler } from "./target";
 
@@ -93,6 +94,9 @@ export const navigationHandlers: Partial<Record<string, ToolHandler>> = {
         if (typeof wsTab.windowId === "number") createOpts.windowId = wsTab.windowId;
       }
       const tab = await chrome.tabs.create(createOpts);
+      // A named group or workspace already says where the tab belongs;
+      // otherwise it joins the window's "Agent" group.
+      if (!parsed.groupName && !parsed.workspaceName) await groupAgentTab(tab);
       // Attach while the first navigation is still in flight so the
       // visibility shim (cdp.ts) is registered before the page's own
       // scripts run; best effort — settle() attaches on demand anyway.

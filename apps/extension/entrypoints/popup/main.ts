@@ -88,6 +88,22 @@ function setupCopyButton(): void {
   });
 }
 
+function renderHeld(count: number): void {
+  const label = document.getElementById("held-tabs");
+  const button = document.getElementById("release-all");
+  if (label) label.textContent = count === 0 ? "Not holding any tabs." : `Holding ${count} tab${count === 1 ? "" : "s"}.`;
+  if (button) button.hidden = count === 0;
+}
+
+async function setupRelease(): Promise<void> {
+  const held = (await chrome.runtime.sendMessage({ type: "chrome-relay.leases" })) as { count?: number } | undefined;
+  renderHeld(held?.count ?? 0);
+  document.getElementById("release-all")?.addEventListener("click", async () => {
+    await chrome.runtime.sendMessage({ type: "chrome-relay.release-all" });
+    renderHeld(0);
+  });
+}
+
 async function main(): Promise<void> {
   const state = await loadState();
   setText("extension-id", state.extensionId);
@@ -96,6 +112,7 @@ async function main(): Promise<void> {
   setText("last-error", state.lastError || "None");
   renderRecentTools(state.recentToolExecutions);
   setupCopyButton();
+  void setupRelease();
 
   const dot = document.getElementById("status-dot");
   const text = document.getElementById("status-text");

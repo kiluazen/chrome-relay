@@ -22,6 +22,7 @@ import { captureHandlers } from "./handlers/capture";
 import { sessionsHandlers } from "./handlers/sessions";
 import { waitHandlers } from "./handlers/wait";
 import { uploadHandlers } from "./handlers/upload";
+import { controlHandlers } from "./handlers/control";
 import { isCursorEnabled, setCursorEnabled } from "./cursor";
 
 const handlers: Partial<Record<ToolName, ToolHandler>> = {
@@ -30,7 +31,8 @@ const handlers: Partial<Record<ToolName, ToolHandler>> = {
   ...(captureHandlers as Partial<Record<ToolName, ToolHandler>>),
   ...(sessionsHandlers as Partial<Record<ToolName, ToolHandler>>),
   ...(waitHandlers as Partial<Record<ToolName, ToolHandler>>),
-  ...(uploadHandlers as Partial<Record<ToolName, ToolHandler>>)
+  ...(uploadHandlers as Partial<Record<ToolName, ToolHandler>>),
+  ...(controlHandlers as Partial<Record<ToolName, ToolHandler>>)
 };
 
 export async function runTool(name: ToolName, args: ToolArguments): Promise<unknown> {

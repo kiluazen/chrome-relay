@@ -20,6 +20,7 @@ import {
   TOOL_NAMES
 } from "@chrome-relay/protocol";
 import { ensureAttached, send } from "./cdp";
+import { onAfterDetach, pinTab } from "./lease-hooks";
 import { networkCaptureTabs } from "./network-state";
 
 export interface NetworkEntry {
@@ -92,7 +93,14 @@ async function subscribeIfNeeded(tabId: number): Promise<void> {
   await send(tabId, "Network.enable", {});
   buf.subscribed = true;
   networkCaptureTabs.add(tabId);
+  pinTab(tabId, "network");
 }
+
+onAfterDetach((tabId) => {
+  const buf = buffers.get(tabId);
+  if (buf) buf.subscribed = false;
+  networkCaptureTabs.delete(tabId);
+});
 
 // CDP event payloads — only what we read.
 interface RequestWillBeSentEvt {

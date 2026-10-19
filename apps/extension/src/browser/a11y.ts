@@ -67,8 +67,11 @@ export async function clickAxNode(tabId: number, backendDOMNodeId: number): Prom
   const y = Math.round((q[1] + q[3] + q[5] + q[7]) / 4);
 
   await send(tabId, "Input.dispatchMouseEvent", { type: "mouseMoved", x, y, button: "none", buttons: 0 });
-  await send(tabId, "Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });
-  await send(tabId, "Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1 });
+  try {
+    await send(tabId, "Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 });
+  } finally {
+    await send(tabId, "Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1 });
+  }
 
   return { clicked: true, backendDOMNodeId, x, y };
 }

@@ -100,7 +100,9 @@ export async function callToolWithMeta(
     (tool === "chrome_screencast" && input.action === "start");
   const requiresNewExtension = newSemantics(name, args) || (name === "chrome_batch" &&
     Array.isArray(args.commands) && args.commands.some(command => newSemantics(command.name, command.args ?? {})));
-  const minimumVersion = options.minimumExtensionVersion ?? (requiresNewExtension ? "0.9.0" : undefined);
+  const controlTool = name === "chrome_release" || name === "chrome_status";
+  const minimumVersion = options.minimumExtensionVersion ??
+    (controlTool ? "0.10.0" : requiresNewExtension ? "0.9.0" : undefined);
   if (minimumVersion) {
     let version = route.extensionVersion;
     if (!version) {

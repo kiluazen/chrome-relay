@@ -414,6 +414,26 @@ export function parseChromeScreenshotArgs(input: unknown): ChromeScreenshotArgs 
 }
 
 // ---------------------------------------------------------------------------
+// chrome_release — one tab (target fields, default active tab) or all.
+
+export interface ChromeReleaseArgs extends TargetArgs {
+  all?: boolean;
+}
+export function parseChromeReleaseArgs(input: unknown): ChromeReleaseArgs {
+  const obj = asObject(input ?? {}, TOOL_NAMES.RELEASE);
+  const out: ChromeReleaseArgs = { ...parseTargetArgs(obj) };
+  const all = optBool(obj, "all", TOOL_NAMES.RELEASE);
+  if (all !== undefined) out.all = all;
+  return out;
+}
+
+// chrome_status — no args.
+export function parseChromeStatusArgs(input: unknown): NoArgs {
+  if (input !== undefined && input !== null) asObject(input, TOOL_NAMES.STATUS);
+  return {};
+}
+
+// ---------------------------------------------------------------------------
 // chrome_cursor — the in-page agent cursor. No `enabled` = read the setting.
 
 export interface ChromeCursorArgs {

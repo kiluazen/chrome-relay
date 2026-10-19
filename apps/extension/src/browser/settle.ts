@@ -18,6 +18,7 @@
 // be throttled, ours are not.
 
 import { send } from "./cdp";
+import { onAfterDetach } from "./lease-hooks";
 import { networkCaptureTabs } from "./network-state";
 
 // Network capture the agent turned on must survive our Network.disable.
@@ -51,6 +52,8 @@ interface Tracker {
 }
 
 const trackers = new Map<number, Tracker>();
+// Its isolated world and Network.enable belonged to the ended session.
+onAfterDetach((tabId) => { trackers.delete(tabId); });
 
 const LONG_LIVED = new Set(["WebSocket", "EventSource", "Media", "Ping", "Prefetch"]);
 

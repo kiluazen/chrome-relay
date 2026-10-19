@@ -20,7 +20,8 @@
 // a ring pulse on click, then a slow wiggle while the agent is between
 // commands — thinking — and a fade-out once it has been idle for a while.
 
-import { send } from "./cdp";
+import { send, sendRaw } from "./cdp";
+import { onAfterDetach, onBeforeDetach } from "./lease-hooks";
 
 export type CursorKind = "click" | "hover" | "type";
 
@@ -37,6 +38,21 @@ if (typeof chrome !== "undefined" && chrome.tabs?.onUpdated) {
   });
   chrome.tabs.onRemoved.addListener((tabId) => contexts.delete(tabId));
 }
+
+// The arrow lives in an isolated world of this session; a new session makes
+// a new world, so take this one's arrow down first or it would linger (and
+// a second one would be drawn next time).
+onBeforeDetach(async (tabId) => {
+  const contextId = contexts.get(tabId);
+  if (contextId === undefined) return;
+  await sendRaw(tabId, "Runtime.evaluate", {
+    expression: "(globalThis.__crCursor ? globalThis.__crCursor.remove() : false)",
+    contextId,
+    returnByValue: true
+  }).catch(() => {});
+  contexts.delete(tabId);
+});
+onAfterDetach((tabId) => { contexts.delete(tabId); });
 
 export async function isCursorEnabled(): Promise<boolean> {
   if (enabledCache !== null) return enabledCache;
