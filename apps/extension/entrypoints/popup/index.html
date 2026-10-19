@@ -105,6 +105,7 @@
       }
 
       .copy-row {
+        justify-content: space-between;
         display: flex;
         gap: 8px;
         align-items: center;
@@ -190,6 +191,14 @@
           <div class="eyebrow">Chrome Relay</div>
         </div>
       </div>
+
+      <section class="card">
+        <h2>Agent tabs</h2>
+        <div class="copy-row">
+          <span id="held-tabs" class="hint">Not holding any tabs.</span>
+          <button id="release-all" class="copy" type="button" hidden>Release</button>
+        </div>
+      </section>
 
       <section class="card">
         <h2>Agent skill</h2>

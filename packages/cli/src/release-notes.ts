@@ -9,6 +9,11 @@
 // agent can consume.
 
 export const RELEASE_NOTES: Record<string, string[]> = {
+  "0.10.0": [
+    "Sharing the browser with the user. Extension 0.10.0 borrows tabs instead of keeping them: a tab is given back after 30s without a command (held keys and buttons released, focus/visibility overrides undone, debugger detached, Chrome's debugging bar gone). Tabs with console/network capture or viewport emulation stay attached but go quiet when idle. Every click, key and drag now sends its release even when the action fails partway, so a tab is never left with a key or button stuck down.",
+    "The user comes first in their own tab: while they type, click or scroll in a tab, agent input to that tab waits until they pause (1.5s). After 8s it fails with retryable user_active; retry, or work in another tab. Tabs opened with navigate --new join an \"Agent\" tab group.",
+    "New commands: chrome-relay status (tabs the agent holds, idle timers, held input, when the user last used each) and chrome-relay release [--tab N] (let go of every tab, or one). Run release at the end of a job. The extension popup has a Release button. Both commands need extension 0.10.0; against older extensions they fail with unsupported_tool (phase extension_compatibility) before acting. Everything else works across 0.9.x/0.10.x in either direction."
+  ],
   "0.9.0": [
     "Background-only operation: --active and switch now fail before browser side effects; target tabs with --tab or qualified refs. Installation opens its welcome tab inactive. Recordings sample background screenshots at up to 15fps instead of requiring the tab to be active; brief states between samples may be missed. Partial recording failures preserve frames and exit with an error.",
     "Fewer agent turns: --snapshot on navigate, click, fill, type and keys prints the resulting page in the same command. With extension 0.9.0, navigation waits for DOMContentLoaded by default, snapshots wait for pending navigation, and input snapshots wait for page reactions. --wait load|commit|none, --timeout and snapshot --settle expose the controls; ready:false means the page is not yet ready.",

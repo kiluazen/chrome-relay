@@ -437,8 +437,15 @@ async function uploadDrop(parsed: ChromeUploadArgs): Promise<unknown> {
   }
 
   const data = { items: [], files: parsed.files, dragOperationsMask: 1 };
-  for (const type of ["dragEnter", "dragOver", "drop"] as const) {
-    await send(tabId, "Input.dispatchDragEvent", { type, x, y, data });
+  let dropped = false;
+  try {
+    for (const type of ["dragEnter", "dragOver", "drop"] as const) {
+      await send(tabId, "Input.dispatchDragEvent", { type, x, y, data });
+    }
+    dropped = true;
+  } finally {
+    // A drag that never reached drop would stay in progress in the tab.
+    if (!dropped) await send(tabId, "Input.dispatchDragEvent", { type: "dragCancel", x, y, data }).catch(() => {});
   }
 
   let dropHandled: boolean | null = null;

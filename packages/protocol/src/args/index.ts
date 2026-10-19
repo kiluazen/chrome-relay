@@ -57,6 +57,9 @@ import {
   parseChromeScreenshotArgs,
   parseChromeSnapshotArgs,
   parseChromeCursorArgs,
+  parseChromeReleaseArgs,
+  parseChromeStatusArgs,
+  type ChromeReleaseArgs,
   type ChromeSnapshotArgs,
   type ChromeCursorArgs,
   type NoArgs,
@@ -125,6 +128,8 @@ export interface ToolArgMap {
   chrome_get: ChromeGetArgs;
   chrome_upload: ChromeUploadArgs;
   chrome_cursor: ChromeCursorArgs;
+  chrome_release: ChromeReleaseArgs;
+  chrome_status: NoArgs;
 }
 
 export type ParsedToolArguments<T extends ToolName = ToolName> = ToolArgMap[T];
@@ -158,6 +163,8 @@ export function parseToolArgs<T extends ToolName>(name: T, input: unknown): Tool
     case "chrome_get": return parseChromeGetArgs(input) as ToolArgMap[T];
     case "chrome_upload": return parseChromeUploadArgs(input) as ToolArgMap[T];
     case "chrome_cursor": return parseChromeCursorArgs(input) as ToolArgMap[T];
+    case "chrome_release": return parseChromeReleaseArgs(input) as ToolArgMap[T];
+    case "chrome_status": return parseChromeStatusArgs(input) as ToolArgMap[T];
   }
   const exhaustive: never = name;
   return exhaustive;

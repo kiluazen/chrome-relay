@@ -134,6 +134,37 @@ after 15s idle. Page scripts can't see or reach it, snapshots ignore it, and
       await run("chrome_cursor", state === undefined ? {} : { enabled: state === "on" });
     });
 
+  // ---------- release / status (what the agent holds in your Chrome) ----------
+  tabOpt(
+    program
+      .command("release")
+      .description("Let go of tabs: release any held key or mouse button, undo the agent's page overrides, detach the debugger. Every tab by default.")
+      .addHelpText(
+        "after",
+        `
+
+Examples:
+  chrome-relay release            # every tab the agent holds
+  chrome-relay release --tab 123  # just this one
+
+Tabs are also let go of on their own after 30s without a command. Tabs with
+console/network capture or viewport emulation stay attached (quiet) until
+released. Run this at the end of a job, or whenever Chrome feels stuck.
+`
+      )
+  ).action(async (opts) => {
+    const args = withBase(opts);
+    const targeted = args.tabId !== undefined || args.workspaceName !== undefined || args.groupName !== undefined;
+    await run("chrome_release", targeted ? args : { ...args, all: true });
+  });
+
+  program
+    .command("status")
+    .description("Show which tabs the agent holds a debugger session on: state, pins, idle timer, held input, and when you last used each.")
+    .action(async () => {
+      await run("chrome_status", {});
+    });
+
   // ---------- workspace (named Chrome WINDOWS for parallel agent work) ----------
   // Pre-0.4.0 this was called `group`. Renamed because "group" collides with
   // Chrome's own tab-group UI primitive, which is now exposed separately

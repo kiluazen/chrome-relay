@@ -485,6 +485,18 @@ describe("release compatibility", () => {
     expect(bridges[0].callTool).not.toHaveBeenCalled();
   });
 
+  it("gates release and status on extension 0.10.0", async () => {
+    await bootHost(ID_A, { extensionVersion: "0.9.0" });
+    await expect(callToolWithMeta("chrome_release", { all: true })).rejects.toMatchObject({
+      code: "unsupported_tool", phase: "extension_compatibility", details: { requiredExtensionVersion: "0.10.0" }
+    });
+    await expect(callToolWithMeta("chrome_status", {})).rejects.toMatchObject({ phase: "extension_compatibility" });
+    expect(bridges[0].callTool).not.toHaveBeenCalled();
+    vi.spyOn(bridges[0], "getExtensionVersion").mockReturnValue("0.10.0");
+    await expect(callToolWithMeta("chrome_release", { all: true })).resolves.toBeDefined();
+    expect(bridges[0].callTool).toHaveBeenCalledTimes(1);
+  });
+
   it("allows legacy navigation without readiness and new semantics after extension update", async () => {
     await bootHost(ID_A, { extensionVersion: "0.8.2" });
     await expect(callToolWithMeta("chrome_navigate", { url: "https://example.com", waitUntil: "none" })).resolves.toBeDefined();

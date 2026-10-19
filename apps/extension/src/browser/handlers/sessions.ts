@@ -13,6 +13,7 @@ import {
   TOOL_NAMES
 } from "@chrome-relay/protocol";
 import { send } from "../cdp";
+import { pinTab, unpinTab } from "../lease-hooks";
 import { VIEWPORT_PRESETS, isPresetName, listPresets } from "../viewport-presets";
 import {
   createWorkspace,
@@ -62,6 +63,7 @@ export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
       await send(tabId, "Emulation.clearDeviceMetricsOverride", {});
       await send(tabId, "Emulation.setTouchEmulationEnabled", { enabled: false });
       await send(tabId, "Emulation.setUserAgentOverride", { userAgent: "" });
+      unpinTab(tabId, "viewport");
       return { tabId, cleared: true };
     }
 
@@ -115,6 +117,8 @@ export const sessionsHandlers: Partial<Record<string, ToolHandler>> = {
     if (spec.userAgent) {
       await send(tabId, "Emulation.setUserAgentOverride", { userAgent: spec.userAgent });
     }
+    // Emulation is session state: keep the session until cleared/released.
+    pinTab(tabId, "viewport");
 
     return {
       tabId,

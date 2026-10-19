@@ -8,6 +8,7 @@
 // is recent-only, in-memory. Wipes on tab close (chrome.tabs.onRemoved).
 
 import { ensureAttached, send } from "./cdp";
+import { onAfterDetach, pinTab } from "./lease-hooks";
 
 export type ConsoleLevel = "log" | "info" | "warn" | "error" | "debug" | "exception";
 
@@ -130,7 +131,16 @@ async function subscribeIfNeeded(tabId: number): Promise<void> {
   await send(tabId, "Runtime.enable", {});
   await send(tabId, "Log.enable", {});
   buf.subscribed = true;
+  // Capture lives in the debugger session: keep it open (quiet when idle).
+  pinTab(tabId, "console");
 }
+
+// Session ended (idle release, `release`, user cancelled the debugging
+// bar): entries stay readable; the next read subscribes again.
+onAfterDetach((tabId) => {
+  const buf = buffers.get(tabId);
+  if (buf) buf.subscribed = false;
+});
 
 // Single module-level CDP event listener; routes by source.tabId into the
 // right per-tab buffer. Wired once at import time.

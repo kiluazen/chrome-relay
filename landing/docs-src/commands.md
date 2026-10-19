@@ -137,6 +137,16 @@ chrome-relay cursor on
 
 Your real mouse never moves. Instead, each click, hover, fill and type draws an arrow in that tab: it glides to the target, pulses on click, wiggles while the agent is between commands, and fades after 15 s idle. It does not wait for its animation before acting. It runs in an isolated world inside a closed shadow root, so page scripts cannot access its API or shadow tree, but can detect the host element. Snapshots and hit tests ignore it, and after it first appears its movement causes no DOM mutations the page can observe. `screenshot` hides it; screencast recordings keep it.
 
+## Sharing the browser
+
+```sh
+chrome-relay status              # tabs the agent holds, idle timers, held input
+chrome-relay release             # let go of every tab
+chrome-relay release --tab 42    # just this one
+```
+
+The agent borrows tabs. A tab is given back after 30 s without a command: held keys and buttons are released, focus/visibility overrides are undone, and the debugger detaches. Tabs with console or network capture or viewport emulation stay attached, but go quiet when idle. While you are typing, clicking or scrolling in a tab, agent input to that tab waits until you pause. After 8 s it fails with retryable `user_active`, so retry or work in another tab. Tabs opened with `navigate --new` join an "Agent" tab group. The extension popup has a Release button too.
+
 ## Evaluate JavaScript
 
 ```sh

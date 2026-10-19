@@ -82,22 +82,26 @@ export async function pressKey(tabId: number, expression: string): Promise<void>
   const spec = resolveSpec(tokens[tokens.length - 1], modifiers);
 
   const downType = spec.text ? "keyDown" : "rawKeyDown";
-  await send(tabId, "Input.dispatchKeyEvent", {
-    type: downType,
-    key: spec.key,
-    code: spec.code,
-    windowsVirtualKeyCode: spec.windowsVirtualKeyCode,
-    nativeVirtualKeyCode: spec.windowsVirtualKeyCode,
-    modifiers,
-    ...(spec.text ? { text: spec.text, unmodifiedText: spec.text } : {})
-  });
-
-  await send(tabId, "Input.dispatchKeyEvent", {
-    type: "keyUp",
-    key: spec.key,
-    code: spec.code,
-    windowsVirtualKeyCode: spec.windowsVirtualKeyCode,
-    nativeVirtualKeyCode: spec.windowsVirtualKeyCode,
-    modifiers
-  });
+  // keyUp in finally: a key left down (Enter navigating mid-press, a thrown
+  // error) keeps the tab treating every later keystroke as a chord.
+  try {
+    await send(tabId, "Input.dispatchKeyEvent", {
+      type: downType,
+      key: spec.key,
+      code: spec.code,
+      windowsVirtualKeyCode: spec.windowsVirtualKeyCode,
+      nativeVirtualKeyCode: spec.windowsVirtualKeyCode,
+      modifiers,
+      ...(spec.text ? { text: spec.text, unmodifiedText: spec.text } : {})
+    });
+  } finally {
+    await send(tabId, "Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: spec.key,
+      code: spec.code,
+      windowsVirtualKeyCode: spec.windowsVirtualKeyCode,
+      nativeVirtualKeyCode: spec.windowsVirtualKeyCode,
+      modifiers
+    });
+  }
 }

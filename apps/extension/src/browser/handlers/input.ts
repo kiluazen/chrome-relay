@@ -19,6 +19,7 @@ import {
 import { evalExpression, evalInTab, send } from "../cdp";
 import { resolveRefCenter, resolveRefObjectId, mapPageError } from "../element";
 import { pressKey } from "../keyboard";
+import { yieldToHuman } from "../human";
 import { armSettle } from "../settle";
 import { moveCursor, pulseCursor } from "../cursor";
 import { fillElement, focusSelector, locateForClick } from "../page-actions";
@@ -65,22 +66,28 @@ async function dispatchClick(tabId: number, x: number, y: number): Promise<void>
     buttons: 0,
     pointerType: "mouse"
   });
-  await send(tabId, "Input.dispatchMouseEvent", {
-    type: "mousePressed",
-    x, y,
-    button: "left",
-    buttons: 1,
-    clickCount: 1,
-    pointerType: "mouse"
-  });
-  await send(tabId, "Input.dispatchMouseEvent", {
-    type: "mouseReleased",
-    x, y,
-    button: "left",
-    buttons: 0,
-    clickCount: 1,
-    pointerType: "mouse"
-  });
+  // Release in finally: a press that lands without its release leaves the
+  // tab believing the button is still down, and the person's own clicks
+  // and typing in that tab stop behaving.
+  try {
+    await send(tabId, "Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x, y,
+      button: "left",
+      buttons: 1,
+      clickCount: 1,
+      pointerType: "mouse"
+    });
+  } finally {
+    await send(tabId, "Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x, y,
+      button: "left",
+      buttons: 0,
+      clickCount: 1,
+      pointerType: "mouse"
+    });
+  }
 }
 
 export const inputHandlers: Partial<Record<string, ToolHandler>> = {
@@ -147,6 +154,9 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
     if (parsed.kind === "ref") {
       const r = await resolveRefObjectId(TOOL_NAMES.FILL, parsed.ref, parsed);
       await moveCursor(r.tabId, r.x, r.y, "type");
+      // Fill focuses the field from page JS, so it waits for the person
+      // the same way CDP input does (cdp.ts send).
+      await yieldToHuman(r.tabId);
       if (parsed.settle) await armSettle(r.tabId);
       // Same semantics as the in-page fillElement, applied to the resolved
       // node: native prototype setter (bypasses React's value tracker so
@@ -194,6 +204,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
 
     const tabId = requireTabId(await resolveTarget(parsed));
     await pulseCursor(tabId, "type");
+    await yieldToHuman(tabId);
     if (parsed.settle) await armSettle(tabId);
     try {
       const result = await evalInTab(tabId, fillElement, [parsed.selector, parsed.value]);
@@ -238,6 +249,7 @@ export const inputHandlers: Partial<Record<string, ToolHandler>> = {
     const tabId = requireTabId(tab);
 
     await pulseCursor(tabId, "type");
+    await yieldToHuman(tabId);
     if (parsed.settle) await armSettle(tabId);
     let focused: { selector: string } | null = null;
     if (parsed.selector) {
