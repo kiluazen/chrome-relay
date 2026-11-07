@@ -106,7 +106,30 @@ export async function createTabGroup(name: string, opts: CreateTabGroupOpts): Pr
   const updateProps: chrome.tabGroups.UpdateProperties = { title: name };
   if (opts.color) updateProps.color = opts.color;
   if (typeof opts.collapsed === "boolean") updateProps.collapsed = opts.collapsed;
-  await chrome.tabGroups.update(groupId, updateProps);
+  try {
+    await chrome.tabGroups.update(groupId, updateProps);
+  } catch (e) {
+    // Opera (tab islands) dissolves a group of fewer than two tabs the
+    // moment it is created, so there is nothing left to update.
+    if (opts.tabIds.length < 2) {
+      throw new RelayError({
+        code: "invalid_arguments",
+        message:
+          `This browser dissolved tab-group "${name}" as soon as it was created: Opera only keeps groups of two or more tabs. ` +
+          `Run: chrome-relay group create ${name} --tabs <id>,<id>`,
+        tool: TOOL_NAMES.GROUP,
+        phase: "create_tab_group",
+        details: {
+          name,
+          tabIds: opts.tabIds,
+          reason: "group_dissolved",
+          underlying: e instanceof Error ? e.message : String(e)
+        },
+        retryable: false
+      });
+    }
+    throw e;
+  }
 
   const record: TabGroupRecord = { name, groupId, createdAt: Date.now() };
   table[name] = record;
