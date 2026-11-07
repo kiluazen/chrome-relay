@@ -69,7 +69,9 @@ function getChromiumBrowserTargets(): BrowserTarget[] {
       { label: "Arc",                    installRoot: path.join(appSupport, "Arc/User Data"),                  manifestDir: path.join(appSupport, "Arc/User Data/NativeMessagingHosts") },
       // Dia (The Browser Company) uses the Arc-style nested User Data layout.
       { label: "Dia",                    installRoot: path.join(appSupport, "Dia/User Data"),                  manifestDir: path.join(appSupport, "Dia/User Data/NativeMessagingHosts") },
-      { label: "Opera",                  installRoot: path.join(appSupport, "com.operasoftware.Opera"),        manifestDir: path.join(appSupport, "com.operasoftware.Opera/NativeMessagingHosts") }
+      { label: "Opera",                  installRoot: path.join(appSupport, "com.operasoftware.Opera"),        manifestDir: path.join(appSupport, "com.operasoftware.Opera/NativeMessagingHosts") },
+      { label: "Opera GX",               installRoot: path.join(appSupport, "com.operasoftware.OperaGX"),      manifestDir: path.join(appSupport, "com.operasoftware.OperaGX/NativeMessagingHosts") },
+      { label: "Opera Air",              installRoot: path.join(appSupport, "com.operasoftware.OperaAir"),     manifestDir: path.join(appSupport, "com.operasoftware.OperaAir/NativeMessagingHosts") }
     ];
   }
 
@@ -131,6 +133,14 @@ function getChromiumBrowserTargets(): BrowserTarget[] {
         installRoot: path.join(roaming, "Opera Software", "Opera Stable"),
         manifestDir: path.join(manifestBase, "Opera"),
         registryKey: `HKCU\\Software\\Opera Software\\NativeMessagingHosts\\${NATIVE_HOST_NAME}`
+      },
+      {
+        // Shares Opera's manifest and key; both also read Chrome's key,
+        // which getInstallTargets() always registers on Windows.
+        label: "Opera GX",
+        installRoot: path.join(roaming, "Opera Software", "Opera GX Stable"),
+        manifestDir: path.join(manifestBase, "Opera"),
+        registryKey: `HKCU\\Software\\Opera Software\\NativeMessagingHosts\\${NATIVE_HOST_NAME}`
       }
     ];
   }
@@ -158,6 +168,25 @@ async function getInstalledBrowsers(): Promise<BrowserTarget[]> {
     }
   }
   return installed;
+}
+
+// What install writes and doctor checks: every detected browser, plus
+// Google Chrome when nothing is detected (so a later Chrome install finds
+// the host) and always on Windows. There, Chromium looks native hosts up
+// under Chrome's registry key (launch_context_win.cc reads
+// SOFTWARE\\Google\\Chrome\\NativeMessagingHosts, after SOFTWARE\\Chromium for
+// Chromium-branded builds), so forks like Opera find the host through
+// Chrome's key even when Chrome itself isn't installed.
+async function getInstallTargets(): Promise<BrowserTarget[]> {
+  const targets = await getInstalledBrowsers();
+  const chrome = getChromiumBrowserTargets().find((t) => t.label === "Google Chrome");
+  const needsChrome = targets.length === 0 || process.platform === "win32";
+  if (chrome && needsChrome && !targets.some((t) => t.label === chrome.label)) {
+    targets.push(
+      targets.length === 0 ? chrome : { ...chrome, label: "Google Chrome key (shared by Chromium browsers on Windows)" }
+    );
+  }
+  return targets;
 }
 
 function getDistDir(): string {
@@ -278,15 +307,7 @@ export async function runInstall(): Promise<void> {
   const hostPath = path.join(distDir, "native-host.js");
   const wrapperPath = await writeWrapperScript(hostPath);
 
-  const installed = await getInstalledBrowsers();
-  if (installed.length === 0) {
-    // Fall back to Chrome's path so the install at least lands somewhere
-    // — matches pre-0.5.22 behavior when no Chromium browser is detected.
-    const all = getChromiumBrowserTargets();
-    const fallback = all.find((t) => t.label === "Google Chrome");
-    if (fallback) installed.push(fallback);
-  }
-  const writtenManifests = await writeManifestsForBrowsers(wrapperPath, installed);
+  const writtenManifests = await writeManifestsForBrowsers(wrapperPath, await getInstallTargets());
 
   // Reaping happens after the manifest is in place, so each browser's next
   // native-messaging request respawns the host pointing at the freshly
@@ -325,7 +346,7 @@ export async function runDoctor(): Promise<boolean> {
     const required = getDefaultAllowedOrigins();
     let allHealthy = true;
     console.log(`Detected browsers (${installed.length}):`);
-    for (const target of installed) {
+    for (const target of await getInstallTargets()) {
       const manifestPath = path.join(target.manifestDir, `${NATIVE_HOST_NAME}.json`);
       const exists = await pathExists(manifestPath);
       if (!exists) {

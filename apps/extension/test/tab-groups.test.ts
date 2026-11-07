@@ -100,6 +100,18 @@ describe("tab-groups — create / list / close / add / remove", () => {
     await expect(m.createTabGroup("empty", { tabIds: [] })).rejects.toThrow(/at least one tabId/);
   });
 
+  it("create with one tab in a browser that dissolves it (Opera) explains the two-tab minimum", async () => {
+    const m = await freshModule();
+    seedTabs([10]);
+    // Opera: tabs.group([one]) returns an id, but the group is gone at once.
+    (chrome.tabs.group as any).mockImplementationOnce(async () => 4242);
+    const err = await m.createTabGroup("solo", { tabIds: [10] }).catch((e) => e);
+    expect(err.code).toBe("invalid_arguments");
+    expect(err.message).toMatch(/two or more tabs/);
+    expect(err.details).toMatchObject({ reason: "group_dissolved" });
+    expect(await m.listTabGroups()).toHaveLength(0);
+  });
+
   it("create on an already-alive name throws", async () => {
     const m = await freshModule();
     seedTabs([10, 11]);
